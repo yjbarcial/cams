@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import libBg from '@/assets/images/lib.jpg'
 
 const email = ref('')
 const password = ref('')
@@ -14,10 +15,12 @@ function submit() {
 function togglePassword() {
   showPassword.value = !showPassword.value
 }
+
+const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 </script>
 
 <template>
-  <div class="login-page" :style="{ '--login-bg-url': 'url(\'/public/favicon.ico\')' }">
+  <div class="login-page" :style="loginBgStyle">
     <div class="backdrop"></div>
     <RouterLink to="/" class="top-back-link" aria-label="Back to Publications">
       <span class="mdi mdi-arrow-left"></span>
@@ -66,10 +69,13 @@ function togglePassword() {
 
           <hr class="divider" />
         </form>
+        <p class="signup-cta">
+          Don't have an account?
+          <RouterLink to="/signup" class="muted-link" style="color: #f5c52b">Sign up</RouterLink>
+        </p>
       </div>
-
-      <p class="footer-note">© 2025 <span class="brand">GoldQuill</span>. All rights reserved.</p>
     </div>
+    <p class="footer-note">© 2025 <span class="brand">GoldQuill</span>. All rights reserved.</p>
   </div>
 </template>
 
@@ -195,9 +201,18 @@ function togglePassword() {
 
 /* removed signup styles */
 
+.signup-cta {
+  text-align: center;
+}
+
 .footer-note {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   color: #e6e6e6;
-  margin: 16px 0 0;
+  text-align: center;
+  padding: 10px 12px;
 }
 
 .brand {
