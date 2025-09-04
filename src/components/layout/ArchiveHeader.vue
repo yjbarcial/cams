@@ -6,9 +6,9 @@
       <h1>GoldQuill</h1>
     </div>
     <div class="actions">
-      <button class="icon-button" aria-label="Login" title="Login">
+      <RouterLink to="/login" class="icon-button" aria-label="Login" title="Login">
         <span class="mdi mdi-account-circle" aria-hidden="true"></span>
-      </button>
+      </RouterLink>
     </div>
   </header>
 </template>
