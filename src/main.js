@@ -23,3 +23,22 @@ const vuetify = createVuetify({
 })
 
 app.use(vuetify)
+
+// Set favicon to bundled GoldQuill logo (works in dev/prod)
+const setFavicon = () => {
+  try {
+    const link = document.querySelector("link[rel='icon']") || document.createElement('link')
+    link.setAttribute('rel', 'icon')
+    link.setAttribute('type', 'image/png')
+    // Use import.meta.url to resolve asset correctly after build
+    const logoUrl = new URL('./assets/images/GoldQuill Logo.png', import.meta.url).href
+    link.setAttribute('href', logoUrl)
+    if (!link.parentNode) {
+      document.head.appendChild(link)
+    }
+  } catch (e) {
+    // no-op fallback to existing favicon
+  }
+}
+
+setFavicon()
