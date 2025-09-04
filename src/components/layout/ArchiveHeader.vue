@@ -6,11 +6,8 @@
       <h1>GoldQuill</h1>
     </div>
     <div class="actions">
-      <button class="icon-button" aria-label="Dashboard" title="Dashboard">
-        <span class="mdi mdi-view-dashboard-outline" aria-hidden="true"></span>
-      </button>
       <button class="icon-button" aria-label="Login" title="Login">
-        <span class="mdi mdi-login" aria-hidden="true"></span>
+        <span class="mdi mdi-account-circle" aria-hidden="true"></span>
       </button>
     </div>
   </header>
@@ -65,7 +62,7 @@
 
 /* MDI icon sizing */
 .icon-button .mdi {
-  font-size: 22px;
+  font-size: 30px;
   line-height: 1;
 }
 </style>
