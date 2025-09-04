@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import libBg from '@/assets/images/lib.jpg'
+import libBg from '@/assets/images/lib-hd.jpg'
 
 const email = ref('')
 const password = ref('')
@@ -86,24 +86,33 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   position: relative;
   min-height: 100vh;
   background: #1f1f1f;
-  /* background image moved to .backdrop */
 }
 
 .backdrop {
   position: absolute;
   inset: 0;
-  background-image: var(--login-bg-url);
-  background-size: cover;
-  background-position: center;
-  filter: grayscale(100%);
   z-index: 0;
+}
+
+.backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(10, 9, 6); /* #100E07 solid tint behind image */
+  pointer-events: none;
 }
 
 .backdrop::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(16, 14, 7, 0.72); /* #100E07 tint */
+  background-image: var(--login-bg-url);
+  background-size: 100% auto; /* reduce zoom while keeping aspect */
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: grayscale(100%);
+  opacity: 0.15; /* image at 15% opacity */
+  pointer-events: none;
 }
 
 .content {
