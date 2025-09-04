@@ -69,9 +69,11 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 
           <hr class="divider" />
         </form>
-        <p class="signup-cta">
+        <p class="signup-cta text-h61">
           Don't have an account?
-          <RouterLink to="/signup" class="muted-link" style="color: #f5c52b">Sign up</RouterLink>
+          <RouterLink to="/signup" class="muted-link font-weight-medium" style="color: #f5c52b"
+            >Sign up here.</RouterLink
+          >
         </p>
       </div>
     </div>
@@ -84,13 +86,29 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   position: relative;
   min-height: 100vh;
   background: #1f1f1f;
-  background-image: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)), var(--login-bg-url);
+  /* background image moved to .backdrop */
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background-image: var(--login-bg-url);
   background-size: cover;
   background-position: center;
+  filter: grayscale(100%);
+  z-index: 0;
+}
+
+.backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 14, 7, 0.72); /* #100E07 tint */
 }
 
 .content {
   position: relative;
+  z-index: 1;
   max-width: 520px;
   margin: 0 auto;
   padding: 48px 12px 28px;
@@ -105,6 +123,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   object-fit: contain;
   margin-bottom: 12px;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+  transform: translateY(-10px);
 }
 
 .card {
@@ -113,6 +132,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   padding: 22px 20px 18px;
+  margin-top: 12px;
 }
 
 .headline {

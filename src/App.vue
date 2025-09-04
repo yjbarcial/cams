@@ -4,6 +4,7 @@ import { RouterView } from 'vue-router'
 <template>
   <RouterView />
 </template>
+
 <style>
 html,
 body,
@@ -12,6 +13,7 @@ body,
 }
 body {
   margin: 0;
+  font-size: 15px;
   font-family:
     'Inter',
     system-ui,
