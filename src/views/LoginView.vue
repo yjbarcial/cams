@@ -241,7 +241,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   bottom: 0;
   color: #e6e6e6;
   text-align: center;
-  padding: 10px 12px;
+  padding: 20px 12px;
 }
 
 .brand {
