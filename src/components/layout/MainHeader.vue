@@ -4,14 +4,14 @@
   <header class="main-header">
     <div class="brand">
       <img src="@/assets/images/GoldQuill Logo.png" alt="GoldQuill" />
-      <h1>GoldQuill</h1>
+      <h3>GoldQuill.</h3>
     </div>
     <nav class="actions" aria-label="Primary">
       <RouterLink to="/dashboard" class="icon-button" aria-label="Dashboard" title="Dashboard">
-        <span class="mdi mdi-view-dashboard-outline" aria-hidden="true"></span>
+        <span class="mdi mdi-view-dashboard" aria-hidden="true"></span>
       </RouterLink>
       <button class="icon-button" aria-label="Notifications" title="Notifications">
-        <span class="mdi mdi-bell-outline" aria-hidden="true"></span>
+        <span class="mdi mdi-bell" aria-hidden="true"></span>
       </button>
       <button class="icon-button" aria-label="Account" title="Account">
         <span class="mdi mdi-account-circle" aria-hidden="true"></span>
@@ -22,7 +22,7 @@
 
 <style scoped>
 .main-header {
-  background: #f5c52b;
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: space-between;
