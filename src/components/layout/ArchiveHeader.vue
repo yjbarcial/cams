@@ -3,7 +3,7 @@
   <header class="archive-header">
     <div class="brand">
       <img src="@/assets/images/GoldQuill Logo.png" alt="GoldQuill" />
-      <h1>GoldQuill</h1>
+      <h1>GoldQuill.</h1>
     </div>
     <div class="actions">
       <RouterLink to="/login" class="icon-button" aria-label="Login" title="Login">

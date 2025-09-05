@@ -45,6 +45,10 @@ import Footer from '@/components/layout/Footer.vue'
 }
 
 .hero {
+  flex: 1;
+}
+
+.hero {
   text-align: center;
   padding: 28px 12px 12px;
 }

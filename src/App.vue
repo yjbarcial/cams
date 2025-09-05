@@ -14,6 +14,7 @@ body,
 body {
   margin: 0;
   font-size: 15px;
+  color: #353535;
   font-family:
     'Inter',
     system-ui,
