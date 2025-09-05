@@ -26,7 +26,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 10px 12px;
+  border-bottom: 2px solid #353535; /* black line at the bottom */
 }
 
 .brand {
