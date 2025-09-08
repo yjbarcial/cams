@@ -10,9 +10,14 @@
       <RouterLink to="/dashboard" class="icon-button" aria-label="Dashboard" title="Dashboard">
         <span class="mdi mdi-view-dashboard" aria-hidden="true"></span>
       </RouterLink>
-      <button class="icon-button" aria-label="Notifications" title="Notifications">
+      <RouterLink
+        to="/notifications"
+        class="icon-button"
+        aria-label="Notifications"
+        title="Notifications"
+      >
         <span class="mdi mdi-bell" aria-hidden="true"></span>
-      </button>
+      </RouterLink>
       <button class="icon-button" aria-label="Account" title="Account">
         <span class="mdi mdi-account-circle" aria-hidden="true"></span>
       </button>
