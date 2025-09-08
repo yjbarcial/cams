@@ -12,25 +12,25 @@ import Footer from '@/components/layout/Footer.vue'
       <h1 class="title">Welcome to <span class="brand">GoldQuill</span>!</h1>
 
       <div class="actions">
-        <button class="pill">
+        <RouterLink to="/magazine" class="pill">
           <span class="mdi mdi-file-document-outline"></span>
           <span>MAGAZINE</span>
-        </button>
-        <button class="pill">
+        </RouterLink>
+        <RouterLink to="/newsletter" class="pill">
           <span class="mdi mdi-newspaper-variant-outline"></span>
           <span>NEWSLETTER</span>
-        </button>
-        <button class="pill">
+        </RouterLink>
+        <RouterLink to="/folio" class="pill">
           <span class="mdi mdi-archive-outline"></span>
           <span>FOLIO</span>
-        </button>
+        </RouterLink>
       </div>
 
       <div class="actions">
-        <button class="pill secondary">
+        <RouterLink to="/other" class="pill secondary">
           <span class="mdi mdi-dots-horizontal"></span>
           <span>OTHER</span>
-        </button>
+        </RouterLink>
       </div>
     </section>
 
