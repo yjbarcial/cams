@@ -3,6 +3,7 @@ import ArchiveView from '@/views/ArchiveView.vue'
 import LoginView from '@/views/LoginView.vue'
 import ContributorDashboard from '@/views/ContributorDashboard.vue'
 import NotificationsView from '@/views/NotificationsView.vue'
+import AddProjectView from '@/views/AddProjectView.vue'
 import MagazineView from '@/views/MagazineView.vue'
 import NewsletterView from '@/views/NewsletterView.vue'
 import FolioView from '@/views/FolioView.vue'
@@ -51,6 +52,10 @@ const router = createRouter({
       name: 'other',
       component: OtherView,
     },
+    { path: '/magazine/new', name: 'magazine-new', component: AddProjectView },
+    { path: '/newsletter/new', name: 'newsletter-new', component: AddProjectView },
+    { path: '/folio/new', name: 'folio-new', component: AddProjectView },
+    { path: '/other/new', name: 'other-new', component: AddProjectView },
   ],
 })
 
