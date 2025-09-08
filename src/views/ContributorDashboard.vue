@@ -18,6 +18,7 @@ import Footer from '@/components/layout/Footer.vue'
         </button>
         <button class="pill">
           <span class="mdi mdi-newspaper-variant-outline"></span>
+          <span>NEWSLETTER</span>
         </button>
         <button class="pill">
           <span class="mdi mdi-archive-outline"></span>
