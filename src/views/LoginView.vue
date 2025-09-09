@@ -66,15 +66,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
           <button type="submit" class="primary-btn" @click.prevent="$router.push('/dashboard')">
             LOG IN
           </button>
-
-          <hr class="divider" />
         </form>
-        <p class="signup-cta text-h61">
-          Don't have an account?
-          <RouterLink to="/signup" class="muted-link font-weight-medium" style="color: #f5c52b"
-            >Sign up here.</RouterLink
-          >
-        </p>
       </div>
     </div>
     <p class="footer-note">© 2025 <span class="brand">GoldQuill</span>. All rights reserved.</p>
@@ -142,6 +134,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   padding: 22px 20px 18px;
   margin-top: 12px;
+  border-bottom: 5px solid #f5c52b;
 }
 
 .headline {
@@ -220,18 +213,6 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 
 .primary-btn:hover {
   opacity: 0.92;
-}
-
-.divider {
-  border: none;
-  border-top: 1px solid #e9e9e9;
-  margin: 14px 0 10px;
-}
-
-/* removed signup styles */
-
-.signup-cta {
-  text-align: center;
 }
 
 .footer-note {
