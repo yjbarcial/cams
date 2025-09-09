@@ -1,13 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import ArchiveView from '@/views/ArchiveView.vue'
-import LoginView from '@/views/LoginView.vue'
-import ContributorDashboard from '@/views/ContributorDashboard.vue'
-import NotificationsView from '@/views/NotificationsView.vue'
-import AddProjectView from '@/views/AddProjectView.vue'
-import MagazineView from '@/views/MagazineView.vue'
-import NewsletterView from '@/views/NewsletterView.vue'
-import FolioView from '@/views/FolioView.vue'
-import OtherView from '@/views/OtherView.vue'
+import ArchiveView from '@/views/system/ArchiveView.vue'
+import LoginView from '@/views/auth/LoginView.vue'
+import ContributorDashboard from '@/views/system/ContributorDashboard.vue'
+import NotificationsView from '@/views/system/NotificationsView.vue'
+import AddProjectView from '@/views/system/AddProjectView.vue'
+import MagazineView from '@/views/system/MagazineView.vue'
+import NewsletterView from '@/views/system/NewsletterView.vue'
+import FolioView from '@/views/system/FolioView.vue'
+import OtherView from '@/views/system/OtherView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
