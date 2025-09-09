@@ -20,57 +20,83 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 </script>
 
 <template>
-  <div class="login-page" :style="loginBgStyle">
-    <div class="backdrop"></div>
-    <RouterLink to="/" class="top-back-link" aria-label="Back to Publications">
-      <span class="mdi mdi-arrow-left"></span>
-      <span class="label">Back to Publications</span>
-    </RouterLink>
-    <div class="content">
-      <img src="@/assets/images/GoldQuill Logo.png" alt="GoldQuill" class="logo" />
-      <div class="card">
-        <h2 class="headline">Welcome Back!</h2>
-        <p class="subtext">Enter your CARSU email for log in</p>
+  <v-container fluid class="login-page" :style="loginBgStyle">
+    <v-sheet class="backdrop"></v-sheet>
+    <v-btn
+      to="/"
+      class="top-back-link"
+      variant="outlined"
+      color="white"
+      prepend-icon="mdi-arrow-left"
+      size="small"
+    >
+      Back to Publications
+    </v-btn>
+    <v-row justify="center" class="content">
+      <v-col cols="12" sm="8" md="6" lg="4" xl="3">
+        <img
+          src="@/assets/images/GoldQuill Logo.png"
+          alt="GoldQuill"
+          class="logo"
+          width="140"
+          height="140"
+          contain
+        />
+        <v-card class="card" flat>
+          <v-card-title class="headline pa-0 font-weight-bold">Welcome Back!</v-card-title>
+          <v-card-subtitle class="subtext pa-0">Enter your CARSU email for log in</v-card-subtitle>
 
-        <form @submit.prevent="submit" class="form">
-          <div class="input-group">
-            <span class="mdi mdi-email-outline"></span>
-            <input v-model="email" type="email" placeholder="Email" required />
-          </div>
+          <v-card-text class="pa-0">
+            <v-form @submit.prevent="submit" class="form">
+              <v-text-field
+                v-model="email"
+                type="email"
+                placeholder="Email"
+                prepend-inner-icon="mdi-email-outline"
+                variant="outlined"
+                class="input-group"
+                density="compact"
+                hide-details
+                required
+              />
 
-          <div class="input-group">
-            <span class="mdi mdi-lock-outline"></span>
-            <input
-              v-model="password"
-              :type="showPassword ? 'text' : 'password'"
-              placeholder="Password"
-              required
-            />
-            <button
-              type="button"
-              class="icon-btn"
-              @click="togglePassword"
-              :aria-label="showPassword ? 'Hide password' : 'Show password'"
-            >
-              <span
-                :class="['mdi', showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline']"
-              ></span>
-            </button>
-          </div>
+              <v-text-field
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                placeholder="Password"
+                prepend-inner-icon="mdi-lock-outline"
+                :append-inner-icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                @click:append-inner="togglePassword"
+                variant="outlined"
+                class="input-group"
+                density="compact"
+                hide-details
+                required
+              />
 
-          <div class="row-between">
-            <span></span>
-            <RouterLink to="/" class="muted-link">Forgot Password?</RouterLink>
-          </div>
+              <v-row class="row-between">
+                <v-col></v-col>
+                <v-col cols="auto">
+                  <v-btn to="/" variant="text" color="grey" class="muted-link"
+                    >Forgot password?</v-btn
+                  >
+                </v-col>
+              </v-row>
 
-          <button type="submit" class="primary-btn" @click.prevent="$router.push('/dashboard')">
-            LOG IN
-          </button>
-        </form>
-      </div>
-    </div>
-    <p class="footer-note">© 2025 <span class="brand">GoldQuill</span>. All rights reserved.</p>
-  </div>
+              <v-btn type="submit" class="primary-btn" @click.prevent="$router.push('/dashboard')">
+                LOG IN
+              </v-btn>
+            </v-form>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+    <v-footer class="footer-note">
+      <v-spacer></v-spacer>
+      <div>© 2025 <span class="brand">GoldQuill</span>. All rights reserved.</div>
+      <v-spacer></v-spacer>
+    </v-footer>
+  </v-container>
 </template>
 
 <style scoped>
@@ -110,70 +136,70 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 .content {
   position: relative;
   z-index: 1;
-  max-width: 520px;
-  margin: 0 auto;
   padding: 48px 12px 28px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
 .logo {
-  width: 140px;
-  height: 140px;
-  object-fit: contain;
-  margin-bottom: 12px;
+  margin: 0 auto 18px !important;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
   transform: translateY(-10px);
+  display: block !important;
 }
 
 .card {
   width: 100%;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  padding: 22px 20px 18px;
+  background: #fff !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+  padding: 22px 20px 18px !important;
   margin-top: 12px;
-  border-bottom: 5px solid #f5c52b;
+  border-bottom: 5px solid #f5c52b !important;
 }
 
 .headline {
-  margin: 0 0 6px 0;
+  margin: 0 0 4px 0;
   text-align: center;
 }
 
 .subtext {
-  margin: 0 0 14px 0;
+  margin: 0 0 8px 0;
   text-align: center;
   color: #6b6b6b;
 }
 
 .form {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .input-group {
-  position: relative;
-  display: flex;
-  align-items: center;
-  border: 1px solid #d9d9d9;
-  border-radius: 999px;
-  padding: 8px 12px;
-  background: #fff;
+  margin-bottom: 8px;
 }
 
-.input-group > .mdi {
-  color: #7a7a7a;
-  font-size: 18px;
+.input-group :deep(.v-field) {
+  border-radius: 999px !important;
+  border: 1px solid #d9d9d9 !important;
+  background: #fff !important;
+  min-height: 48px !important;
 }
 
-.input-group input {
-  flex: 1 1 auto;
-  border: none;
-  outline: none;
-  padding: 4px 8px;
-  font-size: 14px;
+.input-group :deep(.v-field__outline) {
+  border-radius: 999px !important;
+}
+
+.input-group :deep(.v-field__input) {
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+}
+
+.input-group :deep(.v-field__prepend-inner) {
+  padding: 0 8px 0 16px !important;
+  color: #7a7a7a !important;
+}
+
+.input-group :deep(.v-field__append-inner) {
+  padding: 0 16px 0 8px !important;
+  color: #555 !important;
 }
 
 .icon-btn {
@@ -188,12 +214,14 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: -4px;
+  margin-top: -22px;
 }
 
 .muted-link {
   color: #6b6b6b;
   text-decoration: none;
+  text-transform: none !important; /* keep original casing */
+  font-size: 14px;
 }
 
 .muted-link:hover {
@@ -202,27 +230,22 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 
 .primary-btn {
   width: 100%;
-  background: #353535;
-  color: #fff;
-  border: none;
-  border-radius: 999px;
-  padding: 12px 14px;
+  height: 48px !important;
+  background: #353535 !important;
+  color: #fff !important;
+  border-radius: 999px !important;
   font-weight: 600;
-  cursor: pointer;
-}
-
-.primary-btn:hover {
-  opacity: 0.92;
 }
 
 .footer-note {
-  position: fixed;
+  position: absolute;
+  bottom: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  background: transparent !important;
   color: #e6e6e6;
   text-align: center;
-  padding: 20px 12px;
+  padding: 24px 12px;
 }
 
 .brand {
@@ -231,26 +254,17 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 
 .top-back-link {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.4);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  padding: 6px 10px;
-  text-decoration: none;
-  backdrop-filter: blur(2px);
-}
-
-.top-back-link:hover {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.top-back-link .label {
-  font-size: 14px;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  background: rgba(20, 20, 20, 0.575) !important; /* subtle glass look */
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.11) !important;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 999px !important; /* pill style */
+  padding: 4px 12px !important;
+  text-transform: none !important;
 }
 
 @media (max-width: 480px) {
