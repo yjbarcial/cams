@@ -183,17 +183,13 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   min-height: 48px !important;
 }
 
-.input-group :deep(.v-field__outline) {
-  border-radius: 999px !important;
-}
-
 .input-group :deep(.v-field__input) {
   padding: 12px 16px !important;
   font-size: 14px !important;
 }
 
 .input-group :deep(.v-field__prepend-inner) {
-  padding: 0 8px 0 16px !important;
+  padding: 0 8px 0 8px !important;
   color: #7a7a7a !important;
 }
 
