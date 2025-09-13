@@ -65,6 +65,8 @@ function scrollToPublications() {
     <ArchiveHeader />
 
     <section class="hero">
+      <img src="@/assets/images/GoldQuill Logo.png" alt="GoldQuill" class="logo" />
+
       <h2 class="welcome">Welcome to <span class="brand">GoldQuill</span>!</h2>
       <p class="subtitle">Discover the latest publications from The Gold Panicles.</p>
       <div class="scroll-indicator" @click="scrollToPublications" role="button" tabindex="0">
