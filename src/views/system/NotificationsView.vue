@@ -65,55 +65,68 @@ const handleAction = (notificationId, actionType) => {
     <MainHeader />
 
     <main class="main-content">
-      <div class="notifications-container">
-        <h1 class="notifications-title">Notifications</h1>
+      <v-container class="px-4">
+        <v-card class="main-card" elevation="1">
+          <h1 class="notifications-title px-6 pt-6 mb-4">Notifications</h1>
 
-        <div class="notifications-list">
-          <div
-            v-for="notification in notifications"
-            :key="notification.id"
-            class="notification-item"
-            :class="{ unread: !notification.isRead }"
-          >
-            <div class="notification-content">
-              <div class="notification-header">
-                <span
-                  class="notification-type"
-                  :style="{ backgroundColor: notification.typeColor }"
-                >
-                  {{ notification.type }}
-                  <span class="notification-dot" v-if="!notification.isRead"></span>
-                </span>
-              </div>
+          <div class="px-6">
+            <v-card class="notifications-list" elevation="0">
+              <v-card
+                v-for="notification in notifications"
+                :key="notification.id"
+                class="notification-item mb-4"
+                :class="{ unread: !notification.isRead }"
+                elevation="1"
+              >
+                <v-card-item>
+                  <div class="notification-content">
+                    <div class="notification-header">
+                      <span
+                        class="notification-type"
+                        :style="{ backgroundColor: notification.typeColor }"
+                      >
+                        {{ notification.type }}
+                        <span class="notification-dot" v-if="!notification.isRead"></span>
+                      </span>
+                    </div>
 
-              <div class="notification-body">
-                <h3 class="notification-title">{{ notification.title }}</h3>
-                <p class="notification-description">{{ notification.description }}</p>
-              </div>
-            </div>
+                    <div class="notification-body">
+                      <h3 class="notification-title">{{ notification.title }}</h3>
+                      <p class="notification-description">{{ notification.description }}</p>
+                    </div>
+                  </div>
 
-            <div class="notification-meta">
-              <div class="timestamp">
-                <span class="mdi mdi-clock-outline"></span>
-                <span>{{ notification.timestamp }}</span>
-              </div>
+                  <div class="notification-meta">
+                    <div class="timestamp">
+                      <span class="mdi mdi-clock-outline"></span>
+                      <span>{{ notification.timestamp }}</span>
+                    </div>
 
-              <div class="notification-actions">
-                <button
-                  v-for="action in notification.actions"
-                  :key="action.label"
-                  class="action-btn"
-                  :class="action.type"
-                  :style="{ borderColor: action.color, color: action.color }"
-                  @click="handleAction(notification.id, action.type)"
-                >
-                  {{ action.label }}
-                </button>
-              </div>
-            </div>
+                    <div class="notification-actions">
+                      <button
+                        v-for="action in notification.actions"
+                        :key="action.label"
+                        class="action-btn"
+                        :class="action.type"
+                        :style="{ borderColor: action.color, color: action.color }"
+                        @click="handleAction(notification.id, action.type)"
+                      >
+                        {{ action.label }}
+                      </button>
+                    </div>
+                  </div>
+                </v-card-item>
+              </v-card>
+
+              <v-card class="text-center pa-4" elevation="0">
+                <v-btn variant="text" color="grey-darken-1" block>
+                  See Previous Notifications
+                </v-btn>
+              </v-card>
+            </v-card>
           </div>
-        </div>
-      </div>
+        </v-card>
+      </v-container>
     </main>
 
     <Footer />
@@ -130,32 +143,37 @@ const handleAction = (notificationId, actionType) => {
 
 .main-content {
   flex: 1;
-  padding: 40px 20px;
+  padding: 20px 20px;
 }
 
 .notifications-container {
   width: 100%;
 }
 
+.main-card {
+  max-width: 900px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 .notifications-title {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: #2f2f2f;
-  margin: 0 0 32px 0;
+  margin: 0;
 }
 
 .notifications-list {
-  margin-bottom: 32px;
+  background: transparent !important;
 }
 
 .notification-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 20px 0;
-  border-bottom: 1px solid #e5e7eb;
-  position: relative;
-  transition: background-color 0.2s ease;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: white;
+  margin-bottom: 12px;
 }
 
 .notification-item:last-child {
@@ -165,9 +183,8 @@ const handleAction = (notificationId, actionType) => {
 .notification-item.unread {
   background-color: #f8fafc;
   border-left: 4px solid #3b82f6;
-  padding-left: 16px;
-  margin-left: -16px;
-  border-radius: 0 8px 8px 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .notification-content {
@@ -275,9 +292,14 @@ const handleAction = (notificationId, actionType) => {
 }
 
 /* Responsive design */
-@media (max-width: 768px) {
+@media (max-width: 840px) {
+  /* Updated breakpoint */
   .main-content {
     padding: 20px 12px;
+  }
+
+  .v-card-item {
+    padding: 16px;
   }
 
   .notification-item {
@@ -307,6 +329,10 @@ const handleAction = (notificationId, actionType) => {
   .notification-item.unread {
     padding-left: 12px;
     margin-left: -12px;
+  }
+
+  .main-card {
+    border-radius: 0;
   }
 }
 
