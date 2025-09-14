@@ -153,6 +153,12 @@ const assignProject = () => {
   // Navigate back to the category view
   router.push(cancelPath.value)
 }
+
+// Add to script setup section
+const saveAsDraft = () => {
+  // Draft saving logic here
+  console.log('Saving as draft...')
+}
 </script>
 
 <template>
@@ -277,6 +283,7 @@ const assignProject = () => {
 
         <div class="actions">
           <button class="primary" @click="assignProject">Assign Project</button>
+          <button class="draft" @click="saveAsDraft">Save as Draft</button>
           <RouterLink :to="cancelPath" class="tertiary">Cancel</RouterLink>
         </div>
       </section>
@@ -519,6 +526,24 @@ const assignProject = () => {
   transform: translateY(-1px);
 }
 
+.draft {
+  background: #353535; /* Gray-500 */
+  border: 2px solid #353535; /* Gray-600 */
+  color: #ffffff;
+  padding: 14px 24px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.draft:hover {
+  background: #4b5563; /* Gray-600 */
+  border-color: #374151; /* Gray-700 */
+  transform: translateY(-1px);
+}
+
 .tertiary {
   background: #fff;
   color: #374151;
@@ -559,6 +584,7 @@ const assignProject = () => {
   }
 
   .primary,
+  .draft,
   .tertiary {
     width: 100%;
     justify-content: center;
