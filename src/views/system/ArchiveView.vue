@@ -65,55 +65,61 @@ function scrollToPublications() {
     <ArchiveHeader />
 
     <section class="hero">
-      <img src="@/assets/images/GoldQuill Logo.png" alt="GoldQuill" class="logo" />
-
+      <v-img
+        src="@/assets/images/GoldQuill Logo.png"
+        alt="GoldQuill"
+        class="logo"
+        width="160"
+        contain
+      />
       <h2 class="welcome">Welcome to <span class="brand">GoldQuill</span>!</h2>
       <p class="subtitle">Discover the latest publications from The Gold Panicles.</p>
       <div class="scroll-indicator" @click="scrollToPublications" role="button" tabindex="0">
-        <span class="mdi mdi-chevron-down"></span>
-        <span class="mdi mdi-chevron-down"></span>
+        <v-icon>mdi-chevron-down</v-icon>
+        <v-icon>mdi-chevron-down</v-icon>
       </div>
     </section>
 
     <section id="publications-section" class="publications">
-      <h2>Publications</h2>
+      <h2 class="mb-1">Publications</h2>
 
       <div class="controls">
         <div class="search-group">
-          <span class="mdi mdi-magnify" aria-hidden="true"></span>
-          <input
+          <v-text-field
             v-model="searchQuery"
-            type="search"
+            prepend-inner-icon="mdi-magnify"
             placeholder="Search articles..."
-            class="search"
-            aria-label="Search articles"
-          />
+            hide-details
+            variant="outlined"
+            density="comfortable"
+          ></v-text-field>
         </div>
         <div class="categories">
-          <button
+          <v-btn
             v-for="cat in categories"
             :key="cat"
             :class="['chip', { active: activeCategory === cat }]"
             @click="setCategory(cat)"
+            variant="outlined"
+            size="small"
+            rounded
           >
             {{ cat }}
-          </button>
+          </v-btn>
         </div>
       </div>
 
       <div class="grid">
-        <article v-for="a in filteredArticles" :key="a.id" class="card">
-          <div class="cover">
-            <img :src="a.cover" :alt="a.title" />
-          </div>
+        <v-card v-for="a in filteredArticles" :key="a.id" class="card">
+          <v-img :src="a.cover" :alt="a.title" class="cover" aspect-ratio="1.5" cover></v-img>
           <div class="meta">
             <span class="category">{{ a.category }}</span>
             <h4 class="title">{{ a.title }}</h4>
-            <time class="date" :datetime="a.publishedAt">{{
-              new Date(a.publishedAt).toLocaleDateString()
-            }}</time>
+            <time class="date" :datetime="a.publishedAt">
+              {{ new Date(a.publishedAt).toLocaleDateString() }}
+            </time>
           </div>
-        </article>
+        </v-card>
       </div>
     </section>
 
@@ -290,5 +296,30 @@ function scrollToPublications() {
   .search {
     width: 100%;
   }
+}
+
+/* Override Vuetify default styles to match original */
+:deep(.v-text-field) {
+  width: 260px;
+  max-width: 100%;
+}
+
+:deep(.v-text-field .v-field__input) {
+  padding: 8px 10px 8px 8px;
+}
+
+:deep(.v-btn.chip) {
+  text-transform: none;
+  letter-spacing: normal;
+  height: 32px;
+}
+
+:deep(.v-card) {
+  border: 1px solid #eee;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+:deep(.v-img.logo) {
+  margin: 0 auto 12px;
 }
 </style>
