@@ -83,8 +83,8 @@ function scrollToPublications() {
     <section id="publications-section" class="publications">
       <h2 class="mb-1">Publications</h2>
 
-      <div class="controls">
-        <div class="search-group">
+      <div class="archive-controls">
+        <div class="archive-search-group">
           <v-text-field
             v-model="searchQuery"
             prepend-inner-icon="mdi-magnify"
@@ -92,13 +92,14 @@ function scrollToPublications() {
             hide-details
             variant="outlined"
             density="comfortable"
+            class="archive-search"
           ></v-text-field>
         </div>
-        <div class="categories">
+        <div class="archive-categories">
           <v-btn
             v-for="cat in categories"
             :key="cat"
-            :class="['chip', { active: activeCategory === cat }]"
+            :class="['archive-chip', { active: activeCategory === cat }]"
             @click="setCategory(cat)"
             variant="outlined"
             size="small"
@@ -185,7 +186,7 @@ function scrollToPublications() {
   font-size: 22px;
 }
 
-.controls {
+.archive-controls {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -193,21 +194,11 @@ function scrollToPublications() {
   margin-bottom: 16px;
 }
 
-.search-group {
+.archive-search-group {
   position: relative;
 }
 
-.search-group .mdi {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #777;
-  font-size: 18px;
-  pointer-events: none;
-}
-
-.categories {
+.archive-categories {
   display: inline-flex;
   gap: 8px;
 }
@@ -288,12 +279,13 @@ function scrollToPublications() {
 }
 
 @media (max-width: 640px) {
-  .controls {
+  .archive-controls {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
-  .search {
+
+  :deep(.archive-search.v-text-field) {
     width: 100%;
   }
 }
@@ -308,7 +300,7 @@ function scrollToPublications() {
   padding: 8px 10px 8px 8px;
 }
 
-:deep(.v-btn.chip) {
+:deep(.v-btn.archive-chip) {
   text-transform: none;
   letter-spacing: normal;
   height: 32px;
