@@ -112,9 +112,9 @@ function scrollToPublications() {
 
       <div class="grid">
         <v-card v-for="a in filteredArticles" :key="a.id" class="card">
-          <v-img :src="a.cover" :alt="a.title" class="cover" aspect-ratio="1.5" cover></v-img>
+          <img :src="a.cover" :alt="a.title" class="cover" aspect-ratio="1.5" cover />
           <div class="meta">
-            <span class="category">{{ a.category }}</span>
+            <span :class="['category', a.category.toLowerCase()]">{{ a.category }}</span>
             <h4 class="title">{{ a.title }}</h4>
             <time class="date" :datetime="a.publishedAt">
               {{ new Date(a.publishedAt).toLocaleDateString() }}
@@ -264,8 +264,24 @@ function scrollToPublications() {
 .category {
   display: inline-block;
   font-size: 12px;
-  color: #6b6b6b;
+  padding: 4px 8px;
   margin-bottom: 6px;
+  border-radius: 4px;
+}
+
+.category.magazine {
+  background-color: #f5c52b;
+  color: #333;
+}
+
+.category.folio {
+  background-color: #39acff;
+  color: #333;
+}
+
+.category.newsletter {
+  background-color: #353535;
+  color: #fff;
 }
 
 .title {
@@ -298,12 +314,35 @@ function scrollToPublications() {
 
 :deep(.v-text-field .v-field__input) {
   padding: 8px 10px 8px 8px;
+  font-size: 14px; /* Add this line to make the font smaller */
+}
+
+:deep(.v-text-field .v-field__input::placeholder) {
+  font-size: 14px; /* Match placeholder text size */
 }
 
 :deep(.v-btn.archive-chip) {
   text-transform: none;
   letter-spacing: normal;
   height: 32px;
+  background: white;
+  color: #333;
+  border: 1px solid #ddd !important;
+}
+
+:deep(.v-btn.archive-chip.active) {
+  background: #f5c52b !important;
+  border-color: #f5c52b !important;
+  color: #333 !important;
+}
+
+/* Remove any hover effects */
+:deep(.v-btn.archive-chip:hover) {
+  background: white;
+}
+
+:deep(.v-btn.archive-chip.active:hover) {
+  background: #f5c52b !important;
 }
 
 :deep(.v-card) {
