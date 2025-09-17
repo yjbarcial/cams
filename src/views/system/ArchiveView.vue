@@ -13,28 +13,28 @@ const articles = ref([
     id: 1,
     title: 'Exploring Literary Horizons',
     category: 'Folio',
-    cover: '@/assets/images/GoldQuill Logo.png',
+    cover: '/images/lib-hd.jpg',
     publishedAt: '2025-02-12',
   },
   {
     id: 2,
     title: 'Campus Life: Spring Edition',
     category: 'Magazine',
-    cover: '@/assets/images/GoldQuill Logo.png',
+    cover: '/images/lib-hd.jpg',
     publishedAt: '2025-03-05',
   },
   {
     id: 3,
     title: 'Alumni Newsletter – April',
     category: 'Newsletter',
-    cover: '@/assets/images/GoldQuill Logo.png',
+    cover: '/images/lib-hd.jpg',
     publishedAt: '2025-04-01',
   },
   {
     id: 4,
     title: 'The Gold Panicles: Special Feature',
     category: 'Magazine',
-    cover: '@/assets/images/GoldQuill Logo.png',
+    cover: '/images/lib-hd.jpg',
     publishedAt: '2025-05-18',
   },
 ])
@@ -68,7 +68,7 @@ function scrollToPublications() {
       <v-row justify="center" no-gutters>
         <v-col cols="12" class="text-center">
           <v-img
-            src="@/assets/images/GoldQuill Logo.png"
+            src="/images/GoldQuill Logo.png"
             alt="GoldQuill"
             class="logo"
             width="160"

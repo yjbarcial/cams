@@ -3,7 +3,7 @@
 <template>
   <header class="main-header">
     <div class="brand">
-      <img src="@/assets/images/GoldQuill Logo.png" alt="GoldQuill" />
+      <v-img src="/images/GoldQuill Logo.png" alt="GoldQuill" height="40px" width="50%" contain />
       <h3>GoldQuill.</h3>
     </div>
     <nav class="actions" aria-label="Primary">
@@ -42,8 +42,7 @@
 }
 
 .brand img {
-  height: 36px;
-  width: auto;
+  height: 20px;
   display: block;
 }
 

@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import libBg from '@/assets/images/lib-hd.jpg'
+import libBg from '/images/lib-hd.jpg'
 
 const email = ref('')
 const password = ref('')
@@ -34,8 +34,8 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
     </v-btn>
     <v-row justify="center" class="content">
       <v-col cols="12" sm="8" md="6" lg="4" xl="3">
-        <img
-          src="@/assets/images/GoldQuill Logo.png"
+        <v-img
+          src="/images/GoldQuill Logo.png"
           alt="GoldQuill"
           class="logo"
           width="140"

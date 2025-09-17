@@ -18,7 +18,7 @@ const vuetify = createVuetify({
     <MainHeader />
 
     <section class="hero">
-      <img src="@/assets/images/GoldQuill Logo.png" alt="GoldQuill" class="logo" />
+      <v-img src="/images/GoldQuill Logo.png" alt="GoldQuill" class="logo" />
       <h1 class="title">Welcome to <span class="brand">GoldQuill</span>!</h1>
 
       <div class="actions">
@@ -58,7 +58,7 @@ const vuetify = createVuetify({
         <!-- Content Row -->
         <v-row justify="space-between" align="start" no-gutters>
           <v-col cols="12" sm="4" class="d-flex flex-column align-start">
-            <img src="../../assets/images/csu-logo.png" alt="CSU Logo" class="csu-logo mb-4" />
+            <v-img src="/images/csu-logo.png" alt="CSU Logo" class="csu-logo mb-4" />
             <v-card-title class="px-0">Old Administration Bldg.</v-card-title>
             <v-card-text class="px-0">Caraga State University - Main Campus, 8600</v-card-text>
           </v-col>

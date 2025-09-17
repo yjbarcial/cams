@@ -2,7 +2,7 @@
 <template>
   <header class="archive-header">
     <div class="brand">
-      <img src="@/assets/images/GoldQuill Logo.png" alt="GoldQuill" />
+      <v-img src="/images/GoldQuill Logo.png" alt="GoldQuill" height="40px" width="50%" contain />
       <h3>GoldQuill.</h3>
     </div>
     <div class="actions">
