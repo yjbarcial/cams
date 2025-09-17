@@ -139,23 +139,25 @@ function scrollToPublications() {
               lg="2"
               class="grid-item"
             >
-              <v-card class="card">
-                <v-img :src="a.cover" :alt="a.title" class="cover" aspect-ratio="1.2" cover />
-                <v-card-text class="meta">
-                  <v-chip
-                    :class="['category', a.category.toLowerCase()]"
-                    size="x-small"
-                    variant="flat"
-                    >{{ a.category }}</v-chip
-                  >
-                  <v-card-title>
-                    <span class="article-title">{{ a.title }}</span>
-                  </v-card-title>
-                  <v-card-text class="date" :datetime="a.publishedAt">
-                    {{ new Date(a.publishedAt).toLocaleDateString() }}
+              <RouterLink :to="`/deliverables/${a.id}`" style="text-decoration: none">
+                <v-card class="card" hover>
+                  <v-img :src="a.cover" :alt="a.title" class="cover" aspect-ratio="1.2" cover />
+                  <v-card-text class="meta">
+                    <v-chip
+                      :class="['category', a.category.toLowerCase()]"
+                      size="x-small"
+                      variant="flat"
+                      >{{ a.category }}</v-chip
+                    >
+                    <v-card-title>
+                      <span class="article-title">{{ a.title }}</span>
+                    </v-card-title>
+                    <v-card-text class="date" :datetime="a.publishedAt">
+                      {{ new Date(a.publishedAt).toLocaleDateString() }}
+                    </v-card-text>
                   </v-card-text>
-                </v-card-text>
-              </v-card>
+                </v-card>
+              </RouterLink>
             </v-col>
           </v-row>
         </v-col>
