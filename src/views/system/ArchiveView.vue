@@ -61,82 +61,121 @@ function scrollToPublications() {
 </script>
 
 <template>
-  <div class="container">
+  <v-app>
     <ArchiveHeader />
 
-    <section class="hero">
-      <v-img
-        src="@/assets/images/GoldQuill Logo.png"
-        alt="GoldQuill"
-        class="logo"
-        width="160"
-        contain
-      />
-      <h2 class="welcome">Welcome to <span class="brand">GoldQuill</span>!</h2>
-      <p class="subtitle">Discover the latest publications from The Gold Panicles.</p>
-      <div class="scroll-indicator" @click="scrollToPublications" role="button" tabindex="0">
-        <v-icon>mdi-chevron-down</v-icon>
-        <v-icon>mdi-chevron-down</v-icon>
-      </div>
-    </section>
-
-    <section id="publications-section" class="publications">
-      <h2 class="mb-1">Publications</h2>
-
-      <div class="archive-controls">
-        <div class="archive-search-group">
-          <v-text-field
-            v-model="searchQuery"
-            prepend-inner-icon="mdi-magnify"
-            placeholder="Search articles..."
-            hide-details
-            variant="outlined"
-            density="comfortable"
-            class="archive-search"
-          ></v-text-field>
-        </div>
-        <div class="archive-categories">
-          <v-btn
-            v-for="cat in categories"
-            :key="cat"
-            :class="['archive-chip', { active: activeCategory === cat }]"
-            @click="setCategory(cat)"
-            variant="outlined"
-            size="small"
-            rounded
+    <v-main class="hero">
+      <v-row justify="center" no-gutters>
+        <v-col cols="12" class="text-center">
+          <v-img
+            src="@/assets/images/GoldQuill Logo.png"
+            alt="GoldQuill"
+            class="logo"
+            width="160"
+            contain
+          />
+          <v-card-title class="welcome font-weight-bold"
+            >Welcome to <span class="brand">GoldQuill</span>!</v-card-title
           >
-            {{ cat }}
-          </v-btn>
-        </div>
-      </div>
+          <v-card-text class="subtitle"
+            >Discover the latest publications from The Gold Panicles.</v-card-text
+          >
+          <v-row
+            justify="center"
+            no-gutters
+            class="scroll-indicator"
+            @click="scrollToPublications"
+            role="button"
+            tabindex="0"
+          >
+            <v-col cols="auto">
+              <v-icon>mdi-chevron-down</v-icon>
+              <v-icon>mdi-chevron-down</v-icon>
+            </v-col>
+          </v-row>
+        </v-col>
+      </v-row>
+    </v-main>
 
-      <div class="grid">
-        <v-card v-for="a in filteredArticles" :key="a.id" class="card">
-          <img :src="a.cover" :alt="a.title" class="cover" aspect-ratio="1.5" cover />
-          <div class="meta">
-            <span :class="['category', a.category.toLowerCase()]">{{ a.category }}</span>
-            <h4 class="title">{{ a.title }}</h4>
-            <time class="date" :datetime="a.publishedAt">
-              {{ new Date(a.publishedAt).toLocaleDateString() }}
-            </time>
-          </div>
-        </v-card>
-      </div>
-    </section>
+    <v-main id="publications-section" class="publications">
+      <v-row no-gutters>
+        <v-col cols="12">
+          <v-card-title class="mb-1 font-weight-bold">Publications</v-card-title>
+
+          <v-row class="archive-controls" no-gutters>
+            <v-col cols="12" md="2" class="archive-search-group">
+              <v-text-field
+                v-model="searchQuery"
+                prepend-inner-icon="mdi-magnify"
+                placeholder="Search articles..."
+                hide-details
+                variant="outlined"
+                density="comfortable"
+                class="archive-search"
+              ></v-text-field>
+            </v-col>
+            <v-col cols="12" md="2" class="archive-categories">
+              <v-btn
+                v-for="cat in categories"
+                :key="cat"
+                :class="['archive-chip', { active: activeCategory === cat }]"
+                @click="setCategory(cat)"
+                variant="outlined"
+                size="small"
+                rounded
+              >
+                {{ cat }}
+              </v-btn>
+            </v-col>
+          </v-row>
+
+          <v-row class="grid" no-gutters>
+            <v-col
+              v-for="a in filteredArticles"
+              :key="a.id"
+              cols="6"
+              sm="4"
+              md="3"
+              lg="2"
+              class="grid-item"
+            >
+              <v-card class="card">
+                <v-img :src="a.cover" :alt="a.title" class="cover" aspect-ratio="1.2" cover />
+                <v-card-text class="meta">
+                  <v-chip
+                    :class="['category', a.category.toLowerCase()]"
+                    size="x-small"
+                    variant="flat"
+                    >{{ a.category }}</v-chip
+                  >
+                  <v-card-title>
+                    <span class="article-title">{{ a.title }}</span>
+                  </v-card-title>
+                  <v-card-text class="date" :datetime="a.publishedAt">
+                    {{ new Date(a.publishedAt).toLocaleDateString() }}
+                  </v-card-text>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+        </v-col>
+      </v-row>
+    </v-main>
 
     <Footer />
-  </div>
+  </v-app>
 </template>
 
 <style scoped>
 .hero {
-  padding: 32px 12px 20px;
+  padding: 32px 12px 20px !important;
   text-align: center;
 }
 
 .welcome {
-  margin: 0 0 8px 0;
-  font-size: 28px;
+  margin: 0 0 8px 0 !important;
+  font-size: 28px !important;
+  padding: 0 !important;
 }
 
 .brand {
@@ -144,15 +183,23 @@ function scrollToPublications() {
 }
 
 .subtitle {
-  margin: 0;
-  color: #555;
+  margin: 0 !important;
+  color: #555 !important;
+  padding: 0 !important;
 }
 
 .scroll-indicator {
-  margin: 12px auto 0;
-  width: max-content;
+  margin: 12px auto 0 !important;
+  width: max-content !important;
   color: #333;
   cursor: pointer;
+}
+
+.scroll-indicator .v-col {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  padding: 0 !important;
 }
 
 .scroll-indicator .mdi {
@@ -178,68 +225,53 @@ function scrollToPublications() {
 }
 
 .publications {
-  padding: 24px 12px 32px;
+  padding: 24px 12px 32px !important;
 }
 
-.publications h3 {
-  margin: 0 0 12px 0;
-  font-size: 22px;
+.publications .v-card-title {
+  margin: 0 0 12px 0 !important;
+  font-size: 22px !important;
+  padding: 0 !important;
 }
 
 .archive-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+  margin-bottom: 16px !important;
+  padding: 0 !important;
 }
 
 .archive-search-group {
   position: relative;
+  padding: 0 !important;
 }
 
 .archive-categories {
-  display: inline-flex;
-  gap: 8px;
-}
-
-.chip {
-  appearance: none;
-  border: 1px solid #ddd;
-  background: #fff;
-  color: #333;
-  border-radius: 999px;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-
-.chip.active {
-  background: #f5c52b;
-  border-color: #f5c52b;
-}
-
-.search {
-  width: 260px;
-  max-width: 100%;
-  padding: 8px 10px 8px 34px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  display: inline-flex !important;
+  gap: 8px !important;
+  padding: 0 !important;
+  justify-content: flex-start !important;
 }
 
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
+  padding: 0 !important;
+}
+
+.grid-item {
+  padding: 4px !important;
 }
 
 .card {
-  border: 1px solid #eee;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid #eee !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: #fff !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  height: 100% !important;
 }
 
 .cover {
@@ -251,54 +283,67 @@ function scrollToPublications() {
   justify-content: center;
 }
 
-.cover img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: cover;
-}
-
 .meta {
-  padding: 10px 12px 12px;
+  padding: 8px 10px 10px !important;
+  flex-grow: 1 !important;
 }
 
 .category {
-  display: inline-block;
-  font-size: 12px;
-  padding: 4px 8px;
-  margin-bottom: 6px;
-  border-radius: 4px;
+  display: inline-block !important;
+  font-size: 10px !important;
+  padding: 4px 6px !important;
+  margin-bottom: 4px !important;
+  border-radius: 3px !important;
 }
 
 .category.magazine {
-  background-color: #f5c52b;
-  color: #333;
+  background-color: #f5c52b !important;
+  color: #333 !important;
 }
 
 .category.folio {
-  background-color: #39acff;
-  color: #333;
+  background-color: #39acff !important;
+  color: #333 !important;
 }
 
 .category.newsletter {
-  background-color: #353535;
-  color: #fff;
+  background-color: #353535 !important;
+  color: #fff !important;
 }
 
-.title {
-  margin: 0 0 6px 0;
-  font-size: 16px;
+.article-title {
+  margin: 0;
+  font-size: 15px !important;
+  line-height: 1.2 !important;
+  display: block;
 }
 
 .date {
-  font-size: 12px;
-  color: #888;
+  font-size: 10px !important;
+  color: #888 !important;
+  padding: 0 !important;
+}
+
+@media (max-width: 960px) {
+  .archive-categories {
+    justify-content: flex-start !important;
+    margin-top: 8px !important;
+  }
 }
 
 @media (max-width: 640px) {
   .archive-controls {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .archive-categories {
+    margin-top: 0 !important;
+  }
+
+  .grid-item {
+    padding: 2px !important;
   }
 
   :deep(.archive-search.v-text-field) {
@@ -314,11 +359,11 @@ function scrollToPublications() {
 
 :deep(.v-text-field .v-field__input) {
   padding: 8px 10px 8px 8px;
-  font-size: 14px; /* Add this line to make the font smaller */
+  font-size: 14px;
 }
 
 :deep(.v-text-field .v-field__input::placeholder) {
-  font-size: 14px; /* Match placeholder text size */
+  font-size: 14px;
 }
 
 :deep(.v-btn.archive-chip) {
@@ -336,7 +381,6 @@ function scrollToPublications() {
   color: #333 !important;
 }
 
-/* Remove any hover effects */
 :deep(.v-btn.archive-chip:hover) {
   background: white;
 }
