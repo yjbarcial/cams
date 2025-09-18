@@ -85,6 +85,8 @@ function scrollToPublications() {
             no-gutters
             class="scroll-indicator"
             @click="scrollToPublications"
+            @keyup.enter="scrollToPublications"
+            @keyup.space="scrollToPublications"
             role="button"
             tabindex="0"
           >
@@ -139,9 +141,19 @@ function scrollToPublications() {
               lg="2"
               class="grid-item"
             >
-              <RouterLink :to="`/deliverables/${a.id}`" style="text-decoration: none">
+              <RouterLink
+                :to="`/deliverables/${a.id}`"
+                style="text-decoration: none"
+                :aria-label="`View details for ${a.title}`"
+              >
                 <v-card class="card" hover>
-                  <v-img :src="a.cover" :alt="a.title" class="cover" aspect-ratio="1.2" cover />
+                  <v-img
+                    :src="a.cover"
+                    :alt="`${a.title} cover`"
+                    class="cover"
+                    aspect-ratio="1.2"
+                    cover
+                  />
                   <v-card-text class="meta">
                     <v-chip
                       :class="['category', a.category.toLowerCase()]"
@@ -152,8 +164,10 @@ function scrollToPublications() {
                     <v-card-title>
                       <span class="article-title">{{ a.title }}</span>
                     </v-card-title>
-                    <v-card-text class="date" :datetime="a.publishedAt">
-                      {{ new Date(a.publishedAt).toLocaleDateString() }}
+                    <v-card-text class="date">
+                      <time :datetime="a.publishedAt">
+                        {{ new Date(a.publishedAt).toLocaleDateString() }}
+                      </time>
                     </v-card-text>
                   </v-card-text>
                 </v-card>

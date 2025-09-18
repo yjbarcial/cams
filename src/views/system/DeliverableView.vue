@@ -1,25 +1,80 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import ArchiveHeader from '@/components/layout/ArchiveHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 
-const searchQuery = ref('')
-const activeType = ref('All')
 const route = useRoute()
-const articleId = Number(route.params.id)
+const router = useRouter()
 
-const filteredDeliverables = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-  return deliverables.value.filter((d) => {
-    const matchesType = activeType.value === 'All' || d.type === activeType.value
-    const matchesQuery = !query || d.title.toLowerCase().includes(query)
-    return matchesType && matchesQuery
-  })
-})
+const deliverables = ref([
+  {
+    id: 1,
+    title: 'Laom Folio – Yaon 2021',
+    category: 'Folio',
+    cover: '/images/lib-hd.jpg',
+    publishedAt: '2022-09-05',
+    description:
+      'This folio encapsulates the drastic transitions of life in this time of pandemic and inspires people to break free from chaos and continue living with hope.',
+  },
+  {
+    id: 2,
+    title: 'Campus Magazine 2022',
+    category: 'Magazine',
+    cover: '/images/lib-hd.jpg',
+    publishedAt: '2022-11-18',
+    description: 'A colorful look at campus life and stories from students and staff.',
+  },
+  {
+    id: 3,
+    title: 'Quarterly Newsletter – March',
+    category: 'Newsletter',
+    cover: '/images/lib-hd.jpg',
+    publishedAt: '2023-03-01',
+    description: 'Latest announcements and updates for the community.',
+  },
+  {
+    id: 4,
+    title: 'Special Folio – Creativity 2023',
+    category: 'Folio',
+    cover: '/images/lib-hd.jpg',
+    publishedAt: '2023-08-10',
+    description: 'Celebrating creativity and artistic expression across the university.',
+  },
+])
 
-function setType(t) {
-  activeType.value = t
+const articleId = computed(() => Number(route.params.id))
+
+const currentIndex = computed(() => deliverables.value.findIndex((d) => d.id === articleId.value))
+
+const current = computed(() => deliverables.value[currentIndex.value])
+
+function prevItem() {
+  if (currentIndex.value > 0) {
+    const prevId = deliverables.value[currentIndex.value - 1].id
+    router.push(`/deliverables/${prevId}`)
+  }
+}
+
+function nextItem() {
+  if (currentIndex.value < deliverables.value.length - 1) {
+    const nextId = deliverables.value[currentIndex.value + 1].id
+    router.push(`/deliverables/${nextId}`)
+  }
+}
+
+// Map category → chip color
+function categoryColor(cat) {
+  switch (cat) {
+    case 'Folio':
+      return 'blue lighten-4'
+    case 'Magazine':
+      return 'yellow lighten-4'
+    case 'Newsletter':
+      return 'grey lighten-3'
+    default:
+      return 'primary'
+  }
 }
 </script>
 
@@ -27,12 +82,89 @@ function setType(t) {
   <v-app>
     <ArchiveHeader />
 
-    <v-main class="hero">
-      <v-row justify="center" no-gutters>
-        <v-col cols="12" class="text-center">
-          <v-card-title class="welcome font-weight-bold"> Deliverables </v-card-title>
-        </v-col>
-      </v-row>
+    <v-main>
+      <v-container fluid class="py-6">
+        <v-row justify="center">
+          <v-col cols="12" md="11">
+            <v-btn
+              icon
+              variant="text"
+              color="primary"
+              class="mb-4"
+              @click="router.push('/archive')"
+            >
+              <v-icon>mdi-arrow-left</v-icon>
+            </v-btn>
+
+            <v-row>
+              <!-- Left: cover + arrows -->
+              <v-col cols="12" md="6">
+                <v-card flat class="pa-4 d-flex align-center justify-center" color="grey-lighten-4">
+                  <v-row align="center" justify="center" no-gutters style="width: 100%">
+                    <v-col cols="1" class="d-flex justify-end">
+                      <v-btn
+                        icon
+                        variant="text"
+                        :disabled="currentIndex <= 0"
+                        @click="prevItem"
+                        aria-label="Previous deliverable"
+                      >
+                        <v-icon large>mdi-chevron-left</v-icon>
+                      </v-btn>
+                    </v-col>
+
+                    <v-col cols="10" class="d-flex justify-center">
+                      <v-img
+                        :src="current.cover"
+                        :alt="`${current.title} cover`"
+                        max-width="380"
+                        aspect-ratio="3/4"
+                        class="elevation-2"
+                        cover
+                      />
+                    </v-col>
+
+                    <v-col cols="1" class="d-flex justify-start">
+                      <v-btn
+                        icon
+                        variant="text"
+                        :disabled="currentIndex >= deliverables.length - 1"
+                        @click="nextItem"
+                        aria-label="Next deliverable"
+                      >
+                        <v-icon large>mdi-chevron-right</v-icon>
+                      </v-btn>
+                    </v-col>
+                  </v-row>
+                </v-card>
+              </v-col>
+
+              <!-- Right: info -->
+              <v-col cols="12" md="6">
+                <v-card flat class="pa-6" color="grey-lighten-4">
+                  <v-chip size="small" :color="categoryColor(current.category)" class="mb-2" label>
+                    {{ current.category }}
+                  </v-chip>
+
+                  <v-card-title class="text-h6 font-weight-bold pa-0 mb-1">
+                    {{ current.title }}
+                  </v-card-title>
+
+                  <v-card-subtitle class="text-caption mb-4">
+                    <time :datetime="current.publishedAt">
+                      {{ new Date(current.publishedAt).toLocaleDateString() }}
+                    </time>
+                  </v-card-subtitle>
+
+                  <v-card-text class="text-body-2">
+                    {{ current.description }}
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+          </v-col>
+        </v-row>
+      </v-container>
     </v-main>
 
     <Footer />
@@ -40,71 +172,11 @@ function setType(t) {
 </template>
 
 <style scoped>
-/* reuse most ArchiveView styles */
-.hero {
-  padding: 32px 12px 20px;
-  text-align: center;
+.v-img {
+  border-radius: 4px;
 }
-.welcome {
-  margin-bottom: 8px;
-  font-size: 28px;
-}
-.subtitle {
-  color: #555;
-}
-.publications {
-  padding: 24px 12px 32px;
-}
-.grid-item {
-  padding: 4px;
-}
-.card {
-  border: 1px solid #eee;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  height: 100%;
-}
-.cover {
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  background: #fafafa;
-}
-.meta {
-  padding: 8px 10px 10px;
-}
-.category {
-  display: inline-block;
-  font-size: 10px;
-  padding: 4px 6px;
-  margin-bottom: 4px;
-  border-radius: 3px;
-}
-.category.manuscript {
-  background: #1976d2;
-  color: #fff;
-}
-.category.artwork {
-  background: #f57c00;
-  color: #fff;
-}
-.category.layout {
-  background: #43a047;
-  color: #fff;
-}
-.category.proof {
-  background: #6d4c41;
-  color: #fff;
-}
-.article-title {
-  font-size: 15px;
-  line-height: 1.2;
-}
-.date {
-  font-size: 11px;
-  color: #777;
+
+.v-icon {
+  color: #353535;
 }
 </style>

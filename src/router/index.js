@@ -29,6 +29,11 @@ const router = createRouter({
       component: ContributorDashboard,
     },
     {
+      path: '/archive',
+      name: 'archive',
+      component: ArchiveView,
+    },
+    {
       path: '/notifications',
       name: 'notifications',
       component: NotificationsView,
