@@ -1,48 +1,49 @@
 <script setup>
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
-import { createVuetify } from 'vuetify'
-
-const vuetify = createVuetify({
-  components: {
-    defaults: {
-      global: true,
-      // This enables auto-importing of all Vuetify components
-    },
-  },
-})
 </script>
 
 <template>
-  <div class="dashboard">
+  <v-app class="dashboard">
     <MainHeader />
 
-    <section class="hero">
+    <v-main class="hero">
       <v-img src="/images/GoldQuill Logo.png" alt="GoldQuill" class="logo" />
-      <h1 class="title">Welcome to <span class="brand">GoldQuill</span>!</h1>
+      <v-card-title class="title">
+        Welcome to
+        <span class="brand font-weight-bold">GoldQuill</span>!
+      </v-card-title>
 
-      <div class="actions">
-        <RouterLink to="/magazine" class="pill">
-          <span class="mdi mdi-file-document-outline"></span>
-          <span>MAGAZINE</span>
-        </RouterLink>
-        <RouterLink to="/newsletter" class="pill">
-          <span class="mdi mdi-newspaper-variant-outline"></span>
-          <span>NEWSLETTER</span>
-        </RouterLink>
-        <RouterLink to="/folio" class="pill">
-          <span class="mdi mdi-archive-outline"></span>
-          <span>FOLIO</span>
-        </RouterLink>
-      </div>
+      <v-row class="actions" justify="center">
+        <v-col cols="auto">
+          <RouterLink to="/magazine" class="pill">
+            <v-icon class="mdi mdi-file-document-outline"></v-icon>
+            <span>MAGAZINE</span>
+          </RouterLink>
+        </v-col>
+        <v-col cols="auto">
+          <RouterLink to="/newsletter" class="pill">
+            <v-icon class="mdi mdi-newspaper-variant-outline"></v-icon>
+            <span>NEWSLETTER</span>
+          </RouterLink>
+        </v-col>
+        <v-col cols="auto">
+          <RouterLink to="/folio" class="pill">
+            <v-icon class="mdi mdi-archive-outline"></v-icon>
+            <span>FOLIO</span>
+          </RouterLink>
+        </v-col>
+      </v-row>
 
-      <div class="actions">
-        <RouterLink to="/other" class="pill secondary">
-          <span class="mdi mdi-dots-horizontal"></span>
-          <span>OTHER</span>
-        </RouterLink>
-      </div>
-    </section>
+      <v-row class="actions" justify="center">
+        <v-col cols="auto">
+          <RouterLink to="/other" class="pill secondary">
+            <v-icon class="mdi mdi-dots-horizontal"></v-icon>
+            <span>OTHER</span>
+          </RouterLink>
+        </v-col>
+      </v-row>
+    </v-main>
 
     <v-sheet class="contact-info" color="white" width="100%">
       <v-divider class="mx-5 mt-6" thickness="2" color="black"></v-divider>
@@ -51,7 +52,7 @@ const vuetify = createVuetify({
         <!-- Contact Us Header -->
         <v-row justify="center">
           <v-col cols="12" class="text-center">
-            <v-card-title class="text-h">Contact Us!</v-card-title>
+            <v-card-title class="text-h5">Contact Us!</v-card-title>
           </v-col>
         </v-row>
 
@@ -121,21 +122,19 @@ const vuetify = createVuetify({
     </v-sheet>
 
     <Footer />
-  </div>
+  </v-app>
 </template>
 
 <style scoped>
-.dashboard {
+/* Override Vuetify defaults to match original layout */
+:deep(.v-app.dashboard) {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-.hero {
+:deep(.v-main.hero) {
   flex: 1;
-}
-
-.hero {
   text-align: center;
   padding: 28px 12px 12px;
 }
@@ -147,21 +146,29 @@ const vuetify = createVuetify({
   margin: 0 auto 12px;
 }
 
-.title {
+:deep(.v-card-title.title) {
   font-size: 36px;
   margin: 0 0 16px 0;
   font-weight: 800;
-}
-.brand {
-  color: #f5c52b;
+  line-height: 1.2;
+  padding: 0;
 }
 
-.actions {
+:deep(.v-row.actions) {
   display: flex;
   justify-content: center;
   gap: 18px;
   flex-wrap: wrap;
   margin-bottom: 14px;
+  margin: 0 0 14px 0;
+}
+
+:deep(.v-col) {
+  padding: 0;
+}
+
+.brand {
+  color: #f5c52b;
 }
 
 .pill {
@@ -177,14 +184,14 @@ const vuetify = createVuetify({
   justify-content: center;
   box-shadow: 0 6px 10px rgba(0, 0, 0, 0.12);
   cursor: pointer;
-  text-decoration: none; /* Add this line to remove underline */
+  text-decoration: none;
 }
 
 .pill.secondary {
   background: #3a3a3a;
 }
 
-.pill .mdi {
+:deep(.pill .v-icon) {
   font-size: 20px;
 }
 
@@ -193,8 +200,6 @@ const vuetify = createVuetify({
   height: auto;
   object-fit: contain;
 }
-
-/* info section removed */
 
 :deep(.text-h5) {
   font-size: 1.5rem;
@@ -227,10 +232,28 @@ const vuetify = createVuetify({
   justify-content: flex-start;
 }
 
+/* Add colored icons */
+:deep(.mdi-facebook) {
+  color: #1877f2;
+}
+
+:deep(.mdi-instagram) {
+  color: #e4405f;
+}
+
+:deep(.mdi-newspaper) {
+  color: #ff5c62;
+}
+
+:deep(.mdi-gmail) {
+  color: #ea4335;
+}
+
 @media (max-width: 640px) {
-  .title {
+  :deep(.v-card-title.title) {
     font-size: 28px;
   }
+
   .pill {
     min-width: 200px;
   }
