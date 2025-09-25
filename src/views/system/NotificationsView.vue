@@ -61,15 +61,15 @@ const handleAction = (notificationId, actionType) => {
 </script>
 
 <template>
-  <div class="notifications-page">
+  <v-app class="notifications-page">
     <MainHeader />
 
-    <main class="main-content">
+    <v-main class="main-content">
       <v-container class="px-4">
         <v-card class="main-card" elevation="1">
-          <h1 class="notifications-title px-6 pt-6 mb-4">Notifications</h1>
+          <v-card-title class="notifications-title px-6 pt-4 mb-2">Notifications</v-card-title>
 
-          <div class="px-6">
+          <v-card-text class="px-6">
             <v-card class="notifications-list" elevation="0">
               <v-card
                 v-for="notification in notifications"
@@ -79,42 +79,46 @@ const handleAction = (notificationId, actionType) => {
                 elevation="1"
               >
                 <v-card-item>
-                  <div class="notification-content">
-                    <div class="notification-header">
-                      <span
-                        class="notification-type"
-                        :style="{ backgroundColor: notification.typeColor }"
-                      >
+                  <v-container class="notification-content">
+                    <v-row class="notification-header">
+                      <v-chip class="notification-type" :color="notification.typeColor">
                         {{ notification.type }}
-                        <span class="notification-dot" v-if="!notification.isRead"></span>
-                      </span>
-                    </div>
+                        <v-icon v-if="!notification.isRead" class="notification-dot" size="8"
+                          >mdi-circle</v-icon
+                        >
+                      </v-chip>
+                    </v-row>
 
-                    <div class="notification-body">
-                      <h3 class="notification-title">{{ notification.title }}</h3>
-                      <p class="notification-description">{{ notification.description }}</p>
-                    </div>
-                  </div>
+                    <v-row class="notification-body">
+                      <v-card-title class="notification-title">{{
+                        notification.title
+                      }}</v-card-title>
+                      <v-card-text class="notification-description">{{
+                        notification.description
+                      }}</v-card-text>
+                    </v-row>
+                  </v-container>
 
-                  <div class="notification-meta">
-                    <div class="timestamp">
-                      <span class="mdi mdi-clock-outline"></span>
-                      <span>{{ notification.timestamp }}</span>
-                    </div>
+                  <v-container class="notification-meta">
+                    <v-row class="timestamp">
+                      <v-icon>mdi-clock-outline</v-icon>
+                      <v-card-text>{{ notification.timestamp }}</v-card-text>
+                    </v-row>
 
-                    <div class="notification-actions">
-                      <button
+                    <v-row class="notification-actions">
+                      <v-btn
                         v-for="action in notification.actions"
                         :key="action.label"
                         class="action-btn"
                         :class="action.type"
-                        :style="{ borderColor: action.color, color: action.color }"
+                        :color="action.color"
+                        variant="outlined"
                         @click="handleAction(notification.id, action.type)"
                       >
                         {{ action.label }}
-                      </button>
-                    </div>
-                  </div>
+                      </v-btn>
+                    </v-row>
+                  </v-container>
                 </v-card-item>
               </v-card>
 
@@ -124,13 +128,13 @@ const handleAction = (notificationId, actionType) => {
                 </v-btn>
               </v-card>
             </v-card>
-          </div>
+          </v-card-text>
         </v-card>
       </v-container>
-    </main>
+    </v-main>
 
     <Footer />
-  </div>
+  </v-app>
 </template>
 
 <style scoped>
@@ -291,9 +295,31 @@ const handleAction = (notificationId, actionType) => {
   color: #3b82f6;
 }
 
+/* Override Vuetify components to match existing layout */
+:deep(.v-container) {
+  padding: 0 !important;
+  max-width: none !important;
+}
+
+:deep(.v-row) {
+  margin: 0 !important;
+}
+
+:deep(.v-col) {
+  padding: 0 !important;
+}
+
+:deep(.v-chip) {
+  background-color: var(--v-theme-primary) !important;
+}
+
+:deep(.v-btn) {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+
 /* Responsive design */
 @media (max-width: 840px) {
-  /* Updated breakpoint */
   .main-content {
     padding: 20px 12px;
   }
