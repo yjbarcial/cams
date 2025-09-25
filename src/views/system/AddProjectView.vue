@@ -162,119 +162,141 @@ const saveAsDraft = () => {
 </script>
 
 <template>
-  <div class="add-project-page">
+  <v-app class="add-project-page">
     <MainHeader />
 
-    <main class="main-content">
+    <v-main class="main-content">
       <h1 class="page-title">Add New {{ categoryLabel }} Project</h1>
 
       <section class="form-card">
         <div class="form-grid">
           <div class="left-col">
             <div class="form-group">
-              <label class="label">Project Title:</label>
-              <input
+              <v-label class="label">Project Title:</v-label>
+              <v-text-field
                 v-model="title"
-                type="text"
                 class="input"
                 :placeholder="categoryLabel + ' Title'"
+                variant="outlined"
+                hide-details
                 required
               />
             </div>
 
             <div class="form-group">
-              <label class="label">Section Head:</label>
-              <input
+              <v-label class="label">Section Head:</v-label>
+              <v-text-field
                 v-model="sectionHead"
-                type="text"
                 class="input"
                 placeholder="Name of Section Head"
+                variant="outlined"
+                hide-details
               />
             </div>
 
             <div class="form-group">
-              <label class="label">Project Type:</label>
+              <v-label class="label">Project Type:</v-label>
               <div class="project-type-display">
-                <span class="type-badge">{{ categoryLabel }}</span>
-                <span class="type-lock-icon">🔒</span>
+                <v-chip class="type-badge">{{ categoryLabel }}</v-chip>
+                <v-icon class="type-lock-icon">mdi-lock</v-icon>
               </div>
             </div>
 
             <div class="form-group">
-              <label class="label">Deadline:</label>
-              <input v-model="deadline" type="date" class="date-input" />
+              <v-label class="label">Deadline:</v-label>
+              <v-text-field
+                v-model="deadline"
+                type="date"
+                class="date-input"
+                variant="outlined"
+                hide-details
+              />
             </div>
 
             <div class="form-group">
-              <label class="label">Description (Optional):</label>
-              <textarea
+              <v-label class="label">Description (Optional):</v-label>
+              <v-textarea
                 v-model="description"
                 rows="6"
                 class="textarea"
                 placeholder="Describe the project..."
-              ></textarea>
+                variant="outlined"
+                hide-details
+              />
             </div>
           </div>
 
           <div class="right-col">
             <div class="assign-block">
               <div class="assign-header">
-                <label class="label">Assign to Writer(s)</label>
+                <v-label class="label">Assign to Writer(s)</v-label>
                 <div class="inline">
                   <div class="select-wrap small">
-                    <select v-model="selectedWriter" class="select">
-                      <option value="">List of Writers</option>
-                      <option v-for="w in writerOptions" :key="w" :value="w">{{ w }}</option>
-                    </select>
-                    <span class="mdi mdi-menu-down select-caret"></span>
+                    <v-select
+                      v-model="selectedWriter"
+                      :items="writerOptions"
+                      placeholder="List of Writers"
+                      class="select"
+                      variant="outlined"
+                      hide-details
+                    />
                   </div>
-                  <button class="ghost-btn" @click="addSelected('writer')">
+                  <v-btn class="ghost-btn" variant="outlined" @click="addSelected('writer')">
                     +Add Another Writer
-                  </button>
+                  </v-btn>
                 </div>
               </div>
               <div class="listbox" aria-label="Selected writers">
                 <div v-if="writers.length === 0" class="listbox-empty">No writers selected</div>
                 <div v-for="(w, idx) in writers" :key="w + idx" class="listbox-item">
                   <span>{{ w }}</span>
-                  <button
+                  <v-btn
                     class="remove"
+                    size="small"
+                    variant="text"
+                    icon
                     @click="removeItem('writer', idx)"
                     aria-label="Remove writer"
                   >
-                    ×
-                  </button>
+                    <v-icon>mdi-close</v-icon>
+                  </v-btn>
                 </div>
               </div>
             </div>
 
             <div class="assign-block">
               <div class="assign-header">
-                <label class="label">Assign to Artist(s)</label>
+                <v-label class="label">Assign to Artist(s)</v-label>
                 <div class="inline">
                   <div class="select-wrap small">
-                    <select v-model="selectedArtist" class="select">
-                      <option value="">List of Artists</option>
-                      <option v-for="a in artistOptions" :key="a" :value="a">{{ a }}</option>
-                    </select>
-                    <span class="mdi mdi-menu-down select-caret"></span>
+                    <v-select
+                      v-model="selectedArtist"
+                      :items="artistOptions"
+                      placeholder="List of Artists"
+                      class="select"
+                      variant="outlined"
+                      hide-details
+                    />
                   </div>
-                  <button class="ghost-btn" @click="addSelected('artist')">
+                  <v-btn class="ghost-btn" variant="outlined" @click="addSelected('artist')">
                     +Add Another Artist
-                  </button>
+                  </v-btn>
                 </div>
               </div>
               <div class="listbox" aria-label="Selected artists">
                 <div v-if="artists.length === 0" class="listbox-empty">No artists selected</div>
                 <div v-for="(a, idx) in artists" :key="a + idx" class="listbox-item">
                   <span>{{ a }}</span>
-                  <button
+                  <v-btn
                     class="remove"
+                    size="small"
+                    variant="text"
+                    icon
                     @click="removeItem('artist', idx)"
                     aria-label="Remove artist"
                   >
-                    ×
-                  </button>
+                    <v-icon>mdi-close</v-icon>
+                  </v-btn>
                 </div>
               </div>
             </div>
@@ -282,15 +304,15 @@ const saveAsDraft = () => {
         </div>
 
         <div class="actions">
-          <button class="primary" @click="assignProject">Assign Project</button>
-          <button class="draft" @click="saveAsDraft">Save as Draft</button>
-          <RouterLink :to="cancelPath" class="tertiary">Cancel</RouterLink>
+          <v-btn class="primary" @click="assignProject">Assign Project</v-btn>
+          <v-btn class="draft" @click="saveAsDraft">Save as Draft</v-btn>
+          <v-btn :to="cancelPath" class="tertiary" variant="outlined">Cancel</v-btn>
         </div>
       </section>
-    </main>
+    </v-main>
 
     <Footer />
-  </div>
+  </v-app>
 </template>
 
 <style scoped>
@@ -340,31 +362,60 @@ const saveAsDraft = () => {
   font-size: 14px;
 }
 
-.input,
-.select,
-.date-input,
-.textarea {
-  width: 100%;
-  border: 2px solid #d1d5db;
-  border-radius: 8px;
-  padding: 12px 16px;
-  background: #fff;
-  font-size: 14px;
-  transition: border-color 0.2s ease;
+/* Override Vuetify field styles to match original design and remove outlines */
+:deep(.v-field) {
+  border: 2px solid #d1d5db !important;
+  border-radius: 8px !important;
+  background: #fff !important;
 }
 
-.input:focus,
-.select:focus,
-.date-input:focus,
-.textarea:focus {
-  outline: none;
-  border-color: #f5c52b;
-  box-shadow: 0 0 0 3px rgba(245, 197, 43, 0.1);
+:deep(.v-field:hover) {
+  border-color: #d1d5db !important;
 }
 
-.textarea {
-  resize: vertical;
-  min-height: 120px;
+:deep(.v-field:focus-within) {
+  border-color: #d1d5db !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+:deep(.v-field--focused) {
+  border-color: #d1d5db !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+:deep(.v-field__input) {
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+}
+
+:deep(.v-field__input:focus) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+:deep(.v-textarea .v-field) {
+  min-height: 120px !important;
+}
+
+/* Remove focus outlines from select fields */
+:deep(.v-select .v-field) {
+  border: 2px solid #d1d5db !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+
+:deep(.v-select .v-field:focus-within) {
+  border-color: #d1d5db !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+:deep(.v-select .v-field--focused) {
+  border-color: #d1d5db !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 .project-type-display {
@@ -379,12 +430,10 @@ const saveAsDraft = () => {
 }
 
 .type-badge {
-  background: #f5c52b;
-  color: #1f2937;
-  padding: 4px 12px;
-  border-radius: 6px;
-  font-weight: 700;
-  font-size: 14px;
+  background: #f5c52b !important;
+  color: #1f2937 !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
 }
 
 .type-lock-icon {
@@ -398,16 +447,6 @@ const saveAsDraft = () => {
 
 .select-wrap.small {
   width: 220px;
-}
-
-.select-caret {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: #6b7280;
-  font-size: 18px;
 }
 
 .listbox {
@@ -467,37 +506,26 @@ const saveAsDraft = () => {
 }
 
 .ghost-btn {
-  background: #ffffff;
-  border: 2px solid #d1d5db;
-  border-radius: 8px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  transition: all 0.2s ease;
-  white-space: nowrap;
+  background: #ffffff !important;
+  border: 2px solid #d1d5db !important;
+  color: #374151 !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
 }
 
 .ghost-btn:hover {
-  border-color: #f5c52b;
-  color: #1f2937;
+  border-color: #f5c52b !important;
+  color: #1f2937 !important;
 }
 
 .remove {
-  background: transparent;
-  border: none;
-  color: #ef4444;
-  font-size: 20px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 4px;
-  border-radius: 4px;
-  transition: background-color 0.2s ease;
+  color: #ef4444 !important;
+  transition: background-color 0.2s ease !important;
 }
 
 .remove:hover {
-  background-color: #fef2f2;
+  background-color: #fef2f2 !important;
 }
 
 .actions {
@@ -509,58 +537,44 @@ const saveAsDraft = () => {
 }
 
 .primary {
-  background: #f5c52b;
-  border: 2px solid #d4a017;
-  color: #1f2937;
-  padding: 14px 24px;
-  border-radius: 10px;
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.2s ease;
+  background: #f5c52b !important;
+  border: 2px solid #d4a017 !important;
+  color: #1f2937 !important;
+  font-weight: 700 !important;
+  transition: all 0.2s ease !important;
 }
 
 .primary:hover {
-  background: #e6b800;
-  border-color: #b8941f;
+  background: #e6b800 !important;
+  border-color: #b8941f !important;
   transform: translateY(-1px);
 }
 
 .draft {
-  background: #353535; /* Gray-500 */
-  border: 2px solid #353535; /* Gray-600 */
-  color: #ffffff;
-  padding: 14px 24px;
-  border-radius: 10px;
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.2s ease;
+  background: #353535 !important;
+  border: 2px solid #353535 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  transition: all 0.2s ease !important;
 }
 
 .draft:hover {
-  background: #4b5563; /* Gray-600 */
-  border-color: #374151; /* Gray-700 */
+  background: #4b5563 !important;
+  border-color: #374151 !important;
   transform: translateY(-1px);
 }
 
 .tertiary {
-  background: #fff;
-  color: #374151;
-  border: 2px solid #d1d5db;
-  padding: 14px 24px;
-  border-radius: 10px;
-  font-weight: 700;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  font-size: 16px;
-  transition: all 0.2s ease;
+  background: #fff !important;
+  color: #374151 !important;
+  border: 2px solid #d1d5db !important;
+  font-weight: 700 !important;
+  transition: all 0.2s ease !important;
 }
 
 .tertiary:hover {
-  border-color: #9ca3af;
-  background-color: #f9fafb;
+  border-color: #9ca3af !important;
+  background-color: #f9fafb !important;
 }
 
 @media (max-width: 900px) {
