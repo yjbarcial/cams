@@ -168,147 +168,224 @@ const saveAsDraft = () => {
     <v-main class="main-content">
       <h1 class="page-title">Add New {{ categoryLabel }} Project</h1>
 
-      <section class="form-card">
-        <div class="form-grid">
-          <div class="left-col">
-            <div class="form-group">
-              <v-label class="label">Project Title:</v-label>
-              <v-text-field
-                v-model="title"
-                class="input"
-                :placeholder="categoryLabel + ' Title'"
-                variant="outlined"
-                hide-details
-                required
-              />
-            </div>
+      <v-card class="form-card" elevation="1">
+        <v-card-text class="pa-6">
+          <v-container class="form-grid pa-0">
+            <v-row>
+              <v-col cols="6" class="left-col pr-3">
+                <v-container class="pa-0">
+                  <v-row no-gutters>
+                    <v-col cols="12" class="form-group">
+                      <v-label class="label">Project Title:</v-label>
+                      <v-text-field
+                        v-model="title"
+                        class="input"
+                        :placeholder="categoryLabel + ' Title'"
+                        variant="outlined"
+                        hide-details
+                        required
+                      />
+                    </v-col>
 
-            <div class="form-group">
-              <v-label class="label">Section Head:</v-label>
-              <v-text-field
-                v-model="sectionHead"
-                class="input"
-                placeholder="Name of Section Head"
-                variant="outlined"
-                hide-details
-              />
-            </div>
+                    <v-col cols="12" class="form-group">
+                      <v-label class="label">Section Head:</v-label>
+                      <v-text-field
+                        v-model="sectionHead"
+                        class="input"
+                        placeholder="Name of Section Head"
+                        variant="outlined"
+                        hide-details
+                      />
+                    </v-col>
 
-            <div class="form-group">
-              <v-label class="label">Project Type:</v-label>
-              <div class="project-type-display">
-                <v-chip class="type-badge">{{ categoryLabel }}</v-chip>
-                <v-icon class="type-lock-icon">mdi-lock</v-icon>
-              </div>
-            </div>
+                    <v-col cols="12" class="form-group">
+                      <v-label class="label">Project Type:</v-label>
+                      <v-container class="project-type-display pa-3">
+                        <v-row align="center" no-gutters>
+                          <v-col cols="auto">
+                            <v-chip class="type-badge">{{ categoryLabel }}</v-chip>
+                          </v-col>
+                          <v-spacer />
+                          <v-col cols="auto">
+                            <v-icon class="type-lock-icon">mdi-lock</v-icon>
+                          </v-col>
+                        </v-row>
+                      </v-container>
+                    </v-col>
 
-            <div class="form-group">
-              <v-label class="label">Deadline:</v-label>
-              <v-text-field
-                v-model="deadline"
-                type="date"
-                class="date-input"
-                variant="outlined"
-                hide-details
-              />
-            </div>
+                    <v-col cols="12" class="form-group">
+                      <v-label class="label">Deadline:</v-label>
+                      <v-text-field
+                        v-model="deadline"
+                        type="date"
+                        class="date-input"
+                        variant="outlined"
+                        hide-details
+                      />
+                    </v-col>
 
-            <div class="form-group">
-              <v-label class="label">Description (Optional):</v-label>
-              <v-textarea
-                v-model="description"
-                rows="6"
-                class="textarea"
-                placeholder="Describe the project..."
-                variant="outlined"
-                hide-details
-              />
-            </div>
-          </div>
+                    <v-col cols="12" class="form-group">
+                      <v-label class="label">Description (Optional):</v-label>
+                      <v-textarea
+                        v-model="description"
+                        rows="6"
+                        class="textarea"
+                        placeholder="Describe the project..."
+                        variant="outlined"
+                        hide-details
+                      />
+                    </v-col>
+                  </v-row>
+                </v-container>
+              </v-col>
 
-          <div class="right-col">
-            <div class="assign-block">
-              <div class="assign-header">
-                <v-label class="label">Assign to Writer(s)</v-label>
-                <div class="inline">
-                  <div class="select-wrap small">
-                    <v-select
-                      v-model="selectedWriter"
-                      :items="writerOptions"
-                      placeholder="List of Writers"
-                      class="select"
-                      variant="outlined"
-                      hide-details
-                    />
-                  </div>
-                  <v-btn class="ghost-btn" variant="outlined" @click="addSelected('writer')">
-                    +Add Another Writer
-                  </v-btn>
-                </div>
-              </div>
-              <div class="listbox" aria-label="Selected writers">
-                <div v-if="writers.length === 0" class="listbox-empty">No writers selected</div>
-                <div v-for="(w, idx) in writers" :key="w + idx" class="listbox-item">
-                  <span>{{ w }}</span>
-                  <v-btn
-                    class="remove"
-                    size="small"
-                    variant="text"
-                    icon
-                    @click="removeItem('writer', idx)"
-                    aria-label="Remove writer"
-                  >
-                    <v-icon>mdi-close</v-icon>
-                  </v-btn>
-                </div>
-              </div>
-            </div>
+              <v-col cols="6" class="right-col pl-3">
+                <v-container class="pa-0">
+                  <v-row no-gutters>
+                    <v-col cols="12" class="assign-block">
+                      <v-container class="assign-header pa-0">
+                        <v-row no-gutters>
+                          <v-col cols="12">
+                            <v-label class="label">Assign to Writer(s)</v-label>
+                            <v-row class="inline" no-gutters align="center">
+                              <v-col cols="auto" class="select-wrap-col">
+                                <v-container class="select-wrap small pa-0">
+                                  <v-select
+                                    v-model="selectedWriter"
+                                    :items="writerOptions"
+                                    placeholder="List of Writers"
+                                    class="select"
+                                    variant="outlined"
+                                    hide-details
+                                  />
+                                </v-container>
+                              </v-col>
+                              <v-col cols="auto" class="ml-3">
+                                <v-btn
+                                  class="ghost-btn"
+                                  variant="outlined"
+                                  @click="addSelected('writer')"
+                                >
+                                  +Add Another Writer
+                                </v-btn>
+                              </v-col>
+                            </v-row>
+                          </v-col>
+                        </v-row>
+                      </v-container>
+                      <v-card class="listbox mt-3" flat>
+                        <v-card-text class="pa-3">
+                          <v-container v-if="writers.length === 0" class="listbox-empty pa-0">
+                            <v-row justify="center">
+                              <v-col cols="12" class="text-center">No writers selected</v-col>
+                            </v-row>
+                          </v-container>
+                          <v-container
+                            v-for="(w, idx) in writers"
+                            :key="w + idx"
+                            class="listbox-item pa-0"
+                          >
+                            <v-row align="center" no-gutters>
+                              <v-col>{{ w }}</v-col>
+                              <v-col cols="auto">
+                                <v-btn
+                                  class="remove"
+                                  size="small"
+                                  variant="text"
+                                  icon
+                                  @click="removeItem('writer', idx)"
+                                  aria-label="Remove writer"
+                                >
+                                  <v-icon>mdi-close</v-icon>
+                                </v-btn>
+                              </v-col>
+                            </v-row>
+                          </v-container>
+                        </v-card-text>
+                      </v-card>
+                    </v-col>
 
-            <div class="assign-block">
-              <div class="assign-header">
-                <v-label class="label">Assign to Artist(s)</v-label>
-                <div class="inline">
-                  <div class="select-wrap small">
-                    <v-select
-                      v-model="selectedArtist"
-                      :items="artistOptions"
-                      placeholder="List of Artists"
-                      class="select"
-                      variant="outlined"
-                      hide-details
-                    />
-                  </div>
-                  <v-btn class="ghost-btn" variant="outlined" @click="addSelected('artist')">
-                    +Add Another Artist
-                  </v-btn>
-                </div>
-              </div>
-              <div class="listbox" aria-label="Selected artists">
-                <div v-if="artists.length === 0" class="listbox-empty">No artists selected</div>
-                <div v-for="(a, idx) in artists" :key="a + idx" class="listbox-item">
-                  <span>{{ a }}</span>
-                  <v-btn
-                    class="remove"
-                    size="small"
-                    variant="text"
-                    icon
-                    @click="removeItem('artist', idx)"
-                    aria-label="Remove artist"
-                  >
-                    <v-icon>mdi-close</v-icon>
-                  </v-btn>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+                    <v-col cols="12" class="assign-block">
+                      <v-container class="assign-header pa-0">
+                        <v-row no-gutters>
+                          <v-col cols="12">
+                            <v-label class="label">Assign to Artist(s)</v-label>
+                            <v-row class="inline" no-gutters align="center">
+                              <v-col cols="auto" class="select-wrap-col">
+                                <v-container class="select-wrap small pa-0">
+                                  <v-select
+                                    v-model="selectedArtist"
+                                    :items="artistOptions"
+                                    placeholder="List of Artists"
+                                    class="select"
+                                    variant="outlined"
+                                    hide-details
+                                  />
+                                </v-container>
+                              </v-col>
+                              <v-col cols="auto" class="ml-3">
+                                <v-btn
+                                  class="ghost-btn"
+                                  variant="outlined"
+                                  @click="addSelected('artist')"
+                                >
+                                  +Add Another Artist
+                                </v-btn>
+                              </v-col>
+                            </v-row>
+                          </v-col>
+                        </v-row>
+                      </v-container>
+                      <v-card class="listbox mt-3" flat>
+                        <v-card-text class="pa-3">
+                          <v-container v-if="artists.length === 0" class="listbox-empty pa-0">
+                            <v-row justify="center">
+                              <v-col cols="12" class="text-center">No artists selected</v-col>
+                            </v-row>
+                          </v-container>
+                          <v-container
+                            v-for="(a, idx) in artists"
+                            :key="a + idx"
+                            class="listbox-item pa-0"
+                          >
+                            <v-row align="center" no-gutters>
+                              <v-col>{{ a }}</v-col>
+                              <v-col cols="auto">
+                                <v-btn
+                                  class="remove"
+                                  size="small"
+                                  variant="text"
+                                  icon
+                                  @click="removeItem('artist', idx)"
+                                  aria-label="Remove artist"
+                                >
+                                  <v-icon>mdi-close</v-icon>
+                                </v-btn>
+                              </v-col>
+                            </v-row>
+                          </v-container>
+                        </v-card-text>
+                      </v-card>
+                    </v-col>
+                  </v-row>
+                </v-container>
+              </v-col>
+            </v-row>
 
-        <div class="actions">
-          <v-btn class="primary" @click="assignProject">Assign Project</v-btn>
-          <v-btn class="draft" @click="saveAsDraft">Save as Draft</v-btn>
-          <v-btn :to="cancelPath" class="tertiary" variant="outlined">Cancel</v-btn>
-        </div>
-      </section>
+            <v-row class="actions mt-6 pt-2" style="border-top: 1px solid #e5e7eb">
+              <v-col cols="auto">
+                <v-btn class="primary" @click="assignProject">Assign Project</v-btn>
+              </v-col>
+              <v-col cols="auto">
+                <v-btn class="draft" @click="saveAsDraft">Save as Draft</v-btn>
+              </v-col>
+              <v-col cols="auto">
+                <v-btn :to="cancelPath" class="tertiary" variant="outlined">Cancel</v-btn>
+              </v-col>
+            </v-row>
+          </v-container>
+        </v-card-text>
+      </v-card>
     </v-main>
 
     <Footer />
@@ -337,21 +414,26 @@ const saveAsDraft = () => {
 }
 
 .form-card {
-  border: 2px solid #d1d5db;
-  border-radius: 12px;
-  padding: 24px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 2px solid #d1d5db !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
 }
 
 .form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 32px;
+  gap: 16px !important;
 }
 
 .form-group {
   margin-bottom: 20px;
+}
+
+.left-col {
+  padding-right: 12px !important;
+}
+
+.right-col {
+  padding-left: 12px !important;
 }
 
 .label {
@@ -419,13 +501,9 @@ const saveAsDraft = () => {
 }
 
 .project-type-display {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: #f9fafb;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
+  background: #f9fafb !important;
+  border: 2px solid #e5e7eb !important;
+  border-radius: 8px !important;
   color: #6b7280;
 }
 
@@ -450,11 +528,10 @@ const saveAsDraft = () => {
 }
 
 .listbox {
-  border: 2px solid #d1d5db;
-  border-radius: 8px;
-  padding: 12px;
+  border: 2px solid #d1d5db !important;
+  border-radius: 8px !important;
   min-height: 100px;
-  background: #fff;
+  background: #fff !important;
   overflow-y: auto;
   max-height: 200px;
 }
@@ -462,18 +539,13 @@ const saveAsDraft = () => {
 .listbox-empty {
   color: #9ca3af;
   font-size: 14px;
-  text-align: center;
-  padding: 20px;
+  padding: 20px 0;
   font-style: italic;
 }
 
 .listbox-item {
-  padding: 8px 12px;
+  padding: 8px 0;
   border-bottom: 1px solid #f3f4f6;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   transition: background-color 0.2s ease;
 }
 
@@ -487,22 +559,6 @@ const saveAsDraft = () => {
 
 .assign-block {
   margin-bottom: 24px;
-}
-
-.assign-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.inline {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
 }
 
 .ghost-btn {
@@ -526,14 +582,6 @@ const saveAsDraft = () => {
 
 .remove:hover {
   background-color: #fef2f2 !important;
-}
-
-.actions {
-  display: flex;
-  gap: 16px;
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid #e5e7eb;
 }
 
 .primary {
@@ -579,27 +627,24 @@ const saveAsDraft = () => {
 
 @media (max-width: 900px) {
   .form-grid {
-    grid-template-columns: 1fr;
-    gap: 24px;
+    gap: 24px !important;
   }
 
-  .assign-header {
+  .left-col,
+  .right-col {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  :deep(.v-row) {
     flex-direction: column;
-    align-items: flex-start;
   }
 
-  .inline {
+  .actions .v-col {
     width: 100%;
-    justify-content: flex-start;
   }
 
-  .actions {
-    flex-direction: column;
-  }
-
-  .primary,
-  .draft,
-  .tertiary {
+  :deep(.actions .v-btn) {
     width: 100%;
     justify-content: center;
   }
