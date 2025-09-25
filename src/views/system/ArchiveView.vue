@@ -314,12 +314,12 @@ function scrollToPublications() {
 
 .category.magazine {
   background-color: #f5c52b !important;
-  color: #333 !important;
+  color: #353535 !important;
 }
 
 .category.folio {
   background-color: #39acff !important;
-  color: #333 !important;
+  color: #353535 !important;
 }
 
 .category.newsletter {

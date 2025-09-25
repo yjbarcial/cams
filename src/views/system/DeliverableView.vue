@@ -62,20 +62,6 @@ function nextItem() {
     router.push(`/deliverables/${nextId}`)
   }
 }
-
-// Map category → chip color
-function categoryColor(cat) {
-  switch (cat) {
-    case 'Folio':
-      return 'blue lighten-4'
-    case 'Magazine':
-      return 'yellow lighten-4'
-    case 'Newsletter':
-      return 'grey lighten-3'
-    default:
-      return 'primary'
-  }
-}
 </script>
 
 <template>
@@ -142,7 +128,13 @@ function categoryColor(cat) {
               <!-- Right: info -->
               <v-col cols="12" md="6">
                 <v-card flat class="pa-6" color="grey-lighten-4">
-                  <v-chip size="small" :color="categoryColor(current.category)" class="mb-2" label>
+                  <v-chip
+                    :class="['category', current.category.toLowerCase()]"
+                    size="small"
+                    variant="flat"
+                    class="mb-2"
+                    label
+                  >
                     {{ current.category }}
                   </v-chip>
 
@@ -178,5 +170,29 @@ function categoryColor(cat) {
 
 .v-icon {
   color: #353535;
+}
+
+/* Copy the exact category styles from ArchiveView */
+.category {
+  display: inline-block !important;
+  font-size: 11px !important;
+  padding: 5px 6px !important;
+  margin-bottom: 4px !important;
+  border-radius: 3px !important;
+}
+
+.category.magazine {
+  background-color: #f5c52b !important;
+  color: #333 !important;
+}
+
+.category.folio {
+  background-color: #39acff !important;
+  color: #333 !important;
+}
+
+.category.newsletter {
+  background-color: #353535 !important;
+  color: #fff !important;
 }
 </style>
