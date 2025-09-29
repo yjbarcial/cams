@@ -1,7 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
+
+const router = useRouter()
 
 // Sample magazine projects data
 const defaultProjects = [
@@ -96,8 +99,8 @@ const projectToDelete = ref(null)
 const currentUser = ref('Current User') // This would come from auth system
 
 const handleView = (projectId) => {
-  console.log(`View project ${projectId}`)
-  // Handle view logic here
+  // Navigate to project view with the project ID
+  router.push(`/project/${projectId}`)
 }
 
 const handleAddProject = () => {
