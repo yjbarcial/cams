@@ -178,6 +178,84 @@ function scrollToPublications() {
       </v-row>
     </v-main>
 
+    <v-sheet class="contact-info" color="white" width="100%">
+      <v-divider class="mx-5 mt-6" thickness="2" color="black"></v-divider>
+
+      <v-container class="px-12">
+        <!-- Contact Us Header -->
+        <v-row justify="center">
+          <v-col cols="12" class="text-center">
+            <v-card-title class="text-h5">Contact Us!</v-card-title>
+          </v-col>
+        </v-row>
+
+        <!-- Content Row -->
+        <v-row justify="space-between" align="start" no-gutters>
+          <v-col cols="12" sm="4" class="d-flex flex-column align-start">
+            <v-img src="/images/csu-logo.png" alt="CSU Logo" class="csu-logo mb-4" />
+            <v-card-title class="px-0">Old Administration Bldg.</v-card-title>
+            <v-card-text class="px-0">Caraga State University - Main Campus, 8600</v-card-text>
+          </v-col>
+
+          <v-col cols="12" sm="4" class="d-flex flex-column align-start">
+            <v-list class="social-links">
+              <v-list-item
+                href="mailto:thegoldpanicles@carsu.edu.ph"
+                target="_blank"
+                rel="noopener"
+                class="justify-start px-0"
+              >
+                <template v-slot:prepend>
+                  <v-icon>mdi-gmail</v-icon>
+                </template>
+                <span>thegoldpanicles@carsu.edu.ph</span>
+              </v-list-item>
+
+              <v-list-item
+                href="https://facebook.com/thegoldpanicles"
+                target="_blank"
+                rel="noopener"
+                class="justify-start px-0"
+              >
+                <template v-slot:prepend>
+                  <v-icon>mdi-facebook</v-icon>
+                </template>
+                <span>facebook.com/thegoldpanicles</span>
+              </v-list-item>
+            </v-list>
+          </v-col>
+
+          <v-col cols="12" sm="4" class="d-flex flex-column align-start">
+            <v-list class="social-links">
+              <v-list-item
+                href="https://instagram.com/thegoldpanicles"
+                target="_blank"
+                rel="noopener"
+                class="justify-start px-0"
+              >
+                <template v-slot:prepend>
+                  <v-icon>mdi-instagram</v-icon>
+                </template>
+                <span>@thegoldpanicles</span>
+              </v-list-item>
+
+              <v-list-item
+                href="https://x.com/tgpCSU"
+                target="_blank"
+                rel="noopener"
+                class="justify-start px-0"
+              >
+                <template v-slot:prepend>
+                  <v-icon>mdi-twitter</v-icon>
+                </template>
+                <span>https://x.com/tgpCSU</span>
+              </v-list-item>
+            </v-list>
+          </v-col>
+        </v-row>
+      </v-container>
+    </v-sheet>
+
     <Footer />
   </v-app>
 </template>
@@ -412,5 +490,59 @@ function scrollToPublications() {
 
 :deep(.v-img.logo) {
   margin: 0 auto 12px;
+}
+
+.csu-logo {
+  width: 120px;
+  height: auto;
+  object-fit: contain;
+}
+
+:deep(.text-h5) {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2f2f2f;
+}
+
+:deep(.v-container) {
+  max-width: 1400px !important;
+}
+
+:deep(.v-card-title) {
+  line-height: 1.2;
+}
+
+:deep(.v-card-text) {
+  padding-top: 8px;
+}
+
+.social-links {
+  padding: 0;
+}
+
+:deep(.social-links .v-list-item) {
+  padding-inline-start: 0;
+  padding-inline-end: 0;
+}
+
+:deep(.social-links .v-list-item-content) {
+  justify-content: flex-start;
+}
+
+/* Add colored icons */
+:deep(.mdi-facebook) {
+  color: #1877f2;
+}
+
+:deep(.mdi-instagram) {
+  color: #e4405f;
+}
+
+:deep(.mdi-newspaper) {
+  color: #ff5c62;
+}
+
+:deep(.mdi-gmail) {
+  color: #ea4335;
 }
 </style>
