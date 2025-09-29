@@ -248,161 +248,218 @@ const cancelDelete = () => {
 </script>
 
 <template>
-  <div class="newsletter-page">
+  <v-app class="newsletter-page">
     <MainHeader />
 
-    <main class="main-content">
-      <div class="projects-container">
+    <v-main class="main-content">
+      <v-container fluid class="projects-container pa-5">
         <!-- Search and Controls -->
         <div class="controls-section">
           <div class="search-section">
             <label for="search" class="search-label">Search:</label>
             <div class="search-input-container">
-              <span class="mdi mdi-magnify search-icon"></span>
-              <input
+              <v-icon class="search-icon">mdi-magnify</v-icon>
+              <v-text-field
                 id="search"
                 v-model="searchQuery"
-                type="text"
                 class="search-input"
                 placeholder="Search newsletters..."
+                variant="outlined"
+                hide-details
+                single-line
+                density="compact"
               />
-              <span class="mdi mdi-tune search-filter"></span>
+              <v-icon class="search-filter">mdi-tune</v-icon>
             </div>
           </div>
 
           <div class="sort-section">
             <label class="sort-label">Sort by:</label>
-            <select class="sort-select" v-model="sortOrder">
-              <option>A - Z</option>
-              <option>Z - A</option>
-              <option>Starred First</option>
-              <option>Due Date ↑</option>
-              <option>Due Date ↓</option>
-              <option>Date Added ↑</option>
-              <option>Date Added ↓</option>
-            </select>
+            <v-select
+              v-model="sortOrder"
+              class="sort-select"
+              :items="[
+                'A - Z',
+                'Z - A',
+                'Starred First',
+                'Due Date ↑',
+                'Due Date ↓',
+                'Date Added ↑',
+                'Date Added ↓',
+              ]"
+              variant="outlined"
+              hide-details
+              single-line
+              density="compact"
+            />
           </div>
 
           <div class="filter-section">
             <label class="filter-label">
-              <input type="checkbox" v-model="showOnlyStarred" class="filter-checkbox" />
-              Show starred only
+              <v-checkbox
+                v-model="showOnlyStarred"
+                class="filter-checkbox"
+                hide-details
+                density="compact"
+              />
+              <span class="checkbox-text">Show starred only</span>
             </label>
           </div>
 
-          <RouterLink to="/newsletter/new" class="add-project-btn">Add Project</RouterLink>
+          <div class="spacer"></div>
+
+          <div>
+            <RouterLink to="/newsletter/new" class="add-project-btn">Add Project</RouterLink>
+          </div>
         </div>
 
         <!-- Projects Table -->
-        <div class="projects-table">
-          <div class="table-header">
-            <div class="header-cell title-header">Title</div>
-            <div class="header-cell">Section Head</div>
-            <div class="header-cell">Due Date</div>
-            <div class="header-cell">Status</div>
-            <div class="header-cell actions-header">Actions</div>
-          </div>
+        <v-container fluid class="projects-table pa-0">
+          <v-row class="table-header" no-gutters>
+            <v-col class="header-cell title-header">Title</v-col>
+            <v-col class="header-cell">Section Head</v-col>
+            <v-col class="header-cell">Due Date</v-col>
+            <v-col class="header-cell">Status</v-col>
+            <v-col class="header-cell actions-header">Actions</v-col>
+          </v-row>
 
-          <div class="table-body">
-            <div v-for="project in filteredProjects" :key="project.id" class="table-row">
-              <div class="table-cell title-cell">
-                <button
+          <v-container fluid class="table-body pa-0">
+            <v-row
+              v-for="project in filteredProjects"
+              :key="project.id"
+              class="table-row"
+              no-gutters
+            >
+              <v-col class="table-cell title-cell">
+                <v-btn
                   class="star-button"
                   @click="toggleStar(project.id)"
                   :class="{ starred: project.isStarred }"
+                  variant="text"
+                  icon
+                  size="small"
                   aria-label="Toggle favorite"
                 >
-                  <span
-                    class="mdi"
-                    :class="project.isStarred ? 'mdi-star' : 'mdi-star-outline'"
-                  ></span>
-                </button>
+                  <v-icon>{{ project.isStarred ? 'mdi-star' : 'mdi-star-outline' }}</v-icon>
+                </v-btn>
                 {{ project.title }}
-              </div>
-              <div class="table-cell">{{ project.sectionHead }}</div>
-              <div class="table-cell">{{ project.dueDate }}</div>
-              <div class="table-cell">{{ project.status }}</div>
-              <div class="table-cell actions-cell">
-                <button
+              </v-col>
+              <v-col class="table-cell">{{ project.sectionHead }}</v-col>
+              <v-col class="table-cell">{{ project.dueDate }}</v-col>
+              <v-col class="table-cell">{{ project.status }}</v-col>
+              <v-col class="table-cell actions-cell">
+                <v-btn
                   class="action-btn view-btn"
                   @click="handleView(project.id)"
+                  variant="text"
+                  icon
+                  size="small"
                   aria-label="View project"
                 >
-                  <span class="mdi mdi-eye"></span>
-                </button>
-                <button
+                  <v-icon>mdi-eye</v-icon>
+                </v-btn>
+                <v-btn
                   v-if="canEditProject(project)"
                   class="action-btn edit-btn"
                   @click="startEdit(project)"
+                  variant="text"
+                  icon
+                  size="small"
                   aria-label="Edit project"
                 >
-                  <span class="mdi mdi-pencil"></span>
-                </button>
-                <button
+                  <v-icon>mdi-pencil</v-icon>
+                </v-btn>
+                <v-btn
                   v-if="canEditProject(project)"
                   class="action-btn delete-btn"
                   @click="startDelete(project)"
+                  variant="text"
+                  icon
+                  size="small"
                   aria-label="Delete project"
                 >
-                  <span class="mdi mdi-delete"></span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
+                  <v-icon>mdi-delete</v-icon>
+                </v-btn>
+              </v-col>
+            </v-row>
+          </v-container>
+        </v-container>
+      </v-container>
+    </v-main>
 
     <!-- Edit Project Modal -->
-    <div v-if="editingProject" class="modal-overlay" @click="cancelEdit">
-      <div class="modal-content" @click.stop>
-        <h2>Edit Project</h2>
-        <form @submit.prevent="saveEdit">
-          <div class="form-group">
-            <label>Project Title:</label>
-            <input v-model="editingProject.title" type="text" required />
-          </div>
-          <div class="form-group">
-            <label>Section Head:</label>
-            <input v-model="editingProject.sectionHead" type="text" required />
-          </div>
-          <div class="form-group">
-            <label>Due Date:</label>
-            <input v-model="editingProject.dueDate" type="text" />
-          </div>
-          <div class="form-group">
-            <label>Status:</label>
-            <select v-model="editingProject.status">
-              <option>To Editor-in-Chief</option>
-              <option>To Section Head</option>
-              <option>To Technical Editor</option>
-              <option>To Publish</option>
-              <option>Published</option>
-            </select>
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="cancel-btn" @click="cancelEdit">Cancel</button>
-            <button type="submit" class="save-btn">Save Changes</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <v-dialog v-model="editingProject" persistent max-width="500px">
+      <v-card class="modal-content">
+        <v-card-title>Edit Project</v-card-title>
+        <v-card-text>
+          <v-form @submit.prevent="saveEdit">
+            <v-container class="pa-0">
+              <v-row>
+                <v-col cols="12" class="form-group">
+                  <v-label>Project Title:</v-label>
+                  <v-text-field
+                    v-model="editingProject.title"
+                    variant="outlined"
+                    required
+                    hide-details
+                  />
+                </v-col>
+                <v-col cols="12" class="form-group">
+                  <v-label>Section Head:</v-label>
+                  <v-text-field
+                    v-model="editingProject.sectionHead"
+                    variant="outlined"
+                    required
+                    hide-details
+                  />
+                </v-col>
+                <v-col cols="12" class="form-group">
+                  <v-label>Due Date:</v-label>
+                  <v-text-field v-model="editingProject.dueDate" variant="outlined" hide-details />
+                </v-col>
+                <v-col cols="12" class="form-group">
+                  <v-label>Status:</v-label>
+                  <v-select
+                    v-model="editingProject.status"
+                    :items="[
+                      'To Editor-in-Chief',
+                      'To Section Head',
+                      'To Technical Editor',
+                      'To Publish',
+                      'Published',
+                    ]"
+                    variant="outlined"
+                    hide-details
+                  />
+                </v-col>
+              </v-row>
+            </v-container>
+          </v-form>
+        </v-card-text>
+        <v-card-actions class="modal-actions">
+          <v-btn class="cancel-btn" @click="cancelEdit" variant="outlined">Cancel</v-btn>
+          <v-btn class="save-btn" @click="saveEdit" color="primary">Save Changes</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- Delete Confirmation Modal -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" @click="cancelDelete">
-      <div class="modal-content delete-modal" @click.stop>
-        <h2>Confirm Delete</h2>
-        <p>Are you sure you want to delete the project "{{ projectToDelete?.title }}"?</p>
-        <p class="warning-text">This action cannot be undone.</p>
-        <div class="modal-actions">
-          <button type="button" class="cancel-btn" @click="cancelDelete">Cancel</button>
-          <button type="button" class="delete-btn" @click="confirmDelete">Delete Project</button>
-        </div>
-      </div>
-    </div>
+    <v-dialog v-model="showDeleteConfirm" persistent max-width="500px">
+      <v-card class="modal-content delete-modal">
+        <v-card-title>Confirm Delete</v-card-title>
+        <v-card-text>
+          <p>Are you sure you want to delete the project "{{ projectToDelete?.title }}"?</p>
+          <p class="warning-text">This action cannot be undone.</p>
+        </v-card-text>
+        <v-card-actions class="modal-actions">
+          <v-btn class="cancel-btn" @click="cancelDelete" variant="outlined">Cancel</v-btn>
+          <v-btn class="delete-btn" @click="confirmDelete" color="error">Delete Project</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <Footer />
-  </div>
+  </v-app>
 </template>
 
 <style scoped>
@@ -415,11 +472,12 @@ const cancelDelete = () => {
 
 .main-content {
   flex: 1;
-  padding: 20px;
+  padding: 0 !important;
 }
 
 .projects-container {
-  width: 100%;
+  width: 100% !important;
+  max-width: none !important;
 }
 
 .controls-section {
@@ -429,6 +487,7 @@ const cancelDelete = () => {
   margin-bottom: 20px;
   padding-bottom: 20px;
   border-bottom: 1px solid #e5e7eb;
+  min-height: 40px;
 }
 
 .search-section {
@@ -441,6 +500,7 @@ const cancelDelete = () => {
   font-weight: 600;
   color: #2f2f2f;
   white-space: nowrap;
+  font-size: 14px;
 }
 
 .search-input-container {
@@ -449,19 +509,24 @@ const cancelDelete = () => {
   align-items: center;
 }
 
-.search-input {
-  padding: 8px 12px 8px 36px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background-color: #f9fafb;
-  font-size: 14px;
-  width: 300px;
+:deep(.search-input .v-field) {
+  min-height: 40px !important;
+  height: 40px !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  background-color: #f9fafb !important;
+  font-size: 14px !important;
+  width: 300px !important;
 }
 
-.search-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  background-color: white;
+:deep(.search-input .v-field:focus-within) {
+  border-color: #3b82f6 !important;
+  background-color: white !important;
+}
+
+:deep(.search-input .v-field__input) {
+  padding: 8px 12px 8px 36px !important;
+  min-height: auto !important;
 }
 
 .search-icon {
@@ -469,6 +534,7 @@ const cancelDelete = () => {
   left: 12px;
   color: #6b7280;
   font-size: 16px;
+  z-index: 1;
 }
 
 .search-filter {
@@ -477,6 +543,7 @@ const cancelDelete = () => {
   color: #6b7280;
   font-size: 16px;
   cursor: pointer;
+  z-index: 1;
 }
 
 .sort-section {
@@ -489,30 +556,27 @@ const cancelDelete = () => {
   font-weight: 600;
   color: #2f2f2f;
   white-space: nowrap;
-}
-
-.sort-button {
-  padding: 8px 12px;
-  background-color: #f9fafb;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  color: #2f2f2f;
   font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.sort-button:hover {
-  background-color: #f3f4f6;
 }
 
 .sort-select {
-  padding: 8px 12px;
-  background-color: #f9fafb;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  color: #2f2f2f;
-  font-size: 14px;
+  width: 170px;
+}
+
+:deep(.sort-select .v-field) {
+  min-height: 40px !important;
+  height: 40px !important;
+  background-color: #f9fafb !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  color: #2f2f2f !important;
+  font-size: 14px !important;
+  width: 150px !important;
+}
+
+:deep(.sort-select .v-field__input) {
+  padding: 8px 12px !important;
+  min-height: auto !important;
 }
 
 .filter-section {
@@ -527,16 +591,34 @@ const cancelDelete = () => {
   font-weight: 600;
   color: #2f2f2f;
   cursor: pointer;
+  font-size: 14px;
 }
 
-.filter-checkbox {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
+.checkbox-text {
+  user-select: none;
+  padding: 0 0 0 5px;
+}
+
+:deep(.filter-checkbox .v-input__control) {
+  width: 20px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+}
+
+:deep(.filter-checkbox .v-selection-control) {
+  min-height: 20px !important;
+}
+
+:deep(.filter-checkbox .v-checkbox .v-selection-control__wrapper) {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.spacer {
+  flex: 1;
 }
 
 .add-project-btn {
-  margin-left: auto;
   padding: 10px 20px;
   background-color: #2f2f2f;
   color: white;
@@ -548,6 +630,9 @@ const cancelDelete = () => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: background-color 0.2s ease;
   text-decoration: none;
+  height: 40px;
+  display: flex;
+  align-items: center;
 }
 
 .add-project-btn:hover {
@@ -555,291 +640,240 @@ const cancelDelete = () => {
 }
 
 .projects-table {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: hidden;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
 }
 
 .table-header {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 120px;
-  background-color: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  display: grid !important;
+  grid-template-columns: 2fr 1fr 1fr 1fr 120px !important;
 }
 
 .header-cell {
-  padding: 12px 16px;
-  font-weight: 600;
-  color: #2f2f2f;
-  font-size: 14px;
+  padding: 12px 16px !important;
+  font-weight: 600 !important;
+  color: #2f2f2f !important;
+  font-size: 14px !important;
 }
 
 .title-header {
-  text-align: left;
+  text-align: left !important;
 }
 
 .actions-header {
-  text-align: center;
+  text-align: center !important;
 }
 
 .table-body {
-  background-color: white;
+  background-color: white !important;
 }
 
 .table-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 120px;
-  border-bottom: 1px solid #e5e7eb;
-  transition: background-color 0.2s ease;
+  border-bottom: 1px solid #e5e7eb !important;
+  transition: background-color 0.2s ease !important;
+  display: grid !important;
+  grid-template-columns: 2fr 1fr 1fr 1fr 120px !important;
 }
 
 .table-row:last-child {
-  border-bottom: none;
+  border-bottom: none !important;
 }
 
 .table-row:hover {
-  background-color: #f8fafc;
+  background-color: #f8fafc !important;
 }
 
 .table-cell {
-  padding: 12px 16px;
-  color: #2f2f2f;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
+  padding: 12px 16px !important;
+  color: #2f2f2f !important;
+  font-size: 14px !important;
+  display: flex !important;
+  align-items: center !important;
 }
 
 .title-cell {
-  gap: 8px;
+  gap: 8px !important;
 }
 
-.star-button {
-  background: none;
-  border: none;
-  padding: 4px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  color: #d1d5db;
+:deep(.star-button) {
+  background: none !important;
+  border: none !important;
+  padding: 4px !important;
+  cursor: pointer !important;
+  border-radius: 4px !important;
+  transition: all 0.2s ease !important;
+  color: #d1d5db !important;
 }
 
-.star-button:hover {
-  background-color: #f3f4f6;
-  color: #fbbf24;
+:deep(.star-button:hover) {
+  background-color: #f3f4f6 !important;
+  color: #fbbf24 !important;
 }
 
-.star-button.starred {
-  color: #f59e0b;
-}
-
-.star-button .mdi {
-  font-size: 16px;
+:deep(.star-button.starred) {
+  color: #f59e0b !important;
 }
 
 .actions-cell {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 8px !important;
 }
 
-.action-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
-  transition: background-color 0.2s ease;
+:deep(.action-btn) {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  padding: 6px !important;
+  border-radius: 4px !important;
+  transition: background-color 0.2s ease !important;
 }
 
-.view-btn {
-  color: #3b82f6;
+:deep(.view-btn) {
+  color: #3b82f6 !important;
 }
 
-.view-btn:hover {
-  background-color: #eff6ff;
+:deep(.view-btn:hover) {
+  background-color: #eff6ff !important;
 }
 
-.edit-btn {
-  color: #f59e0b;
+:deep(.edit-btn) {
+  color: #f59e0b !important;
 }
 
-.edit-btn:hover {
-  background-color: #fef3c7;
+:deep(.edit-btn:hover) {
+  background-color: #fef3c7 !important;
 }
 
-.delete-btn {
-  color: #ef4444;
+:deep(.delete-btn) {
+  color: #ef4444 !important;
 }
 
-.delete-btn:hover {
-  background-color: #fee2e2;
-}
-
-.action-btn .mdi {
-  font-size: 16px;
+:deep(.delete-btn:hover) {
+  background-color: #fee2e2 !important;
 }
 
 /* Modal styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  padding: 24px;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  max-width: 500px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
 .modal-content h2 {
-  margin: 0 0 20px 0;
-  color: #1f2937;
-  font-size: 20px;
+  margin: 0 0 20px 0 !important;
+  color: #1f2937 !important;
+  font-size: 20px !important;
 }
 
-.modal-content .form-group {
-  margin-bottom: 16px;
+.form-group {
+  margin-bottom: 16px !important;
 }
 
-.modal-content label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 600;
-  color: #374151;
+:deep(.modal-content label) {
+  display: block !important;
+  margin-bottom: 6px !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
 }
 
-.modal-content input,
-.modal-content select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
+:deep(.modal-content .v-field) {
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
 }
 
-.modal-content input:focus,
-.modal-content select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+:deep(.modal-content .v-field:focus-within) {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
 }
 
 .modal-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  margin-top: 24px;
+  display: flex !important;
+  gap: 12px !important;
+  justify-content: flex-end !important;
+  margin-top: 24px !important;
 }
 
-.cancel-btn {
-  padding: 8px 16px;
-  background-color: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  color: #374151;
-  cursor: pointer;
-  font-size: 14px;
+:deep(.cancel-btn) {
+  background-color: #f3f4f6 !important;
+  border: 1px solid #d1d5db !important;
+  color: #374151 !important;
 }
 
-.cancel-btn:hover {
-  background-color: #e5e7eb;
+:deep(.cancel-btn:hover) {
+  background-color: #e5e7eb !important;
 }
 
-.save-btn {
-  padding: 8px 16px;
-  background-color: #3b82f6;
-  border: 1px solid #2563eb;
-  border-radius: 6px;
-  color: white;
-  cursor: pointer;
-  font-size: 14px;
+:deep(.save-btn) {
+  background-color: #3b82f6 !important;
+  color: white !important;
 }
 
-.save-btn:hover {
-  background-color: #2563eb;
+:deep(.save-btn:hover) {
+  background-color: #2563eb !important;
 }
 
-.delete-modal .delete-btn {
-  padding: 8px 16px;
-  background-color: #ef4444;
-  border: 1px solid #dc2626;
-  border-radius: 6px;
-  color: white;
-  cursor: pointer;
-  font-size: 14px;
+:deep(.delete-modal .delete-btn) {
+  background-color: #ef4444 !important;
+  color: white !important;
 }
 
-.delete-modal .delete-btn:hover {
-  background-color: #dc2626;
+:deep(.delete-modal .delete-btn:hover) {
+  background-color: #dc2626 !important;
 }
 
 .warning-text {
-  color: #ef4444;
-  font-weight: 600;
-  margin-top: 8px;
+  color: #ef4444 !important;
+  font-weight: 600 !important;
+  margin-top: 8px !important;
 }
 
 /* Responsive design */
 @media (max-width: 1024px) {
   .controls-section {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 16px !important;
   }
 
-  .search-input {
-    width: 100%;
+  :deep(.search-input .v-field) {
+    width: 100% !important;
   }
 
   .add-project-btn {
-    margin-left: 0;
+    margin-left: 0 !important;
   }
 }
 
 @media (max-width: 768px) {
   .main-content {
-    padding: 16px;
+    padding: 16px !important;
   }
 
   .table-header,
   .table-row {
-    grid-template-columns: 1fr;
-    gap: 8px;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
   }
 
   .header-cell,
   .table-cell {
-    padding: 8px 12px;
+    padding: 8px 12px !important;
   }
 
   .table-cell {
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid #f3f4f6 !important;
   }
 
   .table-cell:last-child {
-    border-bottom: none;
+    border-bottom: none !important;
   }
 
   .table-cell::before {
-    content: attr(data-label);
-    font-weight: 600;
-    color: #6b7280;
-    margin-right: 8px;
-    min-width: 100px;
+    content: attr(data-label) !important;
+    font-weight: 600 !important;
+    color: #6b7280 !important;
+    margin-right: 8px !important;
+    min-width: 100px !important;
   }
 }
 </style>
