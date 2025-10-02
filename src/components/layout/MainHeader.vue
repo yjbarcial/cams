@@ -8,6 +8,7 @@ const showAccountMenu = ref(false)
 const handleSettings = () => {
   console.log('Settings clicked')
   showAccountMenu.value = false
+  router.push('/settings') // Add this line to navigate to settings
 }
 
 const handleLogout = () => {

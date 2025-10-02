@@ -10,6 +10,7 @@ import FolioView from '@/views/system/FolioView.vue'
 import OtherView from '@/views/system/OtherView.vue'
 import DeliverableView from '@/views/system/DeliverableView.vue'
 import ProjectView from '@/views/system/ProjectView.vue'
+import SettingsView from '@/views/system/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -58,6 +59,11 @@ const router = createRouter({
       path: '/other',
       name: 'other',
       component: OtherView,
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsView,
     },
     { path: '/magazine/new', name: 'magazine-new', component: AddProjectView },
     { path: '/newsletter/new', name: 'newsletter-new', component: AddProjectView },
