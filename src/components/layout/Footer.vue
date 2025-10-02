@@ -1,3 +1,13 @@
+<script setup>
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+const goToDashboard = () => {
+  router.push('/dashboard')
+}
+</script>
+
 <template>
   <footer class="site-footer">
     <div class="footer-left">
@@ -5,7 +15,20 @@
     </div>
     <div class="footer-center">
       <slot name="center">
-        <span> © 2025 <span class="brand">GoldQuill</span>. All rights reserved. </span>
+        <span>
+          © 2025
+          <span
+            class="brand clickable-brand"
+            @click="goToDashboard"
+            role="button"
+            tabindex="0"
+            @keydown.enter="goToDashboard"
+            @keydown.space="goToDashboard"
+            title="Go to Dashboard"
+          >
+            GoldQuill </span
+          >. All rights reserved.
+        </span>
       </slot>
     </div>
     <div class="footer-right">
@@ -37,5 +60,26 @@
 
 .brand {
   color: #f5c52b;
+}
+
+.clickable-brand {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.clickable-brand:hover {
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+.clickable-brand:focus {
+  outline: 2px solid #f5c52b;
+  outline-offset: 2px;
+}
+
+.clickable-brand:active {
+  transform: scale(0.95);
 }
 </style>
