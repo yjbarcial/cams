@@ -21,6 +21,11 @@ const project = ref({
   artist: 'Jane Doe',
 })
 
+// Title editing state
+const isEditingTitle = ref(false)
+const titleInputRef = ref(null)
+const tempTitle = ref(project.value.title)
+
 // Rich text editor state
 const editorContent = ref(`
 <p>Give it a try! 😊</p>
@@ -33,7 +38,6 @@ const editorContent = ref(`
 `)
 
 const isEditing = ref(false)
-const showFullScreen = ref(false)
 const quillEditorRef = ref(null)
 
 // Comments state
@@ -70,6 +74,44 @@ const comments = ref([
 const newComment = ref('')
 const commentSearch = ref('')
 
+// Title editing functions
+const startEditingTitle = () => {
+  tempTitle.value = project.value.title
+  isEditingTitle.value = true
+  // Focus the input after Vue updates the DOM
+  setTimeout(() => {
+    if (titleInputRef.value) {
+      titleInputRef.value.focus()
+      titleInputRef.value.select() // Select all text for easier editing
+    }
+  }, 50)
+}
+
+const saveTitleEdit = () => {
+  if (tempTitle.value.trim()) {
+    project.value.title = tempTitle.value.trim()
+    isEditingTitle.value = false
+    console.log('Title updated:', project.value.title)
+  } else {
+    cancelTitleEdit() // Don't save empty titles
+  }
+}
+
+const cancelTitleEdit = () => {
+  tempTitle.value = project.value.title
+  isEditingTitle.value = false
+}
+
+const handleTitleKeydown = (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    saveTitleEdit()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelTitleEdit()
+  }
+}
+
 // Editor functions
 const toggleEdit = () => {
   isEditing.value = !isEditing.value
@@ -84,8 +126,10 @@ const toggleEdit = () => {
   }
 }
 
-const toggleFullScreen = () => {
-  showFullScreen.value = !showFullScreen.value
+const saveAsDraft = () => {
+  saveContent()
+  console.log('Project saved as draft')
+  // Add your save as draft logic here
 }
 
 const saveContent = () => {
@@ -138,8 +182,38 @@ onMounted(() => {
         <v-row>
           <!-- Left Panel - Project Details and Editor -->
           <v-col cols="12" lg="8" class="left-panel">
-            <!-- Project Title -->
-            <h1 class="project-title">{{ project.title }}</h1>
+            <!-- Editable Project Title -->
+            <div class="title-section">
+              <h1
+                v-if="!isEditingTitle"
+                class="project-title editable-title"
+                @click="startEditingTitle"
+                title="Click to edit title"
+              >
+                {{ project.title }}
+                <v-icon class="edit-icon" size="20">mdi-pencil</v-icon>
+              </h1>
+              <div v-else class="title-edit-container">
+                <v-text-field
+                  ref="titleInputRef"
+                  v-model="tempTitle"
+                  class="title-input"
+                  variant="outlined"
+                  hide-details
+                  @blur="saveTitleEdit"
+                  @keydown="handleTitleKeydown"
+                  density="compact"
+                />
+                <div class="title-edit-actions">
+                  <v-btn @click="saveTitleEdit" size="small" color="primary" variant="text" icon>
+                    <v-icon>mdi-check</v-icon>
+                  </v-btn>
+                  <v-btn @click="cancelTitleEdit" size="small" color="error" variant="text" icon>
+                    <v-icon>mdi-close</v-icon>
+                  </v-btn>
+                </div>
+              </div>
+            </div>
 
             <!-- Project Metadata -->
             <div class="project-metadata">
@@ -185,7 +259,7 @@ onMounted(() => {
                 ref="quillEditorRef"
                 v-model="editorContent"
                 :read-only="!isEditing"
-                :height="showFullScreen ? '100vh' : '500px'"
+                height="500px"
                 placeholder="Start writing your content..."
                 @text-change="saveContent"
               />
@@ -196,10 +270,10 @@ onMounted(() => {
               <v-btn @click="toggleEdit" variant="outlined" class="edit-btn">
                 {{ isEditing ? 'Save Changes' : 'Edit Submission' }}
               </v-btn>
-              <v-btn @click="toggleFullScreen" variant="outlined" class="fullscreen-btn">
-                {{ showFullScreen ? 'Exit Fullscreen' : 'Fullscreen' }}
+              <v-btn @click="saveAsDraft" variant="outlined" class="draft-btn">
+                Save as Draft
               </v-btn>
-              <v-btn variant="outlined" color="error" class="remove-btn"> Remove Submission </v-btn>
+              <v-btn variant="outlined" class="remove-btn"> Remove Submission </v-btn>
             </div>
           </v-col>
 
@@ -304,12 +378,76 @@ onMounted(() => {
   padding-left: 24px;
 }
 
+.title-section {
+  margin-bottom: 24px;
+}
+
 .project-title {
   font-size: 28px;
   font-weight: 700;
   color: #1f2937;
-  margin-bottom: 24px;
+  margin: 0;
   line-height: 1.2;
+}
+
+.editable-title {
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 200px;
+}
+
+.editable-title:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.edit-icon {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  color: #6b7280;
+}
+
+.editable-title:hover .edit-icon {
+  opacity: 1;
+}
+
+.title-edit-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.title-input {
+  flex: 1;
+  max-width: 600px;
+}
+
+:deep(.title-input .v-field__input) {
+  font-size: 28px !important;
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+  line-height: 1.2 !important;
+  padding: 8px 12px !important;
+}
+
+:deep(.title-input .v-field__outline) {
+  --v-field-border-width: 2px;
+}
+
+:deep(.title-input.v-field--focused .v-field__outline) {
+  --v-theme-primary: #3b82f6;
+}
+
+.title-edit-actions {
+  display: flex;
+  gap: 4px;
 }
 
 .project-metadata {
@@ -364,16 +502,20 @@ onMounted(() => {
   color: #374151;
 }
 
-.fullscreen-btn {
+.draft-btn {
   background: white;
   border: 1px solid #d1d5db;
   color: #374151;
 }
 
 .remove-btn {
-  background: #6b7280;
-  color: white;
-  border: 1px solid #6b7280;
+  background: #353535 !important;
+  color: white !important;
+  border: 1px solid #353535 !important;
+}
+
+.remove-btn:hover {
+  background: #2b2b2b !important;
 }
 
 .comments-section {
@@ -494,21 +636,13 @@ onMounted(() => {
     gap: 12px;
   }
 
-  .editor-toolbar {
+  .title-edit-container {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .toolbar-group {
-    border-right: none;
-    border-bottom: 1px solid #e5e7eb;
-    padding-bottom: 8px;
-    margin-bottom: 8px;
-  }
-
-  .toolbar-group:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
+  .title-edit-actions {
+    align-self: flex-start;
   }
 }
 
@@ -517,8 +651,9 @@ onMounted(() => {
     padding: 16px !important;
   }
 
-  .project-title {
-    font-size: 24px;
+  .project-title,
+  :deep(.title-input .v-field__input) {
+    font-size: 24px !important;
   }
 
   .action-buttons {
@@ -527,6 +662,10 @@ onMounted(() => {
 
   .comments-section {
     max-height: 500px;
+  }
+
+  .editable-title {
+    min-width: auto;
   }
 }
 </style>
