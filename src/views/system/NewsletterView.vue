@@ -1,7 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
+
+const router = useRouter()
 
 // Sample newsletter projects data
 const defaultProjects = [
@@ -97,7 +100,8 @@ const currentUser = ref('Current User') // This would come from auth system
 
 const handleView = (projectId) => {
   console.log(`View newsletter project ${projectId}`)
-  // Handle view logic here
+  // Navigate to ProjectView with the project ID
+  router.push(`/project/${projectId}`)
 }
 
 const handleAddProject = () => {
@@ -354,7 +358,8 @@ const cancelDelete = () => {
                   variant="text"
                   icon
                   size="small"
-                  aria-label="View project"
+                  aria-label="View and edit project"
+                  title="View and edit project"
                 >
                   <v-icon>mdi-eye</v-icon>
                 </v-btn>
@@ -365,7 +370,8 @@ const cancelDelete = () => {
                   variant="text"
                   icon
                   size="small"
-                  aria-label="Edit project"
+                  aria-label="Edit project details"
+                  title="Edit project details"
                 >
                   <v-icon>mdi-pencil</v-icon>
                 </v-btn>
@@ -377,6 +383,7 @@ const cancelDelete = () => {
                   icon
                   size="small"
                   aria-label="Delete project"
+                  title="Delete project"
                 >
                   <v-icon>mdi-delete</v-icon>
                 </v-btn>

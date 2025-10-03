@@ -497,25 +497,36 @@ onMounted(() => {
 }
 
 .edit-btn {
-  background: white;
-  border: 1px solid #d1d5db;
-  color: #374151;
+  background: #f5c52b !important; /* Yellow/amber background */
+  color: #353535 !important; /* Dark text */
+  border: 1px solid #f5c52b !important;
+  font-weight: bold !important; /* Make text bold */
+}
+
+.edit-btn:hover {
+  background: #f5c52b !important; /* Darker yellow on hover */
 }
 
 .draft-btn {
-  background: white;
-  border: 1px solid #d1d5db;
-  color: #374151;
+  background: #353535 !important; /* Dark gray background */
+  color: white !important;
+  border: 1px solid #353535 !important;
+  font-weight: bold !important; /* Make text bold */
+}
+
+.draft-btn:hover {
+  background: #1f2937 !important; /* Even darker on hover */
 }
 
 .remove-btn {
-  background: #353535 !important;
-  color: white !important;
-  border: 1px solid #353535 !important;
+  background: white !important; /* White background */
+  color: #374151 !important; /* Dark text */
+  border: 1px solid #d1d5db !important; /* Light gray border */
+  font-weight: bold !important; /* Make text bold */
 }
 
 .remove-btn:hover {
-  background: #2b2b2b !important;
+  background: #f3f4f6 !important; /* Light gray on hover */
 }
 
 .comments-section {
