@@ -248,7 +248,7 @@ function scrollToPublications() {
                 <template v-slot:prepend>
                   <v-icon>mdi-twitter</v-icon>
                 </template>
-                <span>https://x.com/tgpCSU</span>
+                <span>x.com/tgpCSU</span>
               </v-list-item>
             </v-list>
           </v-col>
