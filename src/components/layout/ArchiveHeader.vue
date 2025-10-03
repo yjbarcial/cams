@@ -2,7 +2,7 @@
 <template>
   <header class="archive-header">
     <div class="brand">
-      <v-img src="/images/GoldQuill Logo.png" alt="GoldQuill" height="40px" width="50%" contain />
+      <v-img src="/images/GoldQuill Logo.png" alt="GoldQuill" height="30px" width="30%" contain />
       <h3>GoldQuill.</h3>
     </div>
     <div class="actions">
@@ -34,17 +34,11 @@
   display: block;
 }
 
-.brand h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-}
-
 .actions {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
+  padding: 0 10px;
 }
 
 .icon-button {

@@ -26,8 +26,9 @@ const goToDashboard = () => {
             @keydown.space="goToDashboard"
             title="Go to Dashboard"
           >
-            GoldQuill </span
-          >. All rights reserved.
+            GoldQuill.</span
+          >
+          All rights reserved.
         </span>
       </slot>
     </div>

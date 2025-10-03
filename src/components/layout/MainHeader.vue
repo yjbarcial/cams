@@ -104,6 +104,7 @@ const handleLogout = () => {
   font-size: 22px;
   font-weight: 700;
   line-height: 1;
+  color: #353535;
 }
 
 .actions {
@@ -123,13 +124,14 @@ const handleLogout = () => {
   border: none;
   padding: 6px;
   border-radius: 6px;
-  color: #2b2b2b;
+  color: #353535;
   cursor: pointer;
   text-decoration: none;
 }
 
 .icon-button:hover {
   background: rgba(0, 0, 0, 0.06);
+  color: #353535;
 }
 
 .icon-button .mdi {
@@ -144,7 +146,7 @@ const handleLogout = () => {
   height: 120px !important;
   border-radius: 30px !important;
   background: #ffffff !important;
-  border: 2px solid #969595 !important;
+  border: 2px solid #353535 !important;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
   margin-top: 10px;
   transform: translateX(-48%) !important;
@@ -169,6 +171,7 @@ const handleLogout = () => {
   height: 40px;
   border-radius: 50%;
   transition: background 0.2s ease;
+  color: #353535;
 }
 
 .dropdown-icon:hover {
