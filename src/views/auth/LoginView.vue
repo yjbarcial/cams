@@ -1,15 +1,85 @@
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { requiredValidator, emailValidator } from '@/utils/validators'
 import libBg from '/images/lib-hd.jpg'
+
+const router = useRouter()
 
 const email = ref('')
 const password = ref('')
 const showPassword = ref(false)
+const loading = ref(false)
+const errorMessage = ref('')
 
-function submit() {
-  // Placeholder submit
-  // In a real app, call your auth API here
-  console.log('Login attempt', { email: email.value })
+// CARSU email validator (custom)
+const carsuEmailValidator = (value) => {
+  if (!value) return 'Email is required'
+
+  // First check if it's a valid email using your existing validator
+  const emailValidation = emailValidator(value)
+  if (emailValidation !== true) return emailValidation
+
+  // Then check if it's a CARSU email
+  if (!value.endsWith('@carsu.edu.ph')) {
+    return 'Only CARSU email addresses are allowed (@carsu.edu.ph)'
+  }
+
+  return true
+}
+
+// Password validator (using your existing required validator + length check)
+const passwordValidatorCustom = (value) => {
+  // First check if required
+  const requiredValidation = requiredValidator(value)
+  if (requiredValidation !== true) return requiredValidation
+
+  // Then check minimum length
+  if (value.length < 6) {
+    return 'Password must be at least 6 characters'
+  }
+
+  return true
+}
+
+// Validation rules using your validator functions
+const emailRules = [carsuEmailValidator]
+const passwordRules = [passwordValidatorCustom]
+
+const form = ref(null)
+
+async function submit() {
+  // Validate form first
+  const { valid } = await form.value.validate()
+
+  if (!valid) {
+    return
+  }
+
+  // Additional CARSU email validation
+  if (!email.value.endsWith('@carsu.edu.ph')) {
+    errorMessage.value = 'Access denied. Only CARSU email addresses are allowed.'
+    return
+  }
+
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+
+    // Store user session
+    localStorage.setItem('userEmail', email.value)
+    localStorage.setItem('isLoggedIn', 'true')
+
+    // Navigate to dashboard
+    router.push('/dashboard')
+  } catch (error) {
+    errorMessage.value = 'Login failed. Please check your credentials and try again.'
+  } finally {
+    loading.value = false
+  }
 }
 
 function togglePassword() {
@@ -47,17 +117,29 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
           <v-card-subtitle class="subtext pa-0">Enter your CARSU email for log in</v-card-subtitle>
 
           <v-card-text class="pa-0">
-            <v-form @submit.prevent="submit" class="form">
+            <!-- Error Alert -->
+            <v-alert
+              v-if="errorMessage"
+              type="error"
+              class="mb-3"
+              density="compact"
+              variant="tonal"
+            >
+              {{ errorMessage }}
+            </v-alert>
+
+            <v-form ref="form" @submit.prevent="submit" class="form">
               <v-text-field
                 v-model="email"
                 type="email"
-                placeholder="Email"
+                placeholder="yourname@carsu.edu.ph"
                 prepend-inner-icon="mdi-email-outline"
                 variant="outlined"
                 class="input-group"
                 density="compact"
-                hide-details
+                :rules="emailRules"
                 required
+                :disabled="loading"
               />
 
               <v-text-field
@@ -70,23 +152,22 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 variant="outlined"
                 class="input-group"
                 density="compact"
-                hide-details
+                :rules="passwordRules"
                 required
+                :disabled="loading"
               />
 
-              <v-row class="row-between">
-                <v-col></v-col>
-                <v-col cols="auto">
-                  <v-btn to="/" variant="text" color="grey" class="muted-link"
-                    >Forgot password?</v-btn
-                  >
-                </v-col>
-              </v-row>
-
-              <v-btn type="submit" class="primary-btn" @click.prevent="$router.push('/dashboard')">
-                LOG IN
+              <v-btn type="submit" class="primary-btn" :loading="loading" :disabled="loading">
+                <span v-if="!loading">LOG IN</span>
+                <span v-else>Logging in...</span>
               </v-btn>
             </v-form>
+
+            <!-- CARSU Domain Info -->
+            <div class="domain-info">
+              <v-icon size="14" color="grey">mdi-information-outline</v-icon>
+              <span class="info-text">Only CARSU email addresses (@carsu.edu.ph) are allowed</span>
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -169,11 +250,6 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 
 .form {
   display: grid;
-  gap: 8px;
-}
-
-.input-group {
-  margin-bottom: 8px;
 }
 
 .input-group :deep(.v-field) {
@@ -206,24 +282,6 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   color: #555;
 }
 
-.row-between {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: -22px;
-}
-
-.muted-link {
-  color: #6b6b6b;
-  text-decoration: none;
-  text-transform: none !important; /* keep original casing */
-  font-size: 14px;
-}
-
-.muted-link:hover {
-  text-decoration: underline;
-}
-
 .primary-btn {
   width: 100%;
   height: 48px !important;
@@ -231,6 +289,28 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   color: #fff !important;
   border-radius: 999px !important;
   font-weight: 600;
+}
+
+.primary-btn:disabled {
+  opacity: 0.6 !important;
+}
+
+.domain-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(245, 197, 43, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(245, 197, 43, 0.2);
+}
+
+.info-text {
+  font-size: 12px;
+  color: #666;
+  text-align: center;
 }
 
 .footer-note {
