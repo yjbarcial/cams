@@ -11,6 +11,14 @@ const password = ref('')
 const showPassword = ref(false)
 const loading = ref(false)
 const errorMessage = ref('')
+const showDomainPopup = ref(false)
+
+// Valid CARSU emails for the system
+const carsuEmails = [
+  'yssahjulianah.barcial@carsu.edu.ph',
+  'lovellhudson.clavel@carsu.edu.ph',
+  'altheaguila.gorres@carsu.edu.ph',
+]
 
 // CARSU email validator using your existing validators
 const carsuEmailValidator = (value) => {
@@ -22,11 +30,7 @@ const carsuEmailValidator = (value) => {
   const emailValidation = emailValidator(value)
   if (emailValidation !== true) return emailValidation
 
-  // Finally check if it's a CARSU email
-  if (!value.endsWith('@carsu.edu.ph')) {
-    return 'Only CARSU email addresses are allowed (@carsu.edu.ph)'
-  }
-
+  // Don't show validation error here
   return true
 }
 
@@ -51,6 +55,9 @@ const passwordRules = [carsuPasswordValidator]
 const form = ref(null)
 
 async function submit() {
+  // Reset popup state
+  showDomainPopup.value = false
+
   // Validate form first
   const { valid } = await form.value.validate()
 
@@ -58,9 +65,16 @@ async function submit() {
     return
   }
 
-  // Additional CARSU email validation
+  // Check CARSU email domain - show popup if not CARSU
   if (!email.value.endsWith('@carsu.edu.ph')) {
-    errorMessage.value = 'Access denied. Only CARSU email addresses are allowed.'
+    showDomainPopup.value = true
+    errorMessage.value = ''
+    return
+  }
+
+  // Check if email is in the approved CARSU emails list
+  if (!carsuEmails.includes(email.value)) {
+    errorMessage.value = 'This CARSU email is not authorized to access the system.'
     return
   }
 
@@ -68,17 +82,27 @@ async function submit() {
   errorMessage.value = ''
 
   try {
-    // Simulate API call
+    // Simulate API call delay
     await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    // Store user session
+    // Store user session (no password check needed)
     localStorage.setItem('userEmail', email.value)
     localStorage.setItem('isLoggedIn', 'true')
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        email: email.value,
+        loginTime: new Date().toISOString(),
+      }),
+    )
+
+    console.log('Login successful for:', email.value)
 
     // Navigate to dashboard
     router.push('/dashboard')
   } catch (error) {
-    errorMessage.value = 'Login failed. Please check your credentials and try again.'
+    errorMessage.value = 'Login failed. Please try again.'
+    console.error('Login error:', error)
   } finally {
     loading.value = false
   }
@@ -161,15 +185,17 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 
               <v-btn type="submit" class="primary-btn" :loading="loading" :disabled="loading">
                 <span v-if="!loading">LOG IN</span>
-                <span v-else>Logging in...</span>
+                <span v-else>Authenticating...</span>
               </v-btn>
-            </v-form>
 
-            <!-- CARSU Domain Info -->
-            <div class="domain-info">
-              <v-icon size="14" color="grey">mdi-information-outline</v-icon>
-              <span class="info-text">Only CARSU email addresses (@carsu.edu.ph) are allowed</span>
-            </div>
+              <!-- CARSU Domain Info - Only show after login attempt with non-CARSU email -->
+              <div v-if="showDomainPopup" class="domain-info mt-3">
+                <v-icon size="14" color="error">mdi-alert-circle-outline</v-icon>
+                <span class="info-text error-text"
+                  >Only CARSU email addresses (@carsu.edu.ph) are allowed</span
+                >
+              </div>
+            </v-form>
           </v-card-text>
         </v-card>
       </v-col>
@@ -294,17 +320,31 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 12px;
   padding: 8px 12px;
-  background: rgba(245, 197, 43, 0.08);
+  background: rgba(244, 67, 54, 0.08);
   border-radius: 8px;
-  border: 1px solid rgba(245, 197, 43, 0.2);
+  border: 1px solid rgba(244, 67, 54, 0.2);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .info-text {
   font-size: 12px;
-  color: #666;
   text-align: center;
+}
+
+.error-text {
+  color: #d32f2f;
 }
 
 .footer-note {
