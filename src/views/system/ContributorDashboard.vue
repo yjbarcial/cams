@@ -1,6 +1,41 @@
 <script setup>
+import { onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
+
+const router = useRouter()
+
+// Prevent back navigation to login page
+const preventBackToLogin = () => {
+  // Add a new history entry to prevent going back
+  window.history.pushState(null, '', window.location.href)
+}
+
+// Handle browser back button
+const handlePopState = (event) => {
+  // Push the current state again to prevent going back
+  window.history.pushState(null, '', window.location.href)
+
+  // Optional: Show a message or do nothing
+  console.log('Back navigation prevented. Please use the logout button to exit.')
+}
+
+onMounted(() => {
+  // Prevent back navigation when component mounts
+  preventBackToLogin()
+
+  // Listen for back button attempts
+  window.addEventListener('popstate', handlePopState)
+
+  // Replace the current history entry to remove login page from history
+  window.history.replaceState(null, '', window.location.href)
+})
+
+onUnmounted(() => {
+  // Clean up event listener
+  window.removeEventListener('popstate', handlePopState)
+})
 </script>
 
 <template>

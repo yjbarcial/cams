@@ -4,23 +4,38 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const showAccountMenu = ref(false)
+const logoutLoading = ref(false)
 
 const handleSettings = () => {
   console.log('Settings clicked')
   showAccountMenu.value = false
-  router.push('/settings') // Add this line to navigate to settings
+  router.push('/settings')
 }
 
-const handleLogout = () => {
-  console.log('Logout clicked')
-  // Clear any stored authentication data
-  localStorage.removeItem('user')
-  localStorage.removeItem('token')
-  sessionStorage.clear()
+const handleLogout = async () => {
+  logoutLoading.value = true
 
-  // Navigate to login page
-  router.push('/login')
-  showAccountMenu.value = false
+  try {
+    console.log('Logout clicked')
+
+    // Simulate logout delay (replace with actual API call if needed)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Clear any stored authentication data
+    localStorage.removeItem('userEmail')
+    localStorage.removeItem('isLoggedIn')
+    localStorage.removeItem('user')
+    localStorage.removeItem('token')
+    sessionStorage.clear()
+
+    // Navigate to login page
+    router.push('/login')
+    showAccountMenu.value = false
+  } catch (error) {
+    console.error('Logout error:', error)
+  } finally {
+    logoutLoading.value = false
+  }
 }
 </script>
 
@@ -64,8 +79,19 @@ const handleLogout = () => {
               <div class="dropdown-icon" @click="handleSettings">
                 <v-icon>mdi-cog</v-icon>
               </div>
-              <div class="dropdown-icon" @click="handleLogout">
-                <v-icon>mdi-logout</v-icon>
+              <div
+                class="dropdown-icon logout-icon"
+                @click="handleLogout"
+                :class="{ loading: logoutLoading }"
+              >
+                <v-progress-circular
+                  v-if="logoutLoading"
+                  :size="20"
+                  :width="2"
+                  color="#353535"
+                  indeterminate
+                />
+                <v-icon v-else>mdi-logout</v-icon>
               </div>
             </div>
           </v-card>
@@ -176,5 +202,14 @@ const handleLogout = () => {
 
 .dropdown-icon:hover {
   background: rgba(0, 0, 0, 0.1);
+}
+
+.logout-icon.loading {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.logout-icon.loading:hover {
+  background: transparent;
 }
 </style>

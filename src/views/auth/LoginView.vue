@@ -12,15 +12,17 @@ const showPassword = ref(false)
 const loading = ref(false)
 const errorMessage = ref('')
 
-// CARSU email validator (custom)
+// CARSU email validator using your existing validators
 const carsuEmailValidator = (value) => {
-  if (!value) return 'Email is required'
+  // First check if required
+  const requiredValidation = requiredValidator(value)
+  if (requiredValidation !== true) return requiredValidation
 
-  // First check if it's a valid email using your existing validator
+  // Then check if it's a valid email using your validator
   const emailValidation = emailValidator(value)
   if (emailValidation !== true) return emailValidation
 
-  // Then check if it's a CARSU email
+  // Finally check if it's a CARSU email
   if (!value.endsWith('@carsu.edu.ph')) {
     return 'Only CARSU email addresses are allowed (@carsu.edu.ph)'
   }
@@ -28,13 +30,13 @@ const carsuEmailValidator = (value) => {
   return true
 }
 
-// Password validator (using your existing required validator + length check)
-const passwordValidatorCustom = (value) => {
-  // First check if required
+// Password validator using your existing required validator
+const carsuPasswordValidator = (value) => {
+  // Use your existing required validator
   const requiredValidation = requiredValidator(value)
   if (requiredValidation !== true) return requiredValidation
 
-  // Then check minimum length
+  // Add minimum length check for CARSU login
   if (value.length < 6) {
     return 'Password must be at least 6 characters'
   }
@@ -44,7 +46,7 @@ const passwordValidatorCustom = (value) => {
 
 // Validation rules using your validator functions
 const emailRules = [carsuEmailValidator]
-const passwordRules = [passwordValidatorCustom]
+const passwordRules = [carsuPasswordValidator]
 
 const form = ref(null)
 
@@ -272,14 +274,6 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 .input-group :deep(.v-field__append-inner) {
   padding: 0 16px 0 8px !important;
   color: #555 !important;
-}
-
-.icon-btn {
-  background: transparent;
-  border: none;
-  padding: 4px;
-  cursor: pointer;
-  color: #555;
 }
 
 .primary-btn {
