@@ -1,17 +1,57 @@
-<script setup></script>
+<script setup>
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+// Admin access control - temporarily allow access for testing
+const isAdmin = () => {
+  // Temporarily return true to show admin view
+  // TODO: Add proper authentication later
+  return true
+}
+
+const goToAdmin = () => {
+  if (isAdmin()) {
+    router.push('/admin')
+  } else {
+    alert('Access denied. Admin privileges required.')
+  }
+}
+
+const goToPublications = () => {
+  router.push('/archive')
+}
+</script>
+
 <template>
   <header class="archive-header">
     <div class="brand">
-      <v-img src="/images/GoldQuill Logo.png" alt="GoldQuill" height="40px" width="50%" contain />
+      <v-img src="/images/GoldQuill Logo.png" alt="GoldQuill" height="30px" width="30%" contain />
       <h3>GoldQuill.</h3>
     </div>
     <div class="actions">
+      <!-- Publications icon -->
+      <button
+        @click="goToPublications"
+        class="icon-button"
+        aria-label="Publications"
+        title="Publications"
+      >
+        <span class="mdi mdi-bookshelf" aria-hidden="true"></span>
+      </button>
+
+      <!-- Admin icon - temporarily always visible -->
+      <button @click="goToAdmin" class="icon-button" aria-label="Admin Panel" title="Admin Panel">
+        <span class="mdi mdi-shield-outline" aria-hidden="true"></span>
+      </button>
+
       <RouterLink to="/login" class="icon-button" aria-label="Login" title="Login">
         <span class="mdi mdi-account-circle" aria-hidden="true"></span>
       </RouterLink>
     </div>
   </header>
 </template>
+
 <style scoped>
 .archive-header {
   background: #f5c52b;
@@ -34,17 +74,11 @@
   display: block;
 }
 
-.brand h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-}
-
 .actions {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
+  padding: 0 10px;
 }
 
 .icon-button {
@@ -55,6 +89,7 @@
   border-radius: 6px;
   color: #2b2b2b;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .icon-button:hover {
@@ -65,5 +100,23 @@
 .icon-button .mdi {
   font-size: 30px;
   line-height: 1;
+}
+
+/* Publications icon specific styling */
+.icon-button .mdi-book-open-page-variant {
+  color: #353535; /* Same dark color as admin icon */
+}
+
+.icon-button:hover .mdi-book-open-page-variant {
+  color: #1a1a1a; /* Darker on hover */
+}
+
+/* Admin icon specific styling */
+.icon-button .mdi-shield-outline {
+  color: #353535; /* Darker brown color for admin icon */
+}
+
+.icon-button:hover .mdi-shield-outline {
+  color: #1a1a1a; /* Darker on hover */
 }
 </style>

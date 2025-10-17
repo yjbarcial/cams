@@ -1,15 +1,111 @@
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { requiredValidator, emailValidator } from '@/utils/validators'
 import libBg from '/images/lib-hd.jpg'
+
+const router = useRouter()
 
 const email = ref('')
 const password = ref('')
 const showPassword = ref(false)
+const loading = ref(false)
+const errorMessage = ref('')
+const showDomainPopup = ref(false)
 
-function submit() {
-  // Placeholder submit
-  // In a real app, call your auth API here
-  console.log('Login attempt', { email: email.value })
+// Valid CARSU emails for the system
+const carsuEmails = [
+  'yssahjulianah.barcial@carsu.edu.ph',
+  'lovellhudson.clavel@carsu.edu.ph',
+  'altheaguila.gorres@carsu.edu.ph',
+]
+
+// CARSU email validator using your existing validators
+const carsuEmailValidator = (value) => {
+  // First check if required
+  const requiredValidation = requiredValidator(value)
+  if (requiredValidation !== true) return requiredValidation
+
+  // Then check if it's a valid email using your validator
+  const emailValidation = emailValidator(value)
+  if (emailValidation !== true) return emailValidation
+
+  // Don't show validation error here
+  return true
+}
+
+// Password validator using your existing required validator
+const carsuPasswordValidator = (value) => {
+  // Use your existing required validator
+  const requiredValidation = requiredValidator(value)
+  if (requiredValidation !== true) return requiredValidation
+
+  // Add minimum length check for CARSU login
+  if (value.length < 6) {
+    return 'Password must be at least 6 characters'
+  }
+
+  return true
+}
+
+// Validation rules using your validator functions
+const emailRules = [carsuEmailValidator]
+const passwordRules = [carsuPasswordValidator]
+
+const form = ref(null)
+
+async function submit() {
+  // Reset popup state
+  showDomainPopup.value = false
+
+  // Validate form first
+  const { valid } = await form.value.validate()
+
+  if (!valid) {
+    return
+  }
+
+  // Check CARSU email domain - show popup if not CARSU
+  if (!email.value.endsWith('@carsu.edu.ph')) {
+    showDomainPopup.value = true
+    errorMessage.value = ''
+    return
+  }
+
+  // Check if email is in the approved CARSU emails list
+  if (!carsuEmails.includes(email.value)) {
+    errorMessage.value = 'This CARSU email is not authorized to access the system.'
+    return
+  }
+
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    // Simulate API call delay
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+
+    // Store user session (no password check needed)
+    localStorage.setItem('userEmail', email.value)
+    localStorage.setItem('isLoggedIn', 'true')
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        email: email.value,
+        loginTime: new Date().toISOString(),
+      }),
+    )
+
+    console.log('Login successful for:', email.value)
+
+    // Navigate to dashboard
+    router.push('/dashboard')
+  } catch (error) {
+    errorMessage.value = 'Login failed. Please try again.'
+    console.error('Login error:', error)
+  } finally {
+    loading.value = false
+  }
 }
 
 function togglePassword() {
@@ -47,17 +143,29 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
           <v-card-subtitle class="subtext pa-0">Enter your CARSU email for log in</v-card-subtitle>
 
           <v-card-text class="pa-0">
-            <v-form @submit.prevent="submit" class="form">
+            <!-- Error Alert -->
+            <v-alert
+              v-if="errorMessage"
+              type="error"
+              class="mb-3"
+              density="compact"
+              variant="tonal"
+            >
+              {{ errorMessage }}
+            </v-alert>
+
+            <v-form ref="form" @submit.prevent="submit" class="form">
               <v-text-field
                 v-model="email"
                 type="email"
-                placeholder="Email"
+                placeholder="yourname@carsu.edu.ph"
                 prepend-inner-icon="mdi-email-outline"
                 variant="outlined"
                 class="input-group"
                 density="compact"
-                hide-details
+                :rules="emailRules"
                 required
+                :disabled="loading"
               />
 
               <v-text-field
@@ -70,22 +178,23 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 variant="outlined"
                 class="input-group"
                 density="compact"
-                hide-details
+                :rules="passwordRules"
                 required
+                :disabled="loading"
               />
 
-              <v-row class="row-between">
-                <v-col></v-col>
-                <v-col cols="auto">
-                  <v-btn to="/" variant="text" color="grey" class="muted-link"
-                    >Forgot password?</v-btn
-                  >
-                </v-col>
-              </v-row>
-
-              <v-btn type="submit" class="primary-btn" @click.prevent="$router.push('/dashboard')">
-                LOG IN
+              <v-btn type="submit" class="primary-btn" :loading="loading" :disabled="loading">
+                <span v-if="!loading">LOG IN</span>
+                <span v-else>Authenticating...</span>
               </v-btn>
+
+              <!-- CARSU Domain Info - Only show after login attempt with non-CARSU email -->
+              <div v-if="showDomainPopup" class="domain-info mt-3">
+                <v-icon size="14" color="error">mdi-alert-circle-outline</v-icon>
+                <span class="info-text error-text"
+                  >Only CARSU email addresses (@carsu.edu.ph) are allowed</span
+                >
+              </div>
             </v-form>
           </v-card-text>
         </v-card>
@@ -169,11 +278,6 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 
 .form {
   display: grid;
-  gap: 8px;
-}
-
-.input-group {
-  margin-bottom: 8px;
 }
 
 .input-group :deep(.v-field) {
@@ -198,32 +302,6 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   color: #555 !important;
 }
 
-.icon-btn {
-  background: transparent;
-  border: none;
-  padding: 4px;
-  cursor: pointer;
-  color: #555;
-}
-
-.row-between {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: -22px;
-}
-
-.muted-link {
-  color: #6b6b6b;
-  text-decoration: none;
-  text-transform: none !important; /* keep original casing */
-  font-size: 14px;
-}
-
-.muted-link:hover {
-  text-decoration: underline;
-}
-
 .primary-btn {
   width: 100%;
   height: 48px !important;
@@ -231,6 +309,42 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   color: #fff !important;
   border-radius: 999px !important;
   font-weight: 600;
+}
+
+.primary-btn:disabled {
+  opacity: 0.6 !important;
+}
+
+.domain-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(244, 67, 54, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(244, 67, 54, 0.2);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.info-text {
+  font-size: 12px;
+  text-align: center;
+}
+
+.error-text {
+  color: #d32f2f;
 }
 
 .footer-note {

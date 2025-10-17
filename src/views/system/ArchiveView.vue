@@ -1,7 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import ArchiveHeader from '@/components/layout/ArchiveHeader.vue'
-import Footer from '@/components/layout/Footer.vue'
+
+const router = useRouter()
 
 const searchQuery = ref('')
 const activeCategory = ref('All')
@@ -46,6 +48,37 @@ const filteredArticles = computed(() => {
     const matchesQuery = !query || a.title.toLowerCase().includes(query)
     return matchesCategory && matchesQuery
   })
+})
+
+// Prevent back navigation to dashboard
+const preventBackToDashboard = () => {
+  // Add a new history entry to prevent going back
+  window.history.pushState(null, '', window.location.href)
+}
+
+// Handle browser back button
+const handlePopState = (event) => {
+  // Push the current state again to prevent going back
+  window.history.pushState(null, '', window.location.href)
+
+  // Optional: Show a message or do nothing
+  console.log('Back navigation prevented. Please use the navigation menu to exit.')
+}
+
+onMounted(() => {
+  // Prevent back navigation when component mounts
+  preventBackToDashboard()
+
+  // Listen for back button attempts
+  window.addEventListener('popstate', handlePopState)
+
+  // Replace the current history entry to remove previous page from history
+  window.history.replaceState(null, '', window.location.href)
+})
+
+onUnmounted(() => {
+  // Clean up event listener
+  window.removeEventListener('popstate', handlePopState)
 })
 
 function setCategory(cat) {
@@ -248,15 +281,13 @@ function scrollToPublications() {
                 <template v-slot:prepend>
                   <v-icon>mdi-twitter</v-icon>
                 </template>
-                <span>https://x.com/tgpCSU</span>
+                <span>x.com/tgpCSU</span>
               </v-list-item>
             </v-list>
           </v-col>
         </v-row>
       </v-container>
     </v-sheet>
-
-    <Footer />
   </v-app>
 </template>
 

@@ -9,6 +9,9 @@ import NewsletterView from '@/views/system/NewsletterView.vue'
 import FolioView from '@/views/system/FolioView.vue'
 import OtherView from '@/views/system/OtherView.vue'
 import DeliverableView from '@/views/system/DeliverableView.vue'
+import ProjectView from '@/views/system/ProjectView.vue'
+import SettingsView from '@/views/system/SettingsView.vue'
+import AdminView from '@/views/admin/AdminView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -58,11 +61,23 @@ const router = createRouter({
       name: 'other',
       component: OtherView,
     },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsView,
+    },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: AdminView,
+    },
+
     { path: '/magazine/new', name: 'magazine-new', component: AddProjectView },
     { path: '/newsletter/new', name: 'newsletter-new', component: AddProjectView },
     { path: '/folio/new', name: 'folio-new', component: AddProjectView },
     { path: '/other/new', name: 'other-new', component: AddProjectView },
     { path: '/deliverables/:id', name: 'deliverable', component: DeliverableView, props: true },
+    { path: '/project/:id', name: 'project', component: ProjectView, props: true },
   ],
 })
 

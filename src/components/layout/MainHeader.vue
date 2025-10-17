@@ -4,22 +4,38 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const showAccountMenu = ref(false)
+const logoutLoading = ref(false)
 
 const handleSettings = () => {
   console.log('Settings clicked')
   showAccountMenu.value = false
+  router.push('/settings')
 }
 
-const handleLogout = () => {
-  console.log('Logout clicked')
-  // Clear any stored authentication data
-  localStorage.removeItem('user')
-  localStorage.removeItem('token')
-  sessionStorage.clear()
+const handleLogout = async () => {
+  logoutLoading.value = true
 
-  // Navigate to login page
-  router.push('/login')
-  showAccountMenu.value = false
+  try {
+    console.log('Logout clicked')
+
+    // Simulate logout delay (replace with actual API call if needed)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Clear any stored authentication data
+    localStorage.removeItem('userEmail')
+    localStorage.removeItem('isLoggedIn')
+    localStorage.removeItem('user')
+    localStorage.removeItem('token')
+    sessionStorage.clear()
+
+    // Navigate to login page
+    router.push('/login')
+    showAccountMenu.value = false
+  } catch (error) {
+    console.error('Logout error:', error)
+  } finally {
+    logoutLoading.value = false
+  }
 }
 </script>
 
@@ -63,8 +79,19 @@ const handleLogout = () => {
               <div class="dropdown-icon" @click="handleSettings">
                 <v-icon>mdi-cog</v-icon>
               </div>
-              <div class="dropdown-icon" @click="handleLogout">
-                <v-icon>mdi-logout</v-icon>
+              <div
+                class="dropdown-icon logout-icon"
+                @click="handleLogout"
+                :class="{ loading: logoutLoading }"
+              >
+                <v-progress-circular
+                  v-if="logoutLoading"
+                  :size="20"
+                  :width="2"
+                  color="#353535"
+                  indeterminate
+                />
+                <v-icon v-else>mdi-logout</v-icon>
               </div>
             </div>
           </v-card>
@@ -103,6 +130,7 @@ const handleLogout = () => {
   font-size: 22px;
   font-weight: 700;
   line-height: 1;
+  color: #353535;
 }
 
 .actions {
@@ -122,13 +150,14 @@ const handleLogout = () => {
   border: none;
   padding: 6px;
   border-radius: 6px;
-  color: #2b2b2b;
+  color: #353535;
   cursor: pointer;
   text-decoration: none;
 }
 
 .icon-button:hover {
   background: rgba(0, 0, 0, 0.06);
+  color: #353535;
 }
 
 .icon-button .mdi {
@@ -143,7 +172,7 @@ const handleLogout = () => {
   height: 120px !important;
   border-radius: 30px !important;
   background: #ffffff !important;
-  border: 2px solid #969595 !important;
+  border: 2px solid #353535 !important;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
   margin-top: 10px;
   transform: translateX(-48%) !important;
@@ -168,9 +197,19 @@ const handleLogout = () => {
   height: 40px;
   border-radius: 50%;
   transition: background 0.2s ease;
+  color: #353535;
 }
 
 .dropdown-icon:hover {
   background: rgba(0, 0, 0, 0.1);
+}
+
+.logout-icon.loading {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.logout-icon.loading:hover {
+  background: transparent;
 }
 </style>
