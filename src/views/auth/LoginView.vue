@@ -1,7 +1,24 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { requiredValidator, emailValidator } from '@/utils/validators'
+import {
+  requiredValidator,
+  emailValidator,
+  passwordValidator,
+  confirmedValidator,
+  betweenValidator,
+  integerValidator,
+  regexValidator,
+  alphaValidator,
+  urlValidator,
+  lengthValidator,
+  alphaDashValidator,
+  imageValidator,
+  isEmpty,
+  isNullOrUndefined,
+  isEmptyArray,
+  isObject,
+} from '@/utils/validators'
 import libBg from '/images/lib-hd.jpg'
 
 const router = useRouter()
