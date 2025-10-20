@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
+import { createProjectVersion } from '@/services/localProjectHistory.js'
 
 // Accept optional prop; also support reading from route param/query
 const props = defineProps({ type: { type: String, default: '' } })
@@ -149,6 +150,27 @@ const assignProject = () => {
   const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
   existingProjects.unshift(newProject) // Add to beginning of array
   localStorage.setItem(storageKey, JSON.stringify(existingProjects))
+
+  console.log('Project created and saved to localStorage:', {
+    storageKey,
+    project: newProject,
+    allProjects: existingProjects,
+  })
+
+  // Create initial version for the project
+  try {
+    createProjectVersion(
+      routeType.value,
+      newProject.id,
+      newProject,
+      'Initial project creation',
+      'Current User', // This should come from auth system
+      'draft',
+    )
+  } catch (error) {
+    console.error('Error creating initial version:', error)
+    // Don't fail the project creation if versioning fails
+  }
 
   // Navigate back to the category view
   router.push(cancelPath.value)

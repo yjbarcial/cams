@@ -18,9 +18,22 @@ const props = defineProps({
     type: String,
     default: '400px',
   },
+  projectId: {
+    type: [String, Number],
+    default: null,
+  },
+  projectType: {
+    type: String,
+    default: 'magazine',
+  },
 })
 
-const emit = defineEmits(['update:modelValue', 'text-change', 'selection-change'])
+const emit = defineEmits([
+  'update:modelValue',
+  'text-change',
+  'selection-change',
+  'highlight-comments-updated',
+])
 
 const editorRef = ref(null)
 const quill = ref(null)
@@ -164,6 +177,11 @@ watch(
   },
 )
 
+// Load highlight comments from storage on mount
+onMounted(() => {
+  loadHighlightCommentsFromStorage()
+})
+
 // Add highlight comment handler
 const addHighlightCommentHandler = () => {
   if (!quill.value) return
@@ -239,6 +257,12 @@ const addHighlightComment = () => {
 
     highlightComments.value.push(comment)
 
+    // Save to localStorage
+    saveHighlightCommentsToStorage()
+
+    // Emit the updated comments
+    emit('highlight-comments-updated', highlightComments.value)
+
     // Clear form
     highlightComment.value = ''
     showHighlightComment.value = false
@@ -296,6 +320,63 @@ const cancelHighlightComment = () => {
   currentSelection.value = null
 }
 
+// Get highlight comments
+const getHighlightComments = () => {
+  return highlightComments.value
+}
+
+// Delete highlight comment
+const deleteHighlightComment = (commentId) => {
+  const index = highlightComments.value.findIndex((c) => c.id === commentId)
+  if (index !== -1) {
+    highlightComments.value.splice(index, 1)
+    saveHighlightCommentsToStorage()
+    emit('highlight-comments-updated', highlightComments.value)
+    return true
+  }
+  return false
+}
+
+// Clear all highlight comments
+const clearHighlightComments = () => {
+  highlightComments.value = []
+  saveHighlightCommentsToStorage()
+  emit('highlight-comments-updated', highlightComments.value)
+}
+
+// localStorage functions for highlight comments
+const getHighlightCommentsKey = () => {
+  if (!props.projectId) return null
+  return `${props.projectType}_highlight_comments_${props.projectId}`
+}
+
+const loadHighlightCommentsFromStorage = () => {
+  try {
+    const key = getHighlightCommentsKey()
+    if (!key) return
+
+    const stored = localStorage.getItem(key)
+    if (stored) {
+      highlightComments.value = JSON.parse(stored)
+      console.log('Loaded highlight comments from storage:', highlightComments.value)
+    }
+  } catch (error) {
+    console.error('Error loading highlight comments from storage:', error)
+  }
+}
+
+const saveHighlightCommentsToStorage = () => {
+  try {
+    const key = getHighlightCommentsKey()
+    if (!key) return
+
+    localStorage.setItem(key, JSON.stringify(highlightComments.value))
+    console.log('Saved highlight comments to storage:', highlightComments.value)
+  } catch (error) {
+    console.error('Error saving highlight comments to storage:', error)
+  }
+}
+
 // Get editor content
 const getContent = () => {
   return quill.value ? quill.value.root.innerHTML : ''
@@ -348,6 +429,9 @@ defineExpose({
   setContent,
   focus,
   quill,
+  getHighlightComments,
+  deleteHighlightComment,
+  clearHighlightComments,
 })
 </script>
 

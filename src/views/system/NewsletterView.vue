@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
+import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
 
 const router = useRouter()
 
@@ -94,6 +95,7 @@ const showOnlyStarred = ref(false)
 
 // Edit and delete functionality
 const editingProject = ref(null)
+const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
 const currentUser = ref('Current User') // This would come from auth system
@@ -182,13 +184,16 @@ const filteredProjects = computed(() => {
 
 // Permission checking
 const canEditProject = (project) => {
-  return project.sectionHead === currentUser.value
+  // For development/demo purposes, allow editing all projects
+  // In production, this would check against actual user authentication
+  return true
 }
 
 // Edit functionality
 const startEdit = (project) => {
   if (canEditProject(project)) {
     editingProject.value = { ...project }
+    showEditDialog.value = true
   } else {
     alert('Only the section head who created this project can edit it.')
   }
@@ -213,11 +218,14 @@ const saveEdit = () => {
     localStorage.setItem('newsletter_projects', JSON.stringify(updatedProjects))
   }
 
+  // Close the dialog
   editingProject.value = null
+  showEditDialog.value = false
 }
 
 const cancelEdit = () => {
   editingProject.value = null
+  showEditDialog.value = false
 }
 
 // Delete functionality
@@ -248,6 +256,15 @@ const confirmDelete = () => {
 const cancelDelete = () => {
   showDeleteConfirm.value = false
   projectToDelete.value = null
+}
+
+// Delete from edit dialog
+const deleteFromEdit = () => {
+  if (editingProject.value) {
+    projectToDelete.value = editingProject.value
+    showEditDialog.value = false
+    showDeleteConfirm.value = true
+  }
 }
 </script>
 
@@ -375,6 +392,15 @@ const cancelDelete = () => {
                 >
                   <v-icon>mdi-pencil</v-icon>
                 </v-btn>
+                <ProjectHistoryButton
+                  :project-id="project.id"
+                  project-type="newsletter"
+                  button-text=""
+                  variant="text"
+                  size="small"
+                  icon="mdi-history"
+                  class="action-btn history-btn"
+                />
                 <v-btn
                   v-if="canEditProject(project)"
                   class="action-btn delete-btn"
@@ -395,7 +421,7 @@ const cancelDelete = () => {
     </v-main>
 
     <!-- Edit Project Modal -->
-    <v-dialog v-model="editingProject" persistent max-width="500px">
+    <v-dialog v-model="showEditDialog" persistent max-width="500px">
       <v-card class="modal-content">
         <v-card-title>Edit Project</v-card-title>
         <v-card-text>
@@ -445,6 +471,11 @@ const cancelDelete = () => {
         </v-card-text>
         <v-card-actions class="modal-actions">
           <v-btn class="cancel-btn" @click="cancelEdit" variant="outlined">Cancel</v-btn>
+          <v-btn class="delete-btn" @click="deleteFromEdit" color="error" variant="outlined">
+            <v-icon class="mr-1">mdi-delete</v-icon>
+            Delete
+          </v-btn>
+          <v-spacer />
           <v-btn class="save-btn" @click="saveEdit" color="primary">Save Changes</v-btn>
         </v-card-actions>
       </v-card>
@@ -762,6 +793,16 @@ const cancelDelete = () => {
 
 :deep(.delete-btn:hover) {
   background-color: #fee2e2 !important;
+}
+
+:deep(.history-btn) {
+  color: #6b7280 !important;
+  transition: all 0.2s ease !important;
+}
+
+:deep(.history-btn:hover) {
+  color: #3b82f6 !important;
+  background-color: #eff6ff !important;
 }
 
 /* Modal styles */

@@ -1,24 +1,41 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
+import ProjectHistory from '@/components/ProjectHistory.vue'
+import HighlightComments from '@/components/HighlightComments.vue'
+import { createProjectVersion } from '@/services/localProjectHistory.js'
+import {
+  getProjectComments,
+  addProjectComment,
+  updateProjectComment,
+  deleteProjectComment,
+  toggleCommentApproval,
+} from '@/services/commentsService.js'
 
 const route = useRoute()
+const router = useRouter()
 const projectId = route.params.id
 
-// Project data
+// Determine project type from route or project data
+const projectType = ref('magazine') // Default, will be determined from loaded project data
+
+// Project data - will be loaded from localStorage
 const project = ref({
   id: projectId,
-  title: 'Hope Magazine - The Gold Panicles 2020',
-  status: 'Submitted for Section Head review',
-  dueDate: 'Monday, 7 September 2020',
-  lastModified: 'Sunday, 6 September 2020, 9:35 PM',
-  mediaUploaded: 'HopeMagazine.png',
-  sectionHead: 'Mark Dela Cruz',
-  writer: 'John Doe',
-  artist: 'Jane Doe',
+  title: '',
+  status: '',
+  dueDate: '',
+  lastModified: '',
+  mediaUploaded: '',
+  sectionHead: '',
+  writers: '',
+  artists: '',
+  type: 'magazine',
+  description: '',
+  content: '',
 })
 
 // Title editing state
@@ -27,52 +44,24 @@ const titleInputRef = ref(null)
 const tempTitle = ref(project.value.title)
 
 // Rich text editor state
-const editorContent = ref(`
-<p>Give it a try! 😊</p>
-<p><span style="color: red;">Red text</span> and <span style="color: blue;">blue text!</span></p>
-<ul>
-  <li>A simple list</li>
-  <li>With two items</li>
-</ul>
-<p>Just type :) and it will be converted into 😊 as you type.</p>
-`)
+const editorContent = ref('')
 
 const isEditing = ref(false)
 const quillEditorRef = ref(null)
 
-// Comments state
-const comments = ref([
-  {
-    id: 1,
-    author: 'Jane Doe',
-    avatar:
-      'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=40&h=40&fit=crop&crop=face',
-    content: 'Lorem Ipsum',
-    timestamp: '12 minutes ago',
-    isApproved: true,
-  },
-  {
-    id: 2,
-    author: 'Mark Dela Cruz',
-    avatar:
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face',
-    content: 'Lorem Ipsum',
-    timestamp: '30 minutes ago',
-    isApproved: false,
-  },
-  {
-    id: 3,
-    author: 'John Doe',
-    avatar:
-      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face',
-    content: 'Lorem Ipsum',
-    timestamp: '1 day ago',
-    isApproved: false,
-  },
-])
+// History and versioning state
+const showHistory = ref(true) // Always show by default
+const versionDescription = ref('')
+const showVersionDialog = ref(false)
+
+// Comments state - start empty for new projects
+const comments = ref([])
 
 const newComment = ref('')
 const commentSearch = ref('')
+
+// Highlight comments state
+const highlightComments = ref([])
 
 // Title editing functions
 const startEditingTitle = () => {
@@ -91,7 +80,22 @@ const saveTitleEdit = () => {
   if (tempTitle.value.trim()) {
     project.value.title = tempTitle.value.trim()
     isEditingTitle.value = false
-    console.log('Title updated:', project.value.title)
+
+    // Save to localStorage
+    try {
+      const storageKey = `${projectType.value}_projects`
+      const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      const projectIndex = projects.findIndex((p) => p.id == projectId)
+
+      if (projectIndex !== -1) {
+        projects[projectIndex].title = tempTitle.value.trim()
+        projects[projectIndex].lastModified = new Date().toLocaleString()
+        localStorage.setItem(storageKey, JSON.stringify(projects))
+        console.log('Title updated and saved to localStorage:', project.value.title)
+      }
+    } catch (error) {
+      console.error('Error saving title to localStorage:', error)
+    }
   } else {
     cancelTitleEdit() // Don't save empty titles
   }
@@ -136,24 +140,184 @@ const saveContent = () => {
   if (quillEditorRef.value) {
     const content = quillEditorRef.value.getContent()
     editorContent.value = content
-    console.log('Content saved:', content)
+    project.value.content = content
+
+    // Save to localStorage
+    try {
+      const storageKey = `${projectType.value}_projects`
+      const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      const projectIndex = projects.findIndex((p) => p.id == projectId)
+
+      if (projectIndex !== -1) {
+        projects[projectIndex].content = content
+        projects[projectIndex].lastModified = new Date().toLocaleString()
+        localStorage.setItem(storageKey, JSON.stringify(projects))
+        console.log('Content saved to localStorage:', content)
+      }
+    } catch (error) {
+      console.error('Error saving content to localStorage:', error)
+    }
+  }
+}
+
+// Version control functions
+const createVersion = () => {
+  if (!versionDescription.value.trim()) {
+    alert('Please provide a description for this version')
+    return
+  }
+
+  try {
+    const projectData = {
+      ...project.value,
+      content: editorContent.value,
+    }
+
+    createProjectVersion(
+      projectType.value,
+      projectId,
+      projectData,
+      versionDescription.value,
+      'Current User', // This should come from auth system
+      'draft',
+    )
+
+    versionDescription.value = ''
+    showVersionDialog.value = false
+    console.log('Version created successfully')
+  } catch (error) {
+    console.error('Error creating version:', error)
+    alert('Failed to create version')
+  }
+}
+
+const handleVersionRestored = (restoredProject) => {
+  // Update the current project with restored data
+  project.value = { ...project.value, ...restoredProject }
+  editorContent.value = restoredProject.content || ''
+
+  // Update last modified
+  project.value.lastModified = new Date().toLocaleString()
+
+  console.log('Project restored from version:', restoredProject)
+}
+
+// Navigation functions
+const goBack = () => {
+  // Try to go back to the previous page, fallback to the appropriate project list
+  if (window.history.length > 1) {
+    router.go(-1)
+  } else {
+    // Fallback to the appropriate project list based on project type
+    const projectTypeMap = {
+      magazine: '/magazine',
+      newsletter: '/newsletter',
+      folio: '/folio',
+      other: '/other',
+    }
+    const fallbackRoute = projectTypeMap[projectType.value] || '/'
+    router.push(fallbackRoute)
+  }
+}
+
+// Load comments for the current project
+const loadProjectComments = () => {
+  try {
+    comments.value = getProjectComments(projectType.value, projectId)
+    console.log('Comments loaded:', comments.value)
+  } catch (error) {
+    console.error('Error loading comments:', error)
+    comments.value = []
+  }
+}
+
+// Load project data from localStorage
+const loadProjectData = () => {
+  try {
+    // Try to find the project in all project types
+    const projectTypes = ['magazine', 'newsletter', 'folio', 'other']
+
+    for (const type of projectTypes) {
+      const storageKey = `${type}_projects`
+      const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      const foundProject = projects.find((p) => p.id == projectId)
+
+      if (foundProject) {
+        // Update project data
+        project.value = {
+          ...foundProject,
+          id: projectId,
+          lastModified: foundProject.createdAtISO
+            ? new Date(foundProject.createdAtISO).toLocaleString()
+            : new Date().toLocaleString(),
+          content: foundProject.content || '',
+          writers: foundProject.writers || 'Not assigned',
+          artists: foundProject.artists || 'Not assigned',
+          sectionHead: foundProject.sectionHead || 'Not assigned',
+          description: foundProject.description || 'No description provided',
+        }
+
+        // Set project type
+        projectType.value = type
+
+        // Set editor content
+        editorContent.value = foundProject.content || ''
+
+        // Update temp title for editing
+        tempTitle.value = foundProject.title
+
+        // Load comments for this project
+        loadProjectComments()
+
+        // Load highlight comments from QuillEditor
+        if (quillEditorRef.value) {
+          const storedComments = quillEditorRef.value.getHighlightComments()
+          highlightComments.value = storedComments
+        }
+
+        console.log('Project loaded successfully:', {
+          id: project.value.id,
+          title: project.value.title,
+          description: project.value.description,
+          writers: project.value.writers,
+          artists: project.value.artists,
+          sectionHead: project.value.sectionHead,
+          status: project.value.status,
+          content: project.value.content,
+        })
+
+        console.log('Raw found project data:', foundProject)
+        console.log('Project value after assignment:', project.value)
+        return
+      }
+    }
+
+    // If project not found, show error
+    console.error('Project not found with ID:', projectId)
+    alert('Project not found. Please check the project ID.')
+  } catch (error) {
+    console.error('Error loading project:', error)
+    alert('Error loading project data.')
   }
 }
 
 // Comment functions
 const addComment = () => {
   if (newComment.value.trim()) {
-    const comment = {
-      id: comments.value.length + 1,
-      author: 'Current User',
-      avatar:
-        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=40&h=40&fit=crop&crop=face',
-      content: newComment.value,
-      timestamp: 'Just now',
-      isApproved: false,
+    try {
+      const comment = addProjectComment(
+        projectType.value,
+        projectId,
+        newComment.value.trim(),
+        'Current User', // This should come from auth system
+      )
+      comments.value.unshift(comment)
+      newComment.value = ''
+      console.log('Comment added successfully')
+    } catch (error) {
+      console.error('Error adding comment:', error)
+      alert('Failed to add comment')
     }
-    comments.value.unshift(comment)
-    newComment.value = ''
   }
 }
 
@@ -166,16 +330,117 @@ const filteredComments = computed(() => {
   )
 })
 
+// Comment action functions
+const deleteComment = (commentId) => {
+  if (confirm('Are you sure you want to delete this comment?')) {
+    try {
+      const success = deleteProjectComment(projectType.value, projectId, commentId)
+      if (success) {
+        comments.value = comments.value.filter((c) => c.id !== commentId)
+        console.log('Comment deleted successfully')
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error)
+      alert('Failed to delete comment')
+    }
+  }
+}
+
+const toggleCommentApprovalStatus = (commentId) => {
+  try {
+    const success = toggleCommentApproval(projectType.value, projectId, commentId)
+    if (success) {
+      const comment = comments.value.find((c) => c.id === commentId)
+      if (comment) {
+        comment.isApproved = !comment.isApproved
+      }
+      console.log('Comment approval toggled')
+    }
+  } catch (error) {
+    console.error('Error toggling comment approval:', error)
+    alert('Failed to toggle comment approval')
+  }
+}
+
+// Highlight comments functions
+const handleHighlightCommentsUpdated = (comments) => {
+  highlightComments.value = comments
+  console.log('Highlight comments updated:', comments)
+}
+
+const handleHighlightText = (comment) => {
+  console.log('Highlighting text:', comment)
+  // The QuillEditor will handle the highlighting
+}
+
+const handleDeleteHighlightComment = (commentId) => {
+  if (quillEditorRef.value) {
+    const success = quillEditorRef.value.deleteHighlightComment(commentId)
+    if (success) {
+      console.log('Highlight comment deleted')
+    }
+  }
+}
+
+const handleLoadHighlightComments = (comments) => {
+  highlightComments.value = comments
+  console.log('Loaded highlight comments:', comments)
+}
+
+// Format timestamp for display
+const formatCommentTime = (timestamp) => {
+  try {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60))
+
+    if (diffInMinutes < 1) return 'Just now'
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`
+    if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
+
+    return date.toLocaleDateString()
+  } catch (error) {
+    return timestamp
+  }
+}
+
+// Watch for editor content changes to keep QuillEditor in sync
+watch(editorContent, (newContent) => {
+  if (quillEditorRef.value && quillEditorRef.value.getContent() !== newContent) {
+    quillEditorRef.value.setContent(newContent)
+  }
+})
+
+// Watch for QuillEditor to be ready and load highlight comments
+watch(
+  () => quillEditorRef.value,
+  (newEditor) => {
+    if (newEditor && newEditor.getHighlightComments) {
+      const storedComments = newEditor.getHighlightComments()
+      highlightComments.value = storedComments
+    }
+  },
+)
+
 // Load project data on mount
 onMounted(() => {
-  // In a real app, you would fetch project data based on projectId
+  // Load project data from localStorage
   console.log('Loading project:', projectId)
+  loadProjectData()
 })
 </script>
 
 <template>
   <v-app class="project-page">
     <MainHeader />
+
+    <!-- Back Button -->
+    <div class="back-button-container">
+      <v-btn @click="goBack" variant="outlined" prepend-icon="mdi-arrow-left" class="back-button">
+        Back
+      </v-btn>
+    </div>
 
     <v-main class="main-content">
       <v-container fluid class="project-container pa-5">
@@ -215,6 +480,12 @@ onMounted(() => {
               </div>
             </div>
 
+            <!-- Project Description -->
+            <div v-if="project.description" class="project-description">
+              <h3>Description</h3>
+              <p>{{ project.description }}</p>
+            </div>
+
             <!-- Project Metadata -->
             <div class="project-metadata">
               <div class="metadata-row">
@@ -244,11 +515,11 @@ onMounted(() => {
                 </div>
                 <div class="metadata-item">
                   <span class="label">Writer:</span>
-                  <span class="value">{{ project.writer }}</span>
+                  <span class="value">{{ project.writers || 'Not assigned' }}</span>
                 </div>
                 <div class="metadata-item">
                   <span class="label">Artist:</span>
-                  <span class="value">{{ project.artist }}</span>
+                  <span class="value">{{ project.artists || 'Not assigned' }}</span>
                 </div>
               </div>
             </div>
@@ -259,9 +530,12 @@ onMounted(() => {
                 ref="quillEditorRef"
                 v-model="editorContent"
                 :read-only="!isEditing"
+                :project-id="projectId"
+                :project-type="projectType"
                 height="500px"
                 placeholder="Start writing your content..."
                 @text-change="saveContent"
+                @highlight-comments-updated="handleHighlightCommentsUpdated"
               />
             </div>
 
@@ -273,18 +547,58 @@ onMounted(() => {
               <v-btn @click="saveAsDraft" variant="outlined" class="draft-btn">
                 Save as Draft
               </v-btn>
+              <v-btn @click="showVersionDialog = true" variant="outlined" class="version-btn">
+                Create Version
+              </v-btn>
               <v-btn variant="outlined" class="remove-btn"> Remove Submission </v-btn>
             </div>
           </v-col>
 
-          <!-- Right Panel - Comments -->
+          <!-- Right Panel - Comments and History -->
           <v-col cols="12" lg="4" class="right-panel">
+            <!-- Project History -->
+            <div class="history-section mb-4">
+              <v-card class="project-history-card">
+                <v-card-title class="d-flex justify-space-between align-center">
+                  <span>
+                    <v-icon class="mr-2">mdi-history</v-icon>
+                    Project History
+                  </span>
+                  <v-btn icon variant="text" size="small" @click="showHistory = !showHistory">
+                    <v-icon>{{ showHistory ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+                  </v-btn>
+                </v-card-title>
+
+                <v-expand-transition>
+                  <v-card-text v-if="showHistory" class="history-content">
+                    <ProjectHistory
+                      :project-id="projectId"
+                      :project-type="projectType"
+                      @version-restored="handleVersionRestored"
+                    />
+                  </v-card-text>
+                </v-expand-transition>
+              </v-card>
+            </div>
+
+            <!-- Highlight Comments -->
+            <HighlightComments
+              :comments="highlightComments"
+              :quill-editor="quillEditorRef?.quill"
+              :project-id="projectId"
+              :project-type="projectType"
+              @delete-comment="handleDeleteHighlightComment"
+              @highlight-text="handleHighlightText"
+              @load-comments="handleLoadHighlightComments"
+            />
+
+            <!-- Comments Section -->
             <div class="comments-section">
               <!-- Comments Header -->
               <div class="comments-header">
                 <h3>Comments</h3>
                 <div class="header-actions">
-                  <v-btn icon size="small" variant="text">
+                  <v-btn icon size="small" variant="text" @click="loadProjectComments">
                     <v-icon>mdi-refresh</v-icon>
                   </v-btn>
                   <v-btn icon size="small" variant="text">
@@ -328,7 +642,7 @@ onMounted(() => {
                   <div class="comment-content">
                     <div class="comment-header">
                       <span class="comment-author">{{ comment.author }}</span>
-                      <span class="comment-time">{{ comment.timestamp }}</span>
+                      <span class="comment-time">{{ formatCommentTime(comment.timestamp) }}</span>
                     </div>
                     <div class="comment-text">{{ comment.content }}</div>
                   </div>
@@ -336,9 +650,23 @@ onMounted(() => {
                     <v-icon v-if="comment.isApproved" color="success" size="small">
                       mdi-check-circle
                     </v-icon>
-                    <v-btn icon size="small" variant="text">
-                      <v-icon>mdi-dots-vertical</v-icon>
-                    </v-btn>
+                    <v-menu>
+                      <template v-slot:activator="{ props }">
+                        <v-btn icon size="small" variant="text" v-bind="props">
+                          <v-icon>mdi-dots-vertical</v-icon>
+                        </v-btn>
+                      </template>
+                      <v-list>
+                        <v-list-item @click="toggleCommentApprovalStatus(comment.id)">
+                          <v-list-item-title>
+                            {{ comment.isApproved ? 'Unapprove' : 'Approve' }}
+                          </v-list-item-title>
+                        </v-list-item>
+                        <v-list-item @click="deleteComment(comment.id)" class="text-error">
+                          <v-list-item-title>Delete</v-list-item-title>
+                        </v-list-item>
+                      </v-list>
+                    </v-menu>
                   </div>
                 </div>
               </div>
@@ -349,6 +677,48 @@ onMounted(() => {
     </v-main>
 
     <Footer />
+
+    <!-- Version Creation Dialog -->
+    <v-dialog v-model="showVersionDialog" max-width="500px">
+      <v-card>
+        <v-card-title>
+          <v-icon class="mr-2">mdi-plus-circle</v-icon>
+          Create New Version
+        </v-card-title>
+
+        <v-card-text>
+          <p class="mb-4">Create a snapshot of the current project state for version control.</p>
+
+          <v-textarea
+            v-model="versionDescription"
+            label="Version Description"
+            placeholder="Describe the changes made in this version..."
+            rows="3"
+            variant="outlined"
+            required
+            :rules="[(v) => !!v || 'Description is required']"
+          />
+
+          <v-select
+            :items="['draft', 'published', 'major', 'minor']"
+            label="Version Type"
+            variant="outlined"
+            value="draft"
+            readonly
+            hint="Version type will be automatically determined"
+            persistent-hint
+          />
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer />
+          <v-btn @click="showVersionDialog = false" color="grey"> Cancel </v-btn>
+          <v-btn @click="createVersion" color="primary" :disabled="!versionDescription.trim()">
+            Create Version
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
@@ -358,6 +728,25 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   background-color: #f8fafc;
+}
+
+.back-button-container {
+  padding: 16px 24px 0;
+  background-color: #f8fafc;
+}
+
+.back-button {
+  background: white !important;
+  border: 1px solid #d1d5db !important;
+  color: #374151 !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+.back-button:hover {
+  background: #f9fafb !important;
+  border-color: #9ca3af !important;
 }
 
 .main-content {
@@ -450,6 +839,38 @@ onMounted(() => {
   gap: 4px;
 }
 
+.project-description {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.project-description h3 {
+  margin: 0 0 12px 0;
+  color: #374151;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.project-description p {
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.project-history-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.history-content {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .project-metadata {
   background: white;
   border: 1px solid #e5e7eb;
@@ -527,6 +948,28 @@ onMounted(() => {
 
 .remove-btn:hover {
   background: #f3f4f6 !important; /* Light gray on hover */
+}
+
+.version-btn {
+  background: #8b5cf6 !important; /* Purple background */
+  color: white !important;
+  border: 1px solid #8b5cf6 !important;
+  font-weight: bold !important; /* Make text bold */
+}
+
+.version-btn:hover {
+  background: #7c3aed !important; /* Darker purple on hover */
+}
+
+.history-btn {
+  background: #06b6d4 !important; /* Cyan background */
+  color: white !important;
+  border: 1px solid #06b6d4 !important;
+  font-weight: bold !important; /* Make text bold */
+}
+
+.history-btn:hover {
+  background: #0891b2 !important; /* Darker cyan on hover */
 }
 
 .comments-section {
