@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
@@ -43,11 +43,21 @@ const isEditingTitle = ref(false)
 const titleInputRef = ref(null)
 const tempTitle = ref(project.value.title)
 
-// Rich text editor state
+// Rich text editor state - Always in edit mode now
 const editorContent = ref('')
-
-const isEditing = ref(false)
+const isEditing = ref(true) // Always true now - auto-edit mode
 const quillEditorRef = ref(null)
+
+// Auto-save state
+const lastSaveTime = ref(null)
+const saveTimeout = ref(null)
+const autoSaveInterval = ref(null)
+const hasUnsavedChanges = ref(false)
+
+// Submit for approval state
+const showSubmitDialog = ref(false)
+const submitPriority = ref('Medium')
+const submitComments = ref('')
 
 // History and versioning state
 const showHistory = ref(true) // Always show by default
@@ -56,12 +66,23 @@ const showVersionDialog = ref(false)
 
 // Comments state - start empty for new projects
 const comments = ref([])
-
 const newComment = ref('')
 const commentSearch = ref('')
 
 // Highlight comments state
 const highlightComments = ref([])
+
+// Snackbar for notifications
+const showSnackbar = ref(false)
+const snackbarMessage = ref('')
+const snackbarColor = ref('success')
+
+// Show notification
+const showNotification = (message, color = 'success') => {
+  snackbarMessage.value = message
+  snackbarColor.value = color
+  showSnackbar.value = true
+}
 
 // Title editing functions
 const startEditingTitle = () => {
@@ -92,9 +113,12 @@ const saveTitleEdit = () => {
         projects[projectIndex].lastModified = new Date().toLocaleString()
         localStorage.setItem(storageKey, JSON.stringify(projects))
         console.log('Title updated and saved to localStorage:', project.value.title)
+        showNotification('Title updated successfully')
+        updateLastSaveTime()
       }
     } catch (error) {
       console.error('Error saving title to localStorage:', error)
+      showNotification('Error saving title', 'error')
     }
   } else {
     cancelTitleEdit() // Don't save empty titles
@@ -116,29 +140,16 @@ const handleTitleKeydown = (event) => {
   }
 }
 
-// Editor functions
-const toggleEdit = () => {
-  isEditing.value = !isEditing.value
-  if (isEditing.value) {
-    // Focus editor on entering edit mode
-    if (quillEditorRef.value && quillEditorRef.value.focus) {
-      quillEditorRef.value.focus()
-    }
-  } else {
-    // Save on leaving edit mode
-    saveContent()
-  }
-}
-
-const saveAsDraft = () => {
-  saveContent()
-  console.log('Project saved as draft')
-  // Add your save as draft logic here
-}
-
-const saveContent = () => {
+// Enhanced auto-save content function
+const saveContent = (showNotif = false) => {
   if (quillEditorRef.value) {
     const content = quillEditorRef.value.getContent()
+
+    // Only save if content actually changed
+    if (content === project.value.content) {
+      return false // No changes to save
+    }
+
     editorContent.value = content
     project.value.content = content
 
@@ -152,22 +163,192 @@ const saveContent = () => {
         projects[projectIndex].content = content
         projects[projectIndex].lastModified = new Date().toLocaleString()
         localStorage.setItem(storageKey, JSON.stringify(projects))
-        console.log('Content saved to localStorage:', content)
+
+        updateLastSaveTime()
+        hasUnsavedChanges.value = false
+
+        if (showNotif) {
+          showNotification('Content saved', 'success')
+        }
+
+        console.log('Content auto-saved to localStorage')
+        return true // Successfully saved
       }
     } catch (error) {
       console.error('Error saving content to localStorage:', error)
+      if (showNotif) {
+        showNotification('Error saving content', 'error')
+      }
+      return false
     }
   }
+  return false
+}
+
+// Debounced auto-save function
+const debouncedSave = () => {
+  // Clear existing timeout
+  if (saveTimeout.value) {
+    clearTimeout(saveTimeout.value)
+  }
+
+  // Set new timeout - save after 1 second of no typing
+  saveTimeout.value = setTimeout(() => {
+    if (hasUnsavedChanges.value) {
+      saveContent()
+    }
+  }, 1000) // 1 second delay after typing stops
+}
+
+// Handle content changes (called on every keystroke)
+const handleContentChange = () => {
+  hasUnsavedChanges.value = true
+  debouncedSave()
+}
+
+// Update last save time
+const updateLastSaveTime = () => {
+  lastSaveTime.value = new Date().toLocaleString()
+  project.value.lastModified = lastSaveTime.value
+}
+
+// Get last save time for display
+const getLastSaveDisplay = computed(() => {
+  if (!lastSaveTime.value) return 'Never'
+  const now = new Date()
+  const saveTime = new Date(lastSaveTime.value)
+  const diffInSeconds = Math.floor((now - saveTime) / 1000)
+
+  if (diffInSeconds < 5) return 'Just now'
+  if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`
+
+  return lastSaveTime.value
+})
+
+// Editor functions - keeping the old toggleEdit function but modifying it
+const toggleEdit = () => {
+  // Since we're always in edit mode, this now acts as "Submit for Approval"
+  submitForApproval()
+}
+
+const saveAsDraft = () => {
+  saveContent(true) // Show notification for manual save
+
+  // Update status to Draft if not already
+  if (project.value.status !== 'Draft') {
+    project.value.status = 'Draft'
+
+    try {
+      const storageKey = `${projectType.value}_projects`
+      const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      const projectIndex = projects.findIndex((p) => p.id == projectId)
+
+      if (projectIndex !== -1) {
+        projects[projectIndex].status = 'Draft'
+        projects[projectIndex].lastModified = new Date().toLocaleString()
+        localStorage.setItem(storageKey, JSON.stringify(projects))
+      }
+    } catch (error) {
+      console.error('Error saving draft status:', error)
+    }
+  }
+
+  showNotification('Project saved as draft')
+  console.log('Project saved as draft')
+}
+
+// Submit for approval function
+const submitForApproval = () => {
+  // First save current content
+  saveContent()
+
+  // Show submit dialog
+  showSubmitDialog.value = true
+}
+
+const confirmSubmitForApproval = () => {
+  try {
+    const storageKey = `${projectType.value}_projects`
+    const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    const projectIndex = projects.findIndex((p) => p.id == projectId)
+
+    if (projectIndex !== -1) {
+      // Update project with approval fields
+      const updatedProject = {
+        ...projects[projectIndex],
+        status: 'To Section Head', // Start approval workflow
+        submittedBy: 'Current User', // This should come from auth system
+        submittedDate: new Date().toISOString(),
+        priority: submitPriority.value,
+        department: getDepartmentFromProject(),
+        lastModified: new Date().toLocaleString(),
+        submitComments: submitComments.value,
+      }
+
+      projects[projectIndex] = updatedProject
+      localStorage.setItem(storageKey, JSON.stringify(projects))
+
+      // Update local project state
+      project.value.status = 'To Section Head'
+      project.value.priority = submitPriority.value
+      project.value.submittedDate = new Date().toISOString()
+
+      // Close dialog and reset
+      showSubmitDialog.value = false
+      submitComments.value = ''
+      submitPriority.value = 'Medium'
+
+      showNotification('Project submitted for approval successfully!', 'success')
+      console.log('Project submitted for approval:', updatedProject.title)
+
+      // Optionally navigate to approval view or show confirmation
+      setTimeout(() => {
+        const confirmNavigation = confirm(
+          'Project submitted! Would you like to go to the approval dashboard?',
+        )
+        if (confirmNavigation) {
+          router.push('/approval')
+        }
+      }, 1500)
+    } else {
+      throw new Error('Project not found in storage')
+    }
+  } catch (error) {
+    console.error('Error submitting project for approval:', error)
+    showNotification('Error submitting project for approval', 'error')
+  }
+}
+
+const cancelSubmitDialog = () => {
+  showSubmitDialog.value = false
+  submitComments.value = ''
+  submitPriority.value = 'Medium'
+}
+
+// Helper function to determine department
+const getDepartmentFromProject = () => {
+  // You can customize this logic based on your needs
+  const typeMap = {
+    magazine: 'Editorial',
+    newsletter: 'News',
+    folio: 'Arts',
+    other: 'Marketing',
+  }
+  return typeMap[projectType.value] || 'General'
 }
 
 // Version control functions
 const createVersion = () => {
   if (!versionDescription.value.trim()) {
-    alert('Please provide a description for this version')
+    showNotification('Please provide a description for this version', 'warning')
     return
   }
 
   try {
+    // Save current content first
+    saveContent()
+
     const projectData = {
       ...project.value,
       content: editorContent.value,
@@ -184,10 +365,11 @@ const createVersion = () => {
 
     versionDescription.value = ''
     showVersionDialog.value = false
+    showNotification('Version created successfully')
     console.log('Version created successfully')
   } catch (error) {
     console.error('Error creating version:', error)
-    alert('Failed to create version')
+    showNotification('Failed to create version', 'error')
   }
 }
 
@@ -199,11 +381,29 @@ const handleVersionRestored = (restoredProject) => {
   // Update last modified
   project.value.lastModified = new Date().toLocaleString()
 
+  showNotification('Project restored from version')
   console.log('Project restored from version:', restoredProject)
 }
 
 // Navigation functions
 const goBack = () => {
+  // Check if there are unsaved changes
+  if (hasUnsavedChanges.value) {
+    const confirmLeave = confirm('You have unsaved changes. Do you want to save before leaving?')
+    if (confirmLeave) {
+      saveContent(true)
+      // Small delay to ensure save completes
+      setTimeout(() => {
+        performNavigation()
+      }, 100)
+      return
+    }
+  }
+
+  performNavigation()
+}
+
+const performNavigation = () => {
   // Try to go back to the previous page, fallback to the appropriate project list
   if (window.history.length > 1) {
     router.go(-1)
@@ -266,6 +466,9 @@ const loadProjectData = () => {
         // Update temp title for editing
         tempTitle.value = foundProject.title
 
+        // Initialize last save time
+        updateLastSaveTime()
+
         // Load comments for this project
         loadProjectComments()
 
@@ -294,10 +497,10 @@ const loadProjectData = () => {
 
     // If project not found, show error
     console.error('Project not found with ID:', projectId)
-    alert('Project not found. Please check the project ID.')
+    showNotification('Project not found. Please check the project ID.', 'error')
   } catch (error) {
     console.error('Error loading project:', error)
-    alert('Error loading project data.')
+    showNotification('Error loading project data.', 'error')
   }
 }
 
@@ -313,10 +516,11 @@ const addComment = () => {
       )
       comments.value.unshift(comment)
       newComment.value = ''
+      showNotification('Comment added successfully')
       console.log('Comment added successfully')
     } catch (error) {
       console.error('Error adding comment:', error)
-      alert('Failed to add comment')
+      showNotification('Failed to add comment', 'error')
     }
   }
 }
@@ -337,11 +541,12 @@ const deleteComment = (commentId) => {
       const success = deleteProjectComment(projectType.value, projectId, commentId)
       if (success) {
         comments.value = comments.value.filter((c) => c.id !== commentId)
+        showNotification('Comment deleted successfully')
         console.log('Comment deleted successfully')
       }
     } catch (error) {
       console.error('Error deleting comment:', error)
-      alert('Failed to delete comment')
+      showNotification('Failed to delete comment', 'error')
     }
   }
 }
@@ -354,11 +559,12 @@ const toggleCommentApprovalStatus = (commentId) => {
       if (comment) {
         comment.isApproved = !comment.isApproved
       }
+      showNotification('Comment approval toggled')
       console.log('Comment approval toggled')
     }
   } catch (error) {
     console.error('Error toggling comment approval:', error)
-    alert('Failed to toggle comment approval')
+    showNotification('Failed to toggle comment approval', 'error')
   }
 }
 
@@ -377,6 +583,7 @@ const handleDeleteHighlightComment = (commentId) => {
   if (quillEditorRef.value) {
     const success = quillEditorRef.value.deleteHighlightComment(commentId)
     if (success) {
+      showNotification('Highlight comment deleted')
       console.log('Highlight comment deleted')
     }
   }
@@ -405,6 +612,25 @@ const formatCommentTime = (timestamp) => {
   }
 }
 
+// Check if project can be submitted (has content and title)
+const canSubmitProject = computed(() => {
+  return project.value.title.trim() && editorContent.value.trim()
+})
+
+// Get status color for display
+const getStatusColor = (status) => {
+  const statusColors = {
+    Draft: 'grey',
+    'To Section Head': 'warning',
+    'To Technical Editor': 'info',
+    'To Editor-in-Chief': 'primary',
+    'To Chief Adviser': 'purple',
+    Published: 'success',
+    Rejected: 'error',
+  }
+  return statusColors[status] || 'default'
+}
+
 // Watch for editor content changes to keep QuillEditor in sync
 watch(editorContent, (newContent) => {
   if (quillEditorRef.value && quillEditorRef.value.getContent() !== newContent) {
@@ -423,11 +649,31 @@ watch(
   },
 )
 
-// Load project data on mount
+// Setup auto-save system
 onMounted(() => {
   // Load project data from localStorage
   console.log('Loading project:', projectId)
   loadProjectData()
+
+  // Set up real-time auto-save interval (every 1 second)
+  autoSaveInterval.value = setInterval(() => {
+    if (isEditing.value && hasUnsavedChanges.value && quillEditorRef.value) {
+      const saved = saveContent()
+      if (saved) {
+        console.log('Real-time auto-save completed')
+      }
+    }
+  }, 1000) // Auto-save every 1 second if there are unsaved changes
+})
+
+// Clean up intervals and timeouts
+onUnmounted(() => {
+  if (autoSaveInterval.value) {
+    clearInterval(autoSaveInterval.value)
+  }
+  if (saveTimeout.value) {
+    clearTimeout(saveTimeout.value)
+  }
 })
 </script>
 
@@ -491,7 +737,9 @@ onMounted(() => {
               <div class="metadata-row">
                 <div class="metadata-item">
                   <span class="label">Submission Status:</span>
-                  <span class="value">{{ project.status }}</span>
+                  <v-chip :color="getStatusColor(project.status)" size="small" class="status-chip">
+                    {{ project.status }}
+                  </v-chip>
                 </div>
                 <div class="metadata-item">
                   <span class="label">Due Date:</span>
@@ -524,25 +772,45 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- Rich Text Editor -->
+            <!-- Enhanced Auto-save Notice -->
+            <div class="auto-save-notice">
+              <div class="save-status">
+                <v-icon size="16" :color="hasUnsavedChanges ? 'warning' : 'success'">
+                  {{ hasUnsavedChanges ? 'mdi-content-save-edit' : 'mdi-content-save-check' }}
+                </v-icon>
+                <span class="save-text">
+                  {{ hasUnsavedChanges ? 'Saving...' : 'All changes saved' }}
+                </span>
+              </div>
+              <div class="last-save">
+                <span class="last-save-text">Last saved: {{ getLastSaveDisplay }}</span>
+              </div>
+            </div>
+
+            <!-- Rich Text Editor - Always in Edit Mode -->
             <div class="editor-section">
               <QuillEditor
                 ref="quillEditorRef"
                 v-model="editorContent"
-                :read-only="!isEditing"
+                :read-only="false"
                 :project-id="projectId"
                 :project-type="projectType"
                 height="500px"
                 placeholder="Start writing your content..."
-                @text-change="saveContent"
+                @text-change="handleContentChange"
                 @highlight-comments-updated="handleHighlightCommentsUpdated"
               />
             </div>
 
-            <!-- Action Buttons -->
+            <!-- Action Buttons - Keeping Original Style -->
             <div class="action-buttons">
-              <v-btn @click="toggleEdit" variant="outlined" class="edit-btn">
-                {{ isEditing ? 'Save Changes' : 'Edit Submission' }}
+              <v-btn
+                @click="toggleEdit"
+                variant="outlined"
+                class="edit-btn"
+                :disabled="!canSubmitProject"
+              >
+                Submit for Approval
               </v-btn>
               <v-btn @click="saveAsDraft" variant="outlined" class="draft-btn">
                 Save as Draft
@@ -678,6 +946,56 @@ onMounted(() => {
 
     <Footer />
 
+    <!-- Submit for Approval Dialog -->
+    <v-dialog v-model="showSubmitDialog" max-width="600px" persistent>
+      <v-card>
+        <v-card-title>
+          <v-icon class="mr-2" color="primary">mdi-send</v-icon>
+          Submit for Approval
+        </v-card-title>
+
+        <v-card-text>
+          <p class="mb-4">
+            Submit "{{ project.title }}" for approval. This will send your project to the Section
+            Head for review.
+          </p>
+
+          <v-select
+            v-model="submitPriority"
+            label="Priority Level"
+            :items="['High', 'Medium', 'Low']"
+            variant="outlined"
+            class="mb-4"
+            hint="Select the priority level for this submission"
+            persistent-hint
+          />
+
+          <v-textarea
+            v-model="submitComments"
+            label="Submission Comments (Optional)"
+            placeholder="Add any comments or notes for the reviewers..."
+            variant="outlined"
+            rows="3"
+            hint="These comments will be visible to all reviewers"
+            persistent-hint
+          />
+
+          <v-alert type="info" variant="outlined" class="mt-4">
+            <strong>Next Step:</strong> Your project will be forwarded to the Section Head for
+            initial review.
+          </v-alert>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-btn @click="cancelSubmitDialog" variant="outlined"> Cancel </v-btn>
+          <v-spacer />
+          <v-btn @click="confirmSubmitForApproval" color="primary" prepend-icon="mdi-send">
+            Submit for Approval
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Version Creation Dialog -->
     <v-dialog v-model="showVersionDialog" max-width="500px">
       <v-card>
@@ -719,6 +1037,19 @@ onMounted(() => {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Snackbar for notifications -->
+    <v-snackbar
+      v-model="showSnackbar"
+      :color="snackbarColor"
+      timeout="3000"
+      location="bottom right"
+    >
+      {{ snackbarMessage }}
+      <template v-slot:actions>
+        <v-btn variant="text" @click="showSnackbar = false"> Close </v-btn>
+      </template>
+    </v-snackbar>
   </v-app>
 </template>
 
@@ -876,7 +1207,7 @@ onMounted(() => {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 20px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .metadata-row {
@@ -903,6 +1234,45 @@ onMounted(() => {
   color: #6b7280;
 }
 
+.status-chip {
+  margin-left: 8px;
+}
+
+/* Enhanced Auto-save Notice */
+.auto-save-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.save-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.save-text {
+  color: #0369a1;
+  font-weight: 500;
+}
+
+.last-save {
+  display: flex;
+  align-items: center;
+}
+
+.last-save-text {
+  color: #0369a1;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
 .editor-section {
   background: white;
   border: 1px solid #e5e7eb;
@@ -917,6 +1287,7 @@ onMounted(() => {
   margin-bottom: 24px;
 }
 
+/* Keep Original Button Styling */
 .edit-btn {
   background: #f5c52b !important; /* Yellow/amber background */
   color: #353535 !important; /* Dark text */
@@ -926,6 +1297,13 @@ onMounted(() => {
 
 .edit-btn:hover {
   background: #f5c52b !important; /* Darker yellow on hover */
+}
+
+.edit-btn:disabled {
+  background: #d1d5db !important;
+  color: #9ca3af !important;
+  border-color: #d1d5db !important;
+  cursor: not-allowed !important;
 }
 
 .draft-btn {
@@ -1097,6 +1475,12 @@ onMounted(() => {
 
   .title-edit-actions {
     align-self: flex-start;
+  }
+
+  .auto-save-notice {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
   }
 }
 
