@@ -98,7 +98,6 @@ const editingProject = ref(null)
 const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
-const currentUser = ref('Current User') // This would come from auth system
 
 const handleView = (projectId) => {
   // Navigate to project view with the project ID
@@ -378,6 +377,7 @@ const deleteFromEdit = () => {
                 >
                   <v-icon>mdi-eye</v-icon>
                 </v-btn>
+
                 <v-btn
                   v-if="canEditProject(project)"
                   class="action-btn edit-btn"

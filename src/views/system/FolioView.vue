@@ -266,6 +266,25 @@ const deleteFromEdit = () => {
     showDeleteConfirm.value = true
   }
 }
+
+// Add approval functionality
+const submitForApproval = (projectId) => {
+  const project = projects.value.find((p) => p.id === projectId)
+  if (project) {
+    // Update project status to indicate it's submitted for approval
+    project.status = 'To Section Head'
+    project.submittedDate = new Date().toISOString()
+    project.submittedBy = currentUser.value
+
+    // Save to localStorage
+    const savedProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
+    const updatedProjects = savedProjects.map((p) => (p.id === projectId ? { ...project } : p))
+    localStorage.setItem('folio_projects', JSON.stringify(updatedProjects))
+
+    // Navigate to approval view
+    router.push(`/approval/${projectId}`)
+  }
+}
 </script>
 
 <template>
@@ -380,6 +399,21 @@ const deleteFromEdit = () => {
                 >
                   <v-icon>mdi-eye</v-icon>
                 </v-btn>
+
+                <!-- Add Submit for Approval button -->
+                <v-btn
+                  v-if="project.status === 'Draft' || project.status.includes('Returned')"
+                  class="action-btn approval-btn"
+                  @click="submitForApproval(project.id)"
+                  variant="text"
+                  icon
+                  size="small"
+                  aria-label="Submit for approval"
+                  title="Submit for approval"
+                >
+                  <v-icon>mdi-send</v-icon>
+                </v-btn>
+
                 <v-btn
                   v-if="canEditProject(project)"
                   class="action-btn edit-btn"
