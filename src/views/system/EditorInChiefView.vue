@@ -1,0 +1,1157 @@
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import MainHeader from '@/components/layout/MainHeader.vue'
+import Footer from '@/components/layout/Footer.vue'
+
+const router = useRouter()
+
+// State management
+const selectedProjects = ref([])
+const searchQuery = ref('')
+const sortOrder = ref('Date Submitted ↓')
+const showOnlyUrgent = ref(false)
+const viewMode = ref('all') // 'all', 'pending', 'approved', 'published'
+
+// Projects data - will load from localStorage
+const projects = ref([])
+
+// Dialog states
+const showPublishDialog = ref(false)
+const showApproveDialog = ref(false)
+const showForwardDialog = ref(false)
+const currentProject = ref(null)
+
+// Dialog form data
+const publishData = ref({
+  publishDate: '',
+  publishPlatform: 'Website',
+  publishNotes: '',
+})
+
+const approveData = ref({
+  approvalNotes: '',
+  conditions: '',
+})
+
+const forwardData = ref({
+  forwardNotes: '',
+  priority: 'Medium',
+  advisorNotes: '',
+})
+
+// Snackbar
+const showSnackbar = ref(false)
+const snackbarMessage = ref('')
+const snackbarColor = ref('success')
+
+// Show notification
+const showNotification = (message, color = 'success') => {
+  snackbarMessage.value = message
+  snackbarColor.value = color
+  showSnackbar.value = true
+}
+
+// Load projects from localStorage
+const loadProjects = () => {
+  try {
+    const projectTypes = ['magazine', 'newsletter', 'folio', 'other']
+    let allProjects = []
+
+    projectTypes.forEach((type) => {
+      const storageKey = `${type}_projects`
+      const typeProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+
+      // Filter projects that are "To Editor-in-Chief"
+      const eicProjects = typeProjects
+        .filter(
+          (project) =>
+            project.status === 'To Editor-in-Chief' ||
+            project.status === 'EIC Review' ||
+            project.status === 'Published' ||
+            project.status === 'To Chief Adviser',
+        )
+        .map((project) => ({
+          ...project,
+          type: type,
+          submittedDate: project.submittedDate || new Date().toISOString(),
+          priority: project.priority || 'Medium',
+          department: project.department || getDepartmentFromType(type),
+          submittedBy: project.submittedBy || project.sectionHead || 'Unknown',
+        }))
+
+      allProjects = [...allProjects, ...eicProjects]
+    })
+
+    projects.value = allProjects
+    console.log('EIC Projects loaded:', allProjects)
+  } catch (error) {
+    console.error('Error loading EIC projects:', error)
+    showNotification('Error loading projects', 'error')
+  }
+}
+
+// Helper function to get department from project type
+const getDepartmentFromType = (type) => {
+  const typeMap = {
+    magazine: 'Editorial',
+    newsletter: 'News',
+    folio: 'Arts',
+    other: 'Marketing',
+  }
+  return typeMap[type] || 'General'
+}
+
+// Computed properties
+const filteredProjects = computed(() => {
+  let filtered = projects.value
+
+  // Filter by view mode
+  if (viewMode.value === 'pending') {
+    filtered = filtered.filter(
+      (p) => p.status === 'To Editor-in-Chief' || p.status === 'EIC Review',
+    )
+  } else if (viewMode.value === 'approved') {
+    filtered = filtered.filter((p) => p.status === 'To Chief Adviser')
+  } else if (viewMode.value === 'published') {
+    filtered = filtered.filter((p) => p.status === 'Published')
+  }
+
+  // Filter by search query
+  if (searchQuery.value) {
+    filtered = filtered.filter(
+      (project) =>
+        project.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+        project.submittedBy.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+        project.department.toLowerCase().includes(searchQuery.value.toLowerCase()),
+    )
+  }
+
+  // Filter by urgent only
+  if (showOnlyUrgent.value) {
+    filtered = filtered.filter((project) => project.priority === 'High')
+  }
+
+  // Sort projects
+  filtered = [...filtered].sort((a, b) => {
+    if (sortOrder.value === 'Date Submitted ↑') {
+      return new Date(a.submittedDate) - new Date(b.submittedDate)
+    } else if (sortOrder.value === 'Date Submitted ↓') {
+      return new Date(b.submittedDate) - new Date(a.submittedDate)
+    } else if (sortOrder.value === 'A - Z') {
+      return a.title.localeCompare(b.title)
+    } else if (sortOrder.value === 'Z - A') {
+      return b.title.localeCompare(a.title)
+    } else if (sortOrder.value === 'Priority High First') {
+      const priorityOrder = { High: 3, Medium: 2, Low: 1 }
+      return priorityOrder[b.priority] - priorityOrder[a.priority]
+    }
+    return 0
+  })
+
+  return filtered
+})
+
+const projectCounts = computed(() => ({
+  all: projects.value.length,
+  pending: projects.value.filter(
+    (p) => p.status === 'To Editor-in-Chief' || p.status === 'EIC Review',
+  ).length,
+  approved: projects.value.filter((p) => p.status === 'To Chief Adviser').length,
+  published: projects.value.filter((p) => p.status === 'Published').length,
+}))
+
+// Action functions
+const handleViewProject = (project) => {
+  router.push(`/project/${project.id}`)
+}
+
+const startPublish = (project) => {
+  currentProject.value = project
+  publishData.value = {
+    publishDate: new Date().toISOString().split('T')[0],
+    publishPlatform: 'Website',
+    publishNotes: '',
+  }
+  showPublishDialog.value = true
+}
+
+const startApprove = (project) => {
+  currentProject.value = project
+  approveData.value = {
+    approvalNotes: '',
+    conditions: '',
+  }
+  showApproveDialog.value = true
+}
+
+const startForward = (project) => {
+  currentProject.value = project
+  forwardData.value = {
+    forwardNotes: '',
+    priority: project.priority || 'Medium',
+    advisorNotes: '',
+  }
+  showForwardDialog.value = true
+}
+
+// Confirm actions
+const confirmPublish = () => {
+  if (!currentProject.value) return
+
+  try {
+    const storageKey = `${currentProject.value.type}_projects`
+    const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    const projectIndex = projects.findIndex((p) => p.id === currentProject.value.id)
+
+    if (projectIndex !== -1) {
+      projects[projectIndex] = {
+        ...projects[projectIndex],
+        status: 'Published',
+        publishedDate: publishData.value.publishDate,
+        publishedBy: 'Editor-in-Chief', // Should come from auth
+        publishPlatform: publishData.value.publishPlatform,
+        publishNotes: publishData.value.publishNotes,
+        lastModified: new Date().toLocaleString(),
+      }
+
+      localStorage.setItem(storageKey, JSON.stringify(projects))
+
+      showNotification(
+        `"${currentProject.value.title}" has been published successfully!`,
+        'success',
+      )
+      loadProjects() // Reload to update the list
+    }
+  } catch (error) {
+    console.error('Error publishing project:', error)
+    showNotification('Error publishing project', 'error')
+  }
+
+  showPublishDialog.value = false
+  currentProject.value = null
+}
+
+const confirmApprove = () => {
+  if (!currentProject.value) return
+
+  try {
+    const storageKey = `${currentProject.value.type}_projects`
+    const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    const projectIndex = projects.findIndex((p) => p.id === currentProject.value.id)
+
+    if (projectIndex !== -1) {
+      projects[projectIndex] = {
+        ...projects[projectIndex],
+        status: 'EIC Approved',
+        eicApprovedDate: new Date().toISOString(),
+        eicApprovedBy: 'Editor-in-Chief', // Should come from auth
+        eicApprovalNotes: approveData.value.approvalNotes,
+        eicConditions: approveData.value.conditions,
+        lastModified: new Date().toLocaleString(),
+      }
+
+      localStorage.setItem(storageKey, JSON.stringify(projects))
+
+      showNotification(`"${currentProject.value.title}" has been approved!`, 'success')
+      loadProjects() // Reload to update the list
+    }
+  } catch (error) {
+    console.error('Error approving project:', error)
+    showNotification('Error approving project', 'error')
+  }
+
+  showApproveDialog.value = false
+  currentProject.value = null
+}
+
+const confirmForward = () => {
+  if (!currentProject.value) return
+
+  try {
+    const storageKey = `${currentProject.value.type}_projects`
+    const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    const projectIndex = projects.findIndex((p) => p.id === currentProject.value.id)
+
+    if (projectIndex !== -1) {
+      projects[projectIndex] = {
+        ...projects[projectIndex],
+        status: 'To Chief Adviser',
+        forwardedToAdviserDate: new Date().toISOString(),
+        forwardedBy: 'Editor-in-Chief', // Should come from auth
+        forwardNotes: forwardData.value.forwardNotes,
+        advisorNotes: forwardData.value.advisorNotes,
+        priority: forwardData.value.priority,
+        lastModified: new Date().toLocaleString(),
+      }
+
+      localStorage.setItem(storageKey, JSON.stringify(projects))
+
+      showNotification(
+        `"${currentProject.value.title}" has been forwarded to Chief Adviser!`,
+        'success',
+      )
+      loadProjects() // Reload to update the list
+    }
+  } catch (error) {
+    console.error('Error forwarding project:', error)
+    showNotification('Error forwarding project', 'error')
+  }
+
+  showForwardDialog.value = false
+  currentProject.value = null
+}
+
+// Cancel actions
+const cancelPublish = () => {
+  showPublishDialog.value = false
+  currentProject.value = null
+}
+
+const cancelApprove = () => {
+  showApproveDialog.value = false
+  currentProject.value = null
+}
+
+const cancelForward = () => {
+  showForwardDialog.value = false
+  currentProject.value = null
+}
+
+// Get status color
+const getStatusColor = (status) => {
+  const colors = {
+    'To Editor-in-Chief': 'primary',
+    'EIC Review': 'info',
+    'EIC Approved': 'success',
+    'To Chief Adviser': 'purple',
+    Published: 'success',
+  }
+  return colors[status] || 'default'
+}
+
+// Get priority color
+const getPriorityColor = (priority) => {
+  const colors = {
+    High: 'error',
+    Medium: 'warning',
+    Low: 'success',
+  }
+  return colors[priority] || 'default'
+}
+
+// Format date
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A'
+  try {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch (error) {
+    return dateString
+  }
+}
+
+// Load data on mount
+onMounted(() => {
+  loadProjects()
+})
+</script>
+
+<template>
+  <v-app class="eic-page">
+    <MainHeader />
+
+    <v-main class="main-content">
+      <v-container fluid class="eic-container pa-5">
+        <!-- Header Section -->
+        <div class="page-header">
+          <div class="header-content">
+            <h1 class="page-title">
+              <v-icon class="title-icon">mdi-crown</v-icon>
+              Editor-in-Chief Dashboard
+            </h1>
+            <p class="page-subtitle">Review, approve, and publish projects</p>
+          </div>
+          <div class="header-stats">
+            <div class="stat-card">
+              <div class="stat-number">{{ projectCounts.pending }}</div>
+              <div class="stat-label">Pending Review</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number">{{ projectCounts.published }}</div>
+              <div class="stat-label">Published</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="controls-section">
+          <!-- View Mode Tabs -->
+          <div class="view-tabs">
+            <v-btn
+              :variant="viewMode === 'all' ? 'flat' : 'text'"
+              :color="viewMode === 'all' ? 'primary' : 'default'"
+              @click="viewMode = 'all'"
+              class="tab-btn"
+            >
+              All ({{ projectCounts.all }})
+            </v-btn>
+            <v-btn
+              :variant="viewMode === 'pending' ? 'flat' : 'text'"
+              :color="viewMode === 'pending' ? 'warning' : 'default'"
+              @click="viewMode = 'pending'"
+              class="tab-btn"
+            >
+              Pending ({{ projectCounts.pending }})
+            </v-btn>
+            <v-btn
+              :variant="viewMode === 'approved' ? 'flat' : 'text'"
+              :color="viewMode === 'approved' ? 'purple' : 'default'"
+              @click="viewMode = 'approved'"
+              class="tab-btn"
+            >
+              To Adviser ({{ projectCounts.approved }})
+            </v-btn>
+            <v-btn
+              :variant="viewMode === 'published' ? 'flat' : 'text'"
+              :color="viewMode === 'published' ? 'success' : 'default'"
+              @click="viewMode = 'published'"
+              class="tab-btn"
+            >
+              Published ({{ projectCounts.published }})
+            </v-btn>
+          </div>
+
+          <!-- Search and Filters -->
+          <div class="controls-row">
+            <div class="search-section">
+              <v-text-field
+                v-model="searchQuery"
+                placeholder="Search projects, authors, departments..."
+                prepend-inner-icon="mdi-magnify"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="search-input"
+              />
+            </div>
+
+            <div class="filter-section">
+              <v-select
+                v-model="sortOrder"
+                :items="[
+                  'Date Submitted ↓',
+                  'Date Submitted ↑',
+                  'A - Z',
+                  'Z - A',
+                  'Priority High First',
+                ]"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="sort-select"
+                label="Sort by"
+              />
+
+              <v-checkbox
+                v-model="showOnlyUrgent"
+                label="Urgent only"
+                density="compact"
+                hide-details
+                class="urgent-filter"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Projects Table -->
+        <v-card class="projects-table-card">
+          <v-card-title class="table-header">
+            <span>Projects for EIC Review</span>
+            <v-btn @click="loadProjects" variant="text" icon size="small" class="refresh-btn">
+              <v-icon>mdi-refresh</v-icon>
+            </v-btn>
+          </v-card-title>
+
+          <v-divider />
+
+          <div class="table-container">
+            <v-table class="projects-table">
+              <thead>
+                <tr>
+                  <th>Project Details</th>
+                  <th>Submitted By</th>
+                  <th>Department</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Submitted Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="project in filteredProjects"
+                  :key="`${project.type}-${project.id}`"
+                  class="project-row"
+                >
+                  <td>
+                    <div class="project-info">
+                      <div class="project-title">{{ project.title }}</div>
+                      <div class="project-meta">
+                        <v-chip
+                          size="x-small"
+                          :color="
+                            project.type === 'magazine'
+                              ? 'blue'
+                              : project.type === 'newsletter'
+                                ? 'green'
+                                : project.type === 'folio'
+                                  ? 'purple'
+                                  : 'orange'
+                          "
+                        >
+                          {{ project.type }}
+                        </v-chip>
+                        <span class="project-id">#{{ project.id }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="submitter-info">
+                      <div class="submitter-name">{{ project.submittedBy }}</div>
+                      <div class="submitter-role">{{ project.sectionHead }}</div>
+                    </div>
+                  </td>
+                  <td>
+                    <v-chip size="small" variant="outlined">
+                      {{ project.department }}
+                    </v-chip>
+                  </td>
+                  <td>
+                    <v-chip :color="getPriorityColor(project.priority)" size="small">
+                      {{ project.priority }}
+                    </v-chip>
+                  </td>
+                  <td>
+                    <v-chip :color="getStatusColor(project.status)" size="small">
+                      {{ project.status }}
+                    </v-chip>
+                  </td>
+                  <td>
+                    <div class="date-info">
+                      {{ formatDate(project.submittedDate) }}
+                    </div>
+                  </td>
+                  <td>
+                    <div class="action-buttons">
+                      <!-- View Button -->
+                      <v-btn
+                        @click="handleViewProject(project)"
+                        variant="text"
+                        icon
+                        size="small"
+                        class="action-btn view-btn"
+                        title="View Project"
+                      >
+                        <v-icon>mdi-eye</v-icon>
+                      </v-btn>
+
+                      <!-- Publish Button -->
+                      <v-btn
+                        @click="startPublish(project)"
+                        variant="text"
+                        icon
+                        size="small"
+                        class="action-btn publish-btn"
+                        title="Publish Project"
+                        :disabled="project.status === 'Published'"
+                      >
+                        <v-icon>mdi-publish</v-icon>
+                      </v-btn>
+
+                      <!-- Approve Button -->
+                      <v-btn
+                        @click="startApprove(project)"
+                        variant="text"
+                        icon
+                        size="small"
+                        class="action-btn approve-btn"
+                        title="Approve Project"
+                        :disabled="
+                          project.status === 'Published' || project.status === 'EIC Approved'
+                        "
+                      >
+                        <v-icon>mdi-check-circle</v-icon>
+                      </v-btn>
+
+                      <!-- Forward to Chief Adviser Button -->
+                      <v-btn
+                        @click="startForward(project)"
+                        variant="text"
+                        icon
+                        size="small"
+                        class="action-btn forward-btn"
+                        title="Forward to Chief Adviser"
+                        :disabled="
+                          project.status === 'Published' || project.status === 'To Chief Adviser'
+                        "
+                      >
+                        <v-icon>mdi-arrow-right-circle</v-icon>
+                      </v-btn>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </v-table>
+
+            <!-- Empty State -->
+            <div v-if="filteredProjects.length === 0" class="empty-state">
+              <v-icon size="64" color="grey-lighten-1">mdi-crown-outline</v-icon>
+              <h3>No projects found</h3>
+              <p>There are no projects for EIC review at this time.</p>
+            </div>
+          </div>
+        </v-card>
+      </v-container>
+    </v-main>
+
+    <Footer />
+
+    <!-- Publish Dialog -->
+    <v-dialog v-model="showPublishDialog" max-width="600px" persistent>
+      <v-card>
+        <v-card-title>
+          <v-icon class="mr-2" color="success">mdi-publish</v-icon>
+          Publish Project
+        </v-card-title>
+
+        <v-card-text>
+          <p class="mb-4">
+            Publish "{{ currentProject?.title }}" and make it available to the public.
+          </p>
+
+          <v-text-field
+            type="date"
+            v-model="publishData.publishDate"
+            label="Publish Date"
+            variant="outlined"
+            class="mb-4"
+            required
+          />
+
+          <v-select
+            v-model="publishData.publishPlatform"
+            label="Publish Platform"
+            :items="['Website', 'Print', 'Digital Magazine', 'Social Media', 'All Platforms']"
+            variant="outlined"
+            class="mb-4"
+            required
+          />
+
+          <v-textarea
+            v-model="publishData.publishNotes"
+            label="Publication Notes (Optional)"
+            placeholder="Add any notes about this publication..."
+            variant="outlined"
+            rows="3"
+          />
+
+          <v-alert type="success" variant="outlined" class="mt-4">
+            <strong>Final Step:</strong> This project will be marked as published and made available
+            to readers.
+          </v-alert>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-btn @click="cancelPublish" variant="outlined">Cancel</v-btn>
+          <v-spacer />
+          <v-btn @click="confirmPublish" color="success" prepend-icon="mdi-publish">
+            Publish Project
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Approve Dialog -->
+    <v-dialog v-model="showApproveDialog" max-width="600px" persistent>
+      <v-card>
+        <v-card-title>
+          <v-icon class="mr-2" color="success">mdi-check-circle</v-icon>
+          Approve Project
+        </v-card-title>
+
+        <v-card-text>
+          <p class="mb-4">Approve "{{ currentProject?.title }}" as Editor-in-Chief.</p>
+
+          <v-textarea
+            v-model="approveData.approvalNotes"
+            label="Approval Notes"
+            placeholder="Add your approval comments..."
+            variant="outlined"
+            rows="3"
+            class="mb-4"
+          />
+
+          <v-textarea
+            v-model="approveData.conditions"
+            label="Conditions/Requirements (Optional)"
+            placeholder="Any conditions or requirements for this approval..."
+            variant="outlined"
+            rows="2"
+          />
+
+          <v-alert type="info" variant="outlined" class="mt-4">
+            <strong>Note:</strong> This project will be marked as EIC approved and ready for final
+            steps.
+          </v-alert>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-btn @click="cancelApprove" variant="outlined">Cancel</v-btn>
+          <v-spacer />
+          <v-btn @click="confirmApprove" color="success" prepend-icon="mdi-check-circle">
+            Approve Project
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Forward to Chief Adviser Dialog -->
+    <v-dialog v-model="showForwardDialog" max-width="600px" persistent>
+      <v-card>
+        <v-card-title>
+          <v-icon class="mr-2" color="purple">mdi-arrow-right-circle</v-icon>
+          Forward to Chief Adviser
+        </v-card-title>
+
+        <v-card-text>
+          <p class="mb-4">
+            Forward "{{ currentProject?.title }}" to the Chief Adviser for final review.
+          </p>
+
+          <v-select
+            v-model="forwardData.priority"
+            label="Priority Level"
+            :items="['High', 'Medium', 'Low']"
+            variant="outlined"
+            class="mb-4"
+          />
+
+          <v-textarea
+            v-model="forwardData.forwardNotes"
+            label="Forwarding Notes"
+            placeholder="Add notes for the Chief Adviser..."
+            variant="outlined"
+            rows="3"
+            class="mb-4"
+            required
+          />
+
+          <v-textarea
+            v-model="forwardData.advisorNotes"
+            label="Special Instructions for Adviser (Optional)"
+            placeholder="Any special instructions or context for the Chief Adviser..."
+            variant="outlined"
+            rows="2"
+          />
+
+          <v-alert type="info" variant="outlined" class="mt-4">
+            <strong>Next Step:</strong> This project will be forwarded to the Chief Adviser for
+            final approval.
+          </v-alert>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-btn @click="cancelForward" variant="outlined">Cancel</v-btn>
+          <v-spacer />
+          <v-btn @click="confirmForward" color="purple" prepend-icon="mdi-arrow-right-circle">
+            Forward to Adviser
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Snackbar -->
+    <v-snackbar
+      v-model="showSnackbar"
+      :color="snackbarColor"
+      timeout="4000"
+      location="bottom right"
+    >
+      {{ snackbarMessage }}
+      <template v-slot:actions>
+        <v-btn variant="text" @click="showSnackbar = false">Close</v-btn>
+      </template>
+    </v-snackbar>
+  </v-app>
+</template>
+
+<style scoped>
+.eic-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f8fafc;
+}
+
+.main-content {
+  flex: 1;
+  padding: 0 !important;
+}
+
+.eic-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  padding: 24px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header-content {
+  flex: 1;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 32px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+}
+
+.title-icon {
+  color: #f59e0b;
+  font-size: 36px;
+}
+
+.page-subtitle {
+  font-size: 16px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.header-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.stat-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  min-width: 120px;
+}
+
+.stat-number {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.controls-section {
+  margin-bottom: 24px;
+}
+
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  width: fit-content;
+}
+
+.tab-btn {
+  text-transform: none !important;
+  font-weight: 500 !important;
+  border-radius: 4px !important;
+}
+
+.controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.search-section {
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-input {
+  background: white;
+}
+
+.filter-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sort-select {
+  width: 200px;
+  background: white;
+}
+
+.urgent-filter {
+  white-space: nowrap;
+}
+
+.projects-table-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.refresh-btn {
+  opacity: 0.7;
+}
+
+.refresh-btn:hover {
+  opacity: 1;
+}
+
+.table-container {
+  min-height: 400px;
+}
+
+.projects-table {
+  width: 100%;
+}
+
+.projects-table thead th {
+  background: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.project-row {
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s ease;
+}
+
+.project-row:hover {
+  background-color: #f8fafc;
+}
+
+.projects-table td {
+  padding: 16px;
+  vertical-align: top;
+}
+
+.project-info {
+  min-width: 250px;
+}
+
+.project-title {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.project-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-id {
+  font-size: 12px;
+  color: #6b7280;
+  font-family: monospace;
+}
+
+.submitter-info {
+  min-width: 150px;
+}
+
+.submitter-name {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.submitter-role {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.date-info {
+  font-size: 14px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.action-btn {
+  transition: all 0.2s ease;
+}
+
+.view-btn {
+  color: #3b82f6 !important;
+}
+
+.view-btn:hover {
+  background-color: #eff6ff !important;
+}
+
+.publish-btn {
+  color: #059669 !important;
+}
+
+.publish-btn:hover {
+  background-color: #ecfdf5 !important;
+}
+
+.approve-btn {
+  color: #10b981 !important;
+}
+
+.approve-btn:hover {
+  background-color: #f0fdf4 !important;
+}
+
+.forward-btn {
+  color: #8b5cf6 !important;
+}
+
+.forward-btn:hover {
+  background-color: #faf5ff !important;
+}
+
+.action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.empty-state h3 {
+  margin: 16px 0 8px 0;
+  color: #374151;
+}
+
+.empty-state p {
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .page-header {
+    flex-direction: column;
+    gap: 20px;
+    align-items: stretch;
+  }
+
+  .header-stats {
+    justify-content: center;
+  }
+
+  .controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-section {
+    max-width: none;
+  }
+
+  .filter-section {
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 768px) {
+  .eic-container {
+    padding: 16px !important;
+  }
+
+  .page-title {
+    font-size: 28px;
+  }
+
+  .view-tabs {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .tab-btn {
+    flex: 1;
+    min-width: calc(50% - 4px);
+  }
+
+  .header-stats {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .stat-card {
+    padding: 16px;
+  }
+
+  .projects-table {
+    font-size: 14px;
+  }
+
+  .projects-table td,
+  .projects-table th {
+    padding: 12px 8px;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+</style>

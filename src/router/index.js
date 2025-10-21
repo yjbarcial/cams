@@ -13,6 +13,7 @@ import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import ApprovalView from '@/views/system/ApprovalView.vue'
+import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -76,6 +77,17 @@ const router = createRouter({
       path: '/approval',
       name: 'approval',
       component: ApprovalView,
+    },
+    {
+      path: '/approval/:id',
+      name: 'approval-detail',
+      component: ApprovalView,
+      props: true,
+    },
+    {
+      path: '/editor-in-chief',
+      name: 'editor-in-chief',
+      component: EditorInChiefView,
     },
     { path: '/magazine/new', name: 'magazine-new', component: AddProjectView },
     { path: '/newsletter/new', name: 'newsletter-new', component: AddProjectView },
