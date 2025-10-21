@@ -267,11 +267,18 @@ const submitForApproval = () => {
   showSubmitDialog.value = true
 }
 
-const confirmSubmitForApproval = () => {
+const confirmSubmitForApproval = async () => {
   try {
+    console.log('Starting project submission for approval...')
+
+    // First, save any current content changes
+    saveContent()
+
     const storageKey = `${projectType.value}_projects`
     const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    const projectIndex = projects.findIndex((p) => p.id == projectId)
+    const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
+
+    console.log(`Found project at index: ${projectIndex}`)
 
     if (projectIndex !== -1) {
       // Update project with approval fields
@@ -286,6 +293,8 @@ const confirmSubmitForApproval = () => {
         submitComments: submitComments.value,
       }
 
+      console.log('Updated project data:', updatedProject)
+
       projects[projectIndex] = updatedProject
       localStorage.setItem(storageKey, JSON.stringify(projects))
 
@@ -294,25 +303,23 @@ const confirmSubmitForApproval = () => {
       project.value.priority = submitPriority.value
       project.value.submittedDate = new Date().toISOString()
 
+      console.log('Project successfully updated in localStorage')
+
       // Close dialog and reset
       showSubmitDialog.value = false
       submitComments.value = ''
       submitPriority.value = 'Medium'
 
+      // Show success notification
       showNotification('Project submitted for approval successfully!', 'success')
-      console.log('Project submitted for approval:', updatedProject.title)
 
-      // Optionally navigate to approval view or show confirmation
+      // Small delay to ensure UI updates, then navigate
       setTimeout(() => {
-        const confirmNavigation = confirm(
-          'Project submitted! Would you like to go to the approval dashboard?',
-        )
-        if (confirmNavigation) {
-          router.push('/approval')
-        }
-      }, 1500)
+        console.log(`Navigating to approval view: /approval/${projectId}`)
+        router.push(`/approval/${projectId}`)
+      }, 500)
     } else {
-      throw new Error('Project not found in storage')
+      throw new Error(`Project not found in storage with ID: ${projectId}`)
     }
   } catch (error) {
     console.error('Error submitting project for approval:', error)
@@ -434,15 +441,21 @@ const loadProjectComments = () => {
 // Load project data from localStorage
 const loadProjectData = () => {
   try {
+    console.log('Loading project data for ID:', projectId)
+
     // Try to find the project in all project types
     const projectTypes = ['magazine', 'newsletter', 'folio', 'other']
 
     for (const type of projectTypes) {
       const storageKey = `${type}_projects`
       const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-      const foundProject = projects.find((p) => p.id == projectId)
+      console.log(`Checking ${type} projects:`, projects.length, 'projects found')
+
+      const foundProject = projects.find((p) => String(p.id) === String(projectId))
 
       if (foundProject) {
+        console.log('Found project:', foundProject)
+
         // Update project data
         project.value = {
           ...foundProject,
@@ -489,8 +502,6 @@ const loadProjectData = () => {
           content: project.value.content,
         })
 
-        console.log('Raw found project data:', foundProject)
-        console.log('Project value after assignment:', project.value)
         return
       }
     }

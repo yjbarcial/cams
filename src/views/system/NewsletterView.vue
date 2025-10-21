@@ -75,18 +75,15 @@ onMounted(() => {
 
 const loadProjects = () => {
   const savedProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
-  const allProjects = [...savedProjects, ...defaultProjects]
 
-  // Remove duplicates based on title and merge data
-  const uniqueProjects = allProjects.reduce((acc, project) => {
-    const existing = acc.find((p) => p.title === project.title)
-    if (!existing) {
-      acc.push(project)
-    }
-    return acc
-  }, [])
-
-  projects.value = uniqueProjects
+  if (savedProjects.length === 0) {
+    // If no saved projects, use defaults and save them to localStorage
+    projects.value = [...defaultProjects]
+    localStorage.setItem('newsletter_projects', JSON.stringify(defaultProjects))
+  } else {
+    // Only show saved projects - don't merge with defaults anymore
+    projects.value = savedProjects
+  }
 }
 
 const searchQuery = ref('')
@@ -98,11 +95,9 @@ const editingProject = ref(null)
 const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
-const currentUser = ref('Current User') // This would come from auth system
 
 const handleView = (projectId) => {
-  console.log(`View newsletter project ${projectId}`)
-  // Navigate to ProjectView with the project ID
+  // Navigate to project view with the project ID
   router.push(`/project/${projectId}`)
 }
 
@@ -116,11 +111,7 @@ const toggleStar = (projectId) => {
   if (project) {
     project.isStarred = !project.isStarred
     // Save to localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
-    const updatedProjects = savedProjects.map((p) =>
-      p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
-    )
-    localStorage.setItem('newsletter_projects', JSON.stringify(updatedProjects))
+    localStorage.setItem('newsletter_projects', JSON.stringify(projects.value))
   }
 }
 
@@ -211,11 +202,7 @@ const saveEdit = () => {
     projects.value[projectIndex] = { ...editingProject.value }
 
     // Save to localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
-    const updatedProjects = savedProjects.map((p) =>
-      p.id === editingProject.value.id ? { ...editingProject.value } : p,
-    )
-    localStorage.setItem('newsletter_projects', JSON.stringify(updatedProjects))
+    localStorage.setItem('newsletter_projects', JSON.stringify(projects.value))
   }
 
   // Close the dialog
@@ -243,10 +230,8 @@ const confirmDelete = () => {
     // Remove from projects array
     projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
 
-    // Remove from localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
-    const updatedProjects = savedProjects.filter((p) => p.id !== projectToDelete.value.id)
-    localStorage.setItem('newsletter_projects', JSON.stringify(updatedProjects))
+    // Save to localStorage
+    localStorage.setItem('newsletter_projects', JSON.stringify(projects.value))
   }
 
   showDeleteConfirm.value = false
@@ -267,22 +252,45 @@ const deleteFromEdit = () => {
   }
 }
 
-// Add approval functionality
-const submitForApproval = (projectId) => {
-  const project = projects.value.find((p) => p.id === projectId)
-  if (project) {
-    // Update project status to indicate it's submitted for approval
-    project.status = 'To Section Head'
-    project.submittedDate = new Date().toISOString()
-    project.submittedBy = currentUser.value
+// Format date for the date picker
+const formatDateForPicker = (dateString) => {
+  if (!dateString) return ''
 
-    // Save to localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
-    const updatedProjects = savedProjects.map((p) => (p.id === projectId ? { ...project } : p))
-    localStorage.setItem('newsletter_projects', JSON.stringify(updatedProjects))
+  // Try to parse the date
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) {
+    // If it's not a valid date, try to parse it as a readable format
+    const parsedDate = new Date(Date.parse(dateString))
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString().split('T')[0]
+    }
+    return ''
+  }
 
-    // Navigate to approval view
-    router.push(`/approval/${projectId}`)
+  return date.toISOString().split('T')[0]
+}
+
+// Format date for display
+const formatDateForDisplay = (dateString) => {
+  if (!dateString) return ''
+
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) {
+    return dateString // Return original if can't parse
+  }
+
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+// Update due date handling in edit
+const updateDueDate = (newDate) => {
+  if (editingProject.value && newDate) {
+    editingProject.value.dueDate = formatDateForDisplay(newDate)
+    editingProject.value.dueDateISO = newDate
   }
 }
 </script>
@@ -394,24 +402,9 @@ const submitForApproval = (projectId) => {
                   variant="text"
                   icon
                   size="small"
-                  aria-label="View and edit project"
-                  title="View and edit project"
+                  aria-label="View project"
                 >
                   <v-icon>mdi-eye</v-icon>
-                </v-btn>
-
-                <!-- Add Submit for Approval button -->
-                <v-btn
-                  v-if="project.status === 'Draft' || project.status.includes('Returned')"
-                  class="action-btn approval-btn"
-                  @click="submitForApproval(project.id)"
-                  variant="text"
-                  icon
-                  size="small"
-                  aria-label="Submit for approval"
-                  title="Submit for approval"
-                >
-                  <v-icon>mdi-send</v-icon>
                 </v-btn>
 
                 <v-btn
@@ -421,8 +414,7 @@ const submitForApproval = (projectId) => {
                   variant="text"
                   icon
                   size="small"
-                  aria-label="Edit project details"
-                  title="Edit project details"
+                  aria-label="Edit project"
                 >
                   <v-icon>mdi-pencil</v-icon>
                 </v-btn>
@@ -443,7 +435,6 @@ const submitForApproval = (projectId) => {
                   icon
                   size="small"
                   aria-label="Delete project"
-                  title="Delete project"
                 >
                   <v-icon>mdi-delete</v-icon>
                 </v-btn>
@@ -482,16 +473,24 @@ const submitForApproval = (projectId) => {
                 </v-col>
                 <v-col cols="12" class="form-group">
                   <v-label>Due Date:</v-label>
-                  <v-text-field v-model="editingProject.dueDate" variant="outlined" hide-details />
+                  <v-text-field
+                    type="date"
+                    :model-value="formatDateForPicker(editingProject.dueDate)"
+                    @update:model-value="updateDueDate"
+                    variant="outlined"
+                    hide-details
+                    prepend-inner-icon="mdi-calendar"
+                  />
                 </v-col>
                 <v-col cols="12" class="form-group">
                   <v-label>Status:</v-label>
                   <v-select
                     v-model="editingProject.status"
                     :items="[
-                      'To Editor-in-Chief',
+                      'Draft',
                       'To Section Head',
                       'To Technical Editor',
+                      'To Editor-in-Chief',
                       'To Publish',
                       'Published',
                     ]"
@@ -535,6 +534,7 @@ const submitForApproval = (projectId) => {
 </template>
 
 <style scoped>
+/* Same styles as MagazineView - keeping it identical */
 .newsletter-page {
   min-height: 100vh;
   display: flex;
