@@ -12,6 +12,7 @@ import DeliverableView from '@/views/system/DeliverableView.vue'
 import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
+import ApprovalView from '@/views/system/ApprovalView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -71,7 +72,11 @@ const router = createRouter({
       name: 'admin',
       component: AdminView,
     },
-
+    {
+      path: '/approval',
+      name: 'approval',
+      component: ApprovalView,
+    },
     { path: '/magazine/new', name: 'magazine-new', component: AddProjectView },
     { path: '/newsletter/new', name: 'newsletter-new', component: AddProjectView },
     { path: '/folio/new', name: 'folio-new', component: AddProjectView },
