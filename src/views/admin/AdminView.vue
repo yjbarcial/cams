@@ -33,146 +33,294 @@ const departments = ['News', 'Sports', 'Arts', 'Opinion', 'Features']
 
 const activeTab = ref('users')
 
-// Mock data - replace with real API calls
+// Function to load all projects from localStorage
+const loadAllProjects = () => {
+  const magazineProjects = JSON.parse(localStorage.getItem('magazine_projects') || '[]')
+  const folioProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
+  const newsletterProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
+  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+
+  // Default projects from each view
+  const defaultMagazineProjects = [
+    {
+      id: 1,
+      title: 'Hope Magazine - The Gold Panicles 2020',
+      sectionHead: 'Mark Dela Cruz',
+      dueDate: 'Sep 7, 2020',
+      status: 'To Editor-in-Chief',
+      type: 'Magazine',
+      created_at: new Date('2020-09-01').toISOString(),
+      user: { full_name: 'Mark Dela Cruz', email: 'mark.delacruz@campus.edu' },
+    },
+    {
+      id: 2,
+      title: 'Hope Magazine - The Gold Panicles 2020',
+      sectionHead: 'Rey Dela Cruz',
+      dueDate: 'Sep 7, 2020',
+      status: 'To Section Head',
+      type: 'Magazine',
+      created_at: new Date('2020-09-01').toISOString(),
+      user: { full_name: 'Rey Dela Cruz', email: 'rey.delacruz@campus.edu' },
+    },
+    {
+      id: 3,
+      title: 'Hope Magazine - The Gold Panicles 2020',
+      sectionHead: 'Ella Domingo',
+      dueDate: 'Sep 7, 2020',
+      status: 'To Publish',
+      type: 'Magazine',
+      created_at: new Date('2020-09-01').toISOString(),
+      user: { full_name: 'Ella Domingo', email: 'ella.domingo@campus.edu' },
+    },
+  ]
+
+  const defaultFolioProjects = [
+    {
+      id: 11,
+      title: 'Laom Folio - Yaon 2021',
+      sectionHead: 'John Santos',
+      dueDate: 'Oct 10, 2021',
+      status: 'To Section Head',
+      type: 'Folio',
+      created_at: new Date('2021-10-01').toISOString(),
+      user: { full_name: 'John Santos', email: 'john.santos@campus.edu' },
+    },
+    {
+      id: 12,
+      title: 'Laom Folio - Yaon 2021',
+      sectionHead: 'James Rivera',
+      dueDate: 'Oct 10, 2021',
+      status: 'To Technical Editor',
+      type: 'Folio',
+      created_at: new Date('2021-10-01').toISOString(),
+      user: { full_name: 'James Rivera', email: 'james.rivera@campus.edu' },
+    },
+  ]
+
+  const defaultNewsletterProjects = [
+    {
+      id: 21,
+      title: 'Weekly Newsletter - Campus Updates',
+      sectionHead: 'Sarah Johnson',
+      dueDate: 'Jan 15, 2025',
+      status: 'To Editor-in-Chief',
+      type: 'Newsletter',
+      created_at: new Date('2025-01-10').toISOString(),
+      user: { full_name: 'Sarah Johnson', email: 'sarah.johnson@campus.edu' },
+    },
+    {
+      id: 22,
+      title: 'Monthly Newsletter - Student Spotlight',
+      sectionHead: 'Michael Chen',
+      dueDate: 'Jan 20, 2025',
+      status: 'To Section Head',
+      type: 'Newsletter',
+      created_at: new Date('2025-01-10').toISOString(),
+      user: { full_name: 'Michael Chen', email: 'michael.chen@campus.edu' },
+    },
+  ]
+
+  const defaultOtherProjects = [
+    {
+      id: 31,
+      title: 'Instagram Post - Campus Event Promotion',
+      sectionHead: 'Jessica Park',
+      dueDate: 'Jan 18, 2025',
+      status: 'To Editor-in-Chief',
+      type: 'Social Media',
+      created_at: new Date('2025-01-15').toISOString(),
+      user: { full_name: 'Jessica Park', email: 'jessica.park@campus.edu' },
+    },
+    {
+      id: 32,
+      title: 'Facebook Post - Student Achievement',
+      sectionHead: "Ryan O'Connor",
+      dueDate: 'Jan 22, 2025',
+      status: 'To Section Head',
+      type: 'Social Media',
+      created_at: new Date('2025-01-15').toISOString(),
+      user: { full_name: "Ryan O'Connor", email: 'ryan.oconnor@campus.edu' },
+    },
+  ]
+
+  // Combine all projects
+  const allProjects = [
+    ...defaultMagazineProjects,
+    ...defaultFolioProjects,
+    ...defaultNewsletterProjects,
+    ...defaultOtherProjects,
+    ...magazineProjects.map((p) => ({ ...p, type: 'Magazine' })),
+    ...folioProjects.map((p) => ({ ...p, type: 'Folio' })),
+    ...newsletterProjects.map((p) => ({ ...p, type: 'Newsletter' })),
+    ...otherProjects.map((p) => ({ ...p, type: 'Social Media' })),
+  ]
+
+  // Remove duplicates based on title and id
+  const uniqueProjects = allProjects.reduce((acc, project) => {
+    const existing = acc.find((p) => p.id === project.id || p.title === project.title)
+    if (!existing) {
+      acc.push({
+        ...project,
+        user: project.user || {
+          full_name: project.sectionHead,
+          email: `${project.sectionHead?.toLowerCase().replace(/\s+/g, '.')}@campus.edu`,
+        },
+      })
+    }
+    return acc
+  }, [])
+
+  return uniqueProjects.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+}
+
+// Function to load submissions data
+const loadSubmissions = () => {
+  // Mock submissions - expanded for demo
+  return [
+    {
+      id: 1,
+      title: 'Breaking News - Campus Event',
+      type: 'News Article',
+      department: 'News',
+      created_at: new Date().toISOString(),
+      user: { full_name: 'John Doe', email: 'john.doe@campus.edu' },
+    },
+    {
+      id: 2,
+      title: 'Basketball Game Highlights',
+      type: 'Sports Report',
+      department: 'Sports',
+      created_at: new Date(Date.now() - 86400000).toISOString(),
+      user: { full_name: 'Jane Smith', email: 'jane.smith@campus.edu' },
+    },
+    {
+      id: 3,
+      title: 'Gallery Opening Review',
+      type: 'Arts Review',
+      department: 'Arts',
+      created_at: new Date(Date.now() - 172800000).toISOString(),
+      user: { full_name: 'Mike Johnson', email: 'mike.johnson@campus.edu' },
+    },
+    {
+      id: 4,
+      title: 'Student Opinion Survey Results',
+      type: 'Opinion Piece',
+      department: 'Opinion',
+      created_at: new Date(Date.now() - 259200000).toISOString(),
+      user: { full_name: 'Sarah Wilson', email: 'sarah.wilson@campus.edu' },
+    },
+    {
+      id: 5,
+      title: 'Campus Life Feature Story',
+      type: 'Feature Article',
+      department: 'Features',
+      created_at: new Date(Date.now() - 345600000).toISOString(),
+      user: { full_name: 'David Brown', email: 'david.brown@campus.edu' },
+    },
+    {
+      id: 6,
+      title: 'Football Team Victory Report',
+      type: 'Sports Report',
+      department: 'Sports',
+      created_at: new Date(Date.now() - 432000000).toISOString(),
+      user: { full_name: 'Carlos Rodriguez', email: 'carlos.rodriguez@campus.edu' },
+    },
+    {
+      id: 7,
+      title: 'Art Exhibition Opening',
+      type: 'Arts Review',
+      department: 'Arts',
+      created_at: new Date(Date.now() - 518400000).toISOString(),
+      user: { full_name: 'Emily Chen', email: 'emily.chen@campus.edu' },
+    },
+    {
+      id: 8,
+      title: 'Student Government Elections',
+      type: 'News Article',
+      department: 'News',
+      created_at: new Date(Date.now() - 604800000).toISOString(),
+      user: { full_name: 'Alex Thompson', email: 'alex.thompson@campus.edu' },
+    },
+  ]
+}
+
+// Load data on mount
 onMounted(async () => {
   try {
     console.log('Starting to fetch admin data...')
     loading.value = true
 
-    // Mock user data
-    const mockUsers = [
+    // Load all projects from localStorage and defaults
+    const allProjects = loadAllProjects()
+    projects.value = allProjects
+
+    // Load submissions
+    const allSubmissions = loadSubmissions()
+
+    // Extract unique users from projects
+    const uniqueUsers = new Map()
+
+    // Add users from projects
+    allProjects.forEach((project) => {
+      if (project.user) {
+        const userId = project.user.email
+        if (!uniqueUsers.has(userId)) {
+          uniqueUsers.set(userId, {
+            id: uniqueUsers.size + 1,
+            full_name: project.user.full_name,
+            email: project.user.email,
+            department: getDepartmentFromEmail(project.user.email),
+            status: 'active',
+            created_at: new Date().toISOString(),
+            role: getRoleFromName(project.user.full_name),
+          })
+        }
+      }
+    })
+
+    // Add mock admin users
+    const adminUsers = [
       {
-        id: 1,
-        full_name: 'John Doe',
-        email: 'john.doe@campus.edu',
-        department: 'News',
+        id: uniqueUsers.size + 1,
+        full_name: 'Admin User',
+        email: 'admin@campus.edu',
+        department: 'Administration',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        role: 'Administrator',
+      },
+      {
+        id: uniqueUsers.size + 2,
+        full_name: 'Editor Chief',
+        email: 'editor.chief@campus.edu',
+        department: 'Editorial',
         status: 'active',
         created_at: new Date().toISOString(),
         role: 'Editor-in-Chief',
       },
-      {
-        id: 2,
-        full_name: 'Jane Smith',
-        email: 'jane.smith@campus.edu',
-        department: 'Sports',
-        status: 'active',
-        created_at: new Date().toISOString(),
-        role: 'Section Head',
-      },
-      {
-        id: 3,
-        full_name: 'Mike Johnson',
-        email: 'mike.johnson@campus.edu',
-        department: 'Arts',
-        status: 'inactive',
-        created_at: new Date().toISOString(),
-        role: 'Writer',
-      },
-      {
-        id: 4,
-        full_name: 'Sarah Wilson',
-        email: 'sarah.wilson@campus.edu',
-        department: 'Opinion',
-        status: 'active',
-        created_at: new Date().toISOString(),
-        role: 'Technical Editor',
-      },
-      {
-        id: 5,
-        full_name: 'David Brown',
-        email: 'david.brown@campus.edu',
-        department: 'Features',
-        status: 'active',
-        created_at: new Date().toISOString(),
-        role: 'Writer',
-      },
     ]
 
-    // Mock recent projects
-    const mockRecentProjects = [
-      {
-        id: 1,
-        title: 'Campus Newsletter - October 2024',
-        type: 'Newsletter',
-        status: 'Published',
-        created_at: new Date().toISOString(),
-        user: { full_name: 'John Doe', email: 'john.doe@campus.edu', department: 'News' },
-      },
-      {
-        id: 2,
-        title: 'Sports Weekly - Basketball Season',
-        type: 'Newsletter',
-        status: 'In Review',
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        user: { full_name: 'Jane Smith', email: 'jane.smith@campus.edu', department: 'Sports' },
-      },
-      {
-        id: 3,
-        title: 'Art Exhibition Folio 2024',
-        type: 'Folio',
-        status: 'Draft',
-        created_at: new Date(Date.now() - 172800000).toISOString(),
-        user: { full_name: 'Mike Johnson', email: 'mike.johnson@campus.edu', department: 'Arts' },
-      },
-      {
-        id: 4,
-        title: 'Student Opinion Survey',
-        type: 'Other',
-        status: 'Published',
-        created_at: new Date(Date.now() - 259200000).toISOString(),
-        user: {
-          full_name: 'Sarah Wilson',
-          email: 'sarah.wilson@campus.edu',
-          department: 'Opinion',
-        },
-      },
-      {
-        id: 5,
-        title: 'Feature Story - Campus Life',
-        type: 'Newsletter',
-        status: 'In Review',
-        created_at: new Date(Date.now() - 345600000).toISOString(),
-        user: { full_name: 'David Brown', email: 'david.brown@campus.edu', department: 'Features' },
-      },
-    ]
+    adminUsers.forEach((user) => {
+      uniqueUsers.set(user.email, user)
+    })
 
-    // Mock recent submissions
-    const mockRecentSubmissions = [
-      {
-        id: 1,
-        title: 'Breaking News - Campus Event',
-        type: 'News Article',
-        department: 'News',
-        created_at: new Date().toISOString(),
-        user: { full_name: 'John Doe', email: 'john.doe@campus.edu' },
-      },
-      {
-        id: 2,
-        title: 'Basketball Game Highlights',
-        type: 'Sports Report',
-        department: 'Sports',
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        user: { full_name: 'Jane Smith', email: 'jane.smith@campus.edu' },
-      },
-      {
-        id: 3,
-        title: 'Gallery Opening Review',
-        type: 'Arts Review',
-        department: 'Arts',
-        created_at: new Date(Date.now() - 172800000).toISOString(),
-        user: { full_name: 'Mike Johnson', email: 'mike.johnson@campus.edu' },
-      },
-    ]
+    users.value = Array.from(uniqueUsers.values())
 
-    users.value = mockUsers
-    statistics.value.totalUsers = mockUsers.length
-    statistics.value.activeUsers = mockUsers.filter((u) => u.status === 'active').length
-    statistics.value.totalProjects = mockRecentProjects.length
-    statistics.value.totalSubmissions = mockRecentSubmissions.length
-    statistics.value.recentProjects = mockRecentProjects
-    statistics.value.recentSubmissions = mockRecentSubmissions
+    // Update statistics - show all data in fixed tables
+    statistics.value = {
+      totalUsers: users.value.length,
+      activeUsers: users.value.filter((u) => u.status === 'active').length,
+      totalProjects: allProjects.length,
+      totalSubmissions: allSubmissions.length,
+      recentProjects: allProjects, // All projects in fixed table
+      recentSubmissions: allSubmissions, // All submissions in fixed table
+    }
 
-    console.log('All data fetched successfully')
+    console.log('All data loaded successfully:', {
+      users: users.value.length,
+      projects: allProjects.length,
+      submissions: allSubmissions.length,
+    })
   } catch (err) {
     console.error('Error in onMounted:', err)
     error.value = `Failed to load dashboard data: ${err.message}`
@@ -180,6 +328,37 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+// Helper functions
+const getDepartmentFromEmail = (email) => {
+  const domains = {
+    news: 'News',
+    sports: 'Sports',
+    arts: 'Arts',
+    opinion: 'Opinion',
+    features: 'Features',
+  }
+
+  for (const [key, dept] of Object.entries(domains)) {
+    if (email.toLowerCase().includes(key)) {
+      return dept
+    }
+  }
+
+  // Default assignment based on name patterns
+  return departments[Math.floor(Math.random() * departments.length)]
+}
+
+const getRoleFromName = (name) => {
+  const roles = ['Section Head', 'Writer', 'Technical Editor', 'Assistant Editor']
+  if (name.toLowerCase().includes('mark') || name.toLowerCase().includes('sarah')) {
+    return 'Section Head'
+  }
+  if (name.toLowerCase().includes('john') || name.toLowerCase().includes('jane')) {
+    return 'Editor-in-Chief'
+  }
+  return roles[Math.floor(Math.random() * roles.length)]
+}
 
 // Computed properties for filtered users
 const filteredUsers = computed(() => {
@@ -228,10 +407,11 @@ const formatDate = (date) => {
 // Update user status
 const updateUserStatus = async (userId, newStatus) => {
   try {
-    // Update local state
     const userIndex = users.value.findIndex((u) => u.id === userId)
     if (userIndex !== -1) {
       users.value[userIndex].status = newStatus
+      // Update active users count
+      statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
     }
     console.log(`Updated user ${userId} status to ${newStatus}`)
   } catch (err) {
@@ -256,7 +436,7 @@ const fetchAllRecords = async (type) => {
   try {
     showAllType.value = type
     if (type === 'projects') {
-      allRecords.value = statistics.value.recentProjects
+      allRecords.value = projects.value
     } else if (type === 'submissions') {
       allRecords.value = statistics.value.recentSubmissions
     }
@@ -343,14 +523,14 @@ const fetchAllRecords = async (type) => {
                   </v-col>
                 </v-row>
 
-                <!-- Recent Activity -->
+                <!-- Recent Activity - Fixed Tables -->
                 <v-row class="mt-4">
                   <v-col cols="12">
                     <v-card>
                       <v-card-title class="text-h6 d-flex justify-space-between align-center">
                         <div>
                           <v-icon class="mr-2" color="primary">mdi-folder-multiple</v-icon>
-                          Recent Projects
+                          All Projects
                         </div>
                         <v-btn
                           variant="text"
@@ -358,7 +538,7 @@ const fetchAllRecords = async (type) => {
                           @click="fetchAllRecords('projects')"
                           class="text-none"
                         >
-                          View All
+                          View Details
                           <v-icon end>mdi-chevron-right</v-icon>
                         </v-btn>
                       </v-card-title>
@@ -385,9 +565,11 @@ const fetchAllRecords = async (type) => {
                               <td>
                                 <v-chip
                                   :color="
-                                    project.status === 'Published'
+                                    project.status === 'Published' ||
+                                    project.status === 'To Publish'
                                       ? 'success'
-                                      : project.status === 'In Review'
+                                      : project.status.includes('Review') ||
+                                          project.status.includes('Editor')
                                         ? 'warning'
                                         : 'default'
                                   "
@@ -397,7 +579,7 @@ const fetchAllRecords = async (type) => {
                                 </v-chip>
                               </td>
                               <td>
-                                {{ project.user?.full_name || project.user?.email }}
+                                {{ project.user?.full_name || project.sectionHead }}
                               </td>
                               <td>{{ formatDate(project.created_at) }}</td>
                             </tr>
@@ -412,7 +594,7 @@ const fetchAllRecords = async (type) => {
                       <v-card-title class="text-h6 d-flex justify-space-between align-center">
                         <div>
                           <v-icon class="mr-2" color="primary">mdi-file-document-multiple</v-icon>
-                          Recent Submissions
+                          All Submissions
                         </div>
                         <v-btn
                           variant="text"
@@ -420,7 +602,7 @@ const fetchAllRecords = async (type) => {
                           @click="fetchAllRecords('submissions')"
                           class="text-none"
                         >
-                          View All
+                          View Details
                           <v-icon end>mdi-chevron-right</v-icon>
                         </v-btn>
                       </v-card-title>
@@ -467,7 +649,7 @@ const fetchAllRecords = async (type) => {
                               : 'mdi-file-document-multiple'
                           }}
                         </v-icon>
-                        All {{ showAllType === 'projects' ? 'Projects' : 'Submissions' }}
+                        All {{ showAllType === 'projects' ? 'Projects' : 'Submissions' }} Details
                       </div>
                       <v-btn icon @click="showAllDialog = false">
                         <v-icon>mdi-close</v-icon>
@@ -497,9 +679,10 @@ const fetchAllRecords = async (type) => {
                               <v-chip
                                 v-if="showAllType === 'projects'"
                                 :color="
-                                  record.status === 'Published'
+                                  record.status === 'Published' || record.status === 'To Publish'
                                     ? 'success'
-                                    : record.status === 'In Review'
+                                    : record.status.includes('Review') ||
+                                        record.status.includes('Editor')
                                       ? 'warning'
                                       : 'default'
                                 "
@@ -509,7 +692,7 @@ const fetchAllRecords = async (type) => {
                               </v-chip>
                               <span v-else>{{ record.department }}</span>
                             </td>
-                            <td>{{ record.user?.full_name || record.user?.email }}</td>
+                            <td>{{ record.user?.full_name || record.sectionHead }}</td>
                             <td>{{ formatDate(record.created_at) }}</td>
                           </tr>
                         </tbody>
@@ -562,7 +745,7 @@ const fetchAllRecords = async (type) => {
                         <v-select
                           v-model="departmentFilter"
                           label="Department"
-                          :items="['all', ...departments]"
+                          :items="['all', ...departments, 'Administration', 'Editorial']"
                           variant="outlined"
                           density="comfortable"
                           hide-details
@@ -584,7 +767,7 @@ const fetchAllRecords = async (type) => {
                       </v-col>
                     </v-row>
 
-                    <!-- Users Table -->
+                    <!-- Users Table - Fixed, No Scroll -->
                     <v-table>
                       <thead>
                         <tr>
@@ -701,5 +884,36 @@ const fetchAllRecords = async (type) => {
 
 .v-chip {
   cursor: pointer;
+}
+
+/* Fixed Table Styles */
+.v-table thead th {
+  background-color: #f8fafc;
+  border-bottom: 2px solid #e0e0e0;
+  font-weight: 600;
+  padding: 16px;
+  color: #424242;
+}
+
+.v-table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.v-table tbody tr:hover {
+  background-color: #f5f5f5;
+}
+
+.v-table tbody td {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .v-table thead th,
+  .v-table tbody td {
+    padding: 12px 8px;
+    font-size: 14px;
+  }
 }
 </style>

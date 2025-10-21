@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   requiredValidator,
@@ -71,6 +71,64 @@ const passwordRules = [carsuPasswordValidator]
 
 const form = ref(null)
 
+// Handle back button navigation prevention
+const handlePopState = (event) => {
+  // Check if user is trying to go back to dashboard after logout
+  const isLoggedIn = localStorage.getItem('isLoggedIn')
+  if (!isLoggedIn || isLoggedIn === 'false') {
+    // User is not logged in, prevent going back to dashboard
+    window.history.pushState(null, '', window.location.href)
+    console.log('Navigation to dashboard prevented - please login first')
+  }
+}
+
+// Prevent navigation to dashboard when not logged in
+const preventUnauthorizedNavigation = () => {
+  // Clear any existing session if user navigated here after logout
+  const isLoggedIn = localStorage.getItem('isLoggedIn')
+  if (!isLoggedIn || isLoggedIn === 'false') {
+    // Replace current history entry to prevent going back to dashboard
+    window.history.replaceState(null, '', window.location.href)
+
+    // Add a new state to catch back button attempts
+    window.history.pushState(null, '', window.location.href)
+  }
+}
+
+onMounted(() => {
+  // Check if user was redirected here from logout
+  const urlParams = new URLSearchParams(window.location.search)
+  const fromLogout = urlParams.get('logout')
+
+  if (fromLogout === 'true') {
+    // Clear URL parameters
+    window.history.replaceState(null, '', window.location.pathname)
+
+    // Show logout message (optional)
+    console.log('Successfully logged out')
+  }
+
+  // Ensure session is properly cleared
+  const isLoggedIn = localStorage.getItem('isLoggedIn')
+  if (!isLoggedIn || isLoggedIn === 'false') {
+    // Clear any residual session data
+    localStorage.removeItem('userEmail')
+    localStorage.removeItem('user')
+    localStorage.setItem('isLoggedIn', 'false')
+  }
+
+  // Prevent unauthorized navigation
+  preventUnauthorizedNavigation()
+
+  // Listen for back button attempts
+  window.addEventListener('popstate', handlePopState)
+})
+
+onUnmounted(() => {
+  // Clean up event listener
+  window.removeEventListener('popstate', handlePopState)
+})
+
 async function submit() {
   // Reset popup state
   showDomainPopup.value = false
@@ -114,6 +172,9 @@ async function submit() {
     )
 
     console.log('Login successful for:', email.value)
+
+    // Clear browser history to prevent going back to login after successful login
+    window.history.replaceState(null, '', '/dashboard')
 
     // Navigate to dashboard
     router.push('/dashboard')
