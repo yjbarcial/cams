@@ -130,19 +130,30 @@ const assignProject = () => {
       })
     : 'No deadline set'
 
+  // Ensure writers and artists are properly formatted
+  const writersString = writers.value.length > 0 ? writers.value.join(', ') : 'Not assigned'
+  const artistsString = artists.value.length > 0 ? artists.value.join(', ') : 'Not assigned'
+
   const newProject = {
     id: Date.now(), // Simple ID generation
-    title: title.value,
+    title: title.value.trim(),
     type: categoryLabel.value,
-    sectionHead: sectionHead.value || 'Unassigned',
+    sectionHead: sectionHead.value.trim() || 'Not assigned',
     dueDate: dueDateDisplay,
     dueDateISO,
     createdAtISO,
-    description: description.value || 'No description provided',
-    writers: writers.value.join(', ') || 'Unassigned',
-    artists: artists.value.join(', ') || 'Unassigned',
+    createdBy: 'Current User', // This should come from auth system
+    created_at: createdAtISO, // Alternative field name for compatibility
+    description: description.value.trim() || 'No description provided',
+    writers: writersString,
+    artists: artistsString,
     isStarred: false,
-    status: 'In Progress',
+    status: 'Draft',
+    content: '', // Initialize empty content
+    lastModified: new Date().toLocaleString(),
+    mediaUploaded: 'No media',
+    priority: 'Medium',
+    department: getDepartmentFromType(routeType.value),
   }
 
   // Store in localStorage for persistence across page refreshes
@@ -154,6 +165,8 @@ const assignProject = () => {
   console.log('Project created and saved to localStorage:', {
     storageKey,
     project: newProject,
+    writers: newProject.writers,
+    artists: newProject.artists,
     allProjects: existingProjects,
   })
 
@@ -176,10 +189,70 @@ const assignProject = () => {
   router.push(cancelPath.value)
 }
 
+// Helper function to get department based on project type
+const getDepartmentFromType = (type) => {
+  const typeMap = {
+    magazine: 'Editorial',
+    newsletter: 'News',
+    folio: 'Arts',
+    'social-media': 'Marketing',
+  }
+  return typeMap[type] || 'General'
+}
+
 // Add to script setup section
 const saveAsDraft = () => {
-  // Draft saving logic here
-  console.log('Saving as draft...')
+  if (!title.value.trim()) {
+    alert('Please enter a project title before saving as draft')
+    return
+  }
+
+  // Create draft project with same structure as assignProject
+  const createdAt = new Date()
+  const createdAtISO = createdAt.toISOString()
+  const dueDateISO = deadline.value ? new Date(deadline.value + 'T00:00:00').toISOString() : ''
+  const dueDateDisplay = deadline.value
+    ? new Date(deadline.value + 'T00:00:00').toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : 'No deadline set'
+
+  const writersString = writers.value.length > 0 ? writers.value.join(', ') : 'Not assigned'
+  const artistsString = artists.value.length > 0 ? artists.value.join(', ') : 'Not assigned'
+
+  const draftProject = {
+    id: Date.now(),
+    title: title.value.trim(),
+    type: categoryLabel.value,
+    sectionHead: sectionHead.value.trim() || 'Not assigned',
+    dueDate: dueDateDisplay,
+    dueDateISO,
+    createdAtISO,
+    createdBy: 'Current User',
+    created_at: createdAtISO,
+    description: description.value.trim() || 'No description provided',
+    writers: writersString,
+    artists: artistsString,
+    isStarred: false,
+    status: 'Draft',
+    content: '',
+    lastModified: new Date().toLocaleString(),
+    mediaUploaded: 'No media',
+    priority: 'Medium',
+    department: getDepartmentFromType(routeType.value),
+  }
+
+  const storageKey = `${routeType.value}_projects`
+  const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+  existingProjects.unshift(draftProject)
+  localStorage.setItem(storageKey, JSON.stringify(existingProjects))
+
+  console.log('Draft saved:', draftProject)
+
+  // Navigate back
+  router.push(cancelPath.value)
 }
 </script>
 
