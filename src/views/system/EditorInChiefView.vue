@@ -163,7 +163,8 @@ const projectCounts = computed(() => ({
 
 // Action functions
 const handleViewProject = (project) => {
-  router.push(`/project/${project.id}`)
+  // Open the approval detail view as Editor-in-Chief
+  router.push(`/approval/${project.id}?role=Editor-in-Chief`)
 }
 
 const startPublish = (project) => {
@@ -209,7 +210,7 @@ const confirmPublish = () => {
         ...projects[projectIndex],
         status: 'Published',
         publishedDate: publishData.value.publishDate,
-        publishedBy: 'Editor-in-Chief', // Should come from auth
+        publishedBy: 'Editor-in-Chief',
         publishPlatform: publishData.value.publishPlatform,
         publishNotes: publishData.value.publishNotes,
         lastModified: new Date().toLocaleString(),
@@ -221,7 +222,7 @@ const confirmPublish = () => {
         `"${currentProject.value.title}" has been published successfully!`,
         'success',
       )
-      loadProjects() // Reload to update the list
+      loadProjects()
     }
   } catch (error) {
     console.error('Error publishing project:', error)
@@ -245,7 +246,7 @@ const confirmApprove = () => {
         ...projects[projectIndex],
         status: 'EIC Approved',
         eicApprovedDate: new Date().toISOString(),
-        eicApprovedBy: 'Editor-in-Chief', // Should come from auth
+        eicApprovedBy: 'Editor-in-Chief',
         eicApprovalNotes: approveData.value.approvalNotes,
         eicConditions: approveData.value.conditions,
         lastModified: new Date().toLocaleString(),
@@ -254,7 +255,7 @@ const confirmApprove = () => {
       localStorage.setItem(storageKey, JSON.stringify(projects))
 
       showNotification(`"${currentProject.value.title}" has been approved!`, 'success')
-      loadProjects() // Reload to update the list
+      loadProjects()
     }
   } catch (error) {
     console.error('Error approving project:', error)
@@ -278,7 +279,7 @@ const confirmForward = () => {
         ...projects[projectIndex],
         status: 'To Chief Adviser',
         forwardedToAdviserDate: new Date().toISOString(),
-        forwardedBy: 'Editor-in-Chief', // Should come from auth
+        forwardedBy: 'Editor-in-Chief',
         forwardNotes: forwardData.value.forwardNotes,
         advisorNotes: forwardData.value.advisorNotes,
         priority: forwardData.value.priority,
@@ -291,7 +292,7 @@ const confirmForward = () => {
         `"${currentProject.value.title}" has been forwarded to Chief Adviser!`,
         'success',
       )
-      loadProjects() // Reload to update the list
+      loadProjects()
     }
   } catch (error) {
     console.error('Error forwarding project:', error)
@@ -501,7 +502,10 @@ onMounted(() => {
                 >
                   <td>
                     <div class="project-info">
-                      <div class="project-title">{{ project.title }}</div>
+                      <!-- Make title clickable -->
+                      <div class="project-title clickable" @click="handleViewProject(project)">
+                        {{ project.title }}
+                      </div>
                       <div class="project-meta">
                         <v-chip
                           size="x-small"
@@ -549,7 +553,7 @@ onMounted(() => {
                   </td>
                   <td>
                     <div class="action-buttons">
-                      <!-- View Button -->
+                      <!-- View icon button -->
                       <v-btn
                         @click="handleViewProject(project)"
                         variant="text"
@@ -561,20 +565,22 @@ onMounted(() => {
                         <v-icon>mdi-eye</v-icon>
                       </v-btn>
 
-                      <!-- Publish Button -->
+                      <!-- Forward -->
                       <v-btn
-                        @click="startPublish(project)"
+                        @click="startForward(project)"
                         variant="text"
                         icon
                         size="small"
-                        class="action-btn publish-btn"
-                        title="Publish Project"
-                        :disabled="project.status === 'Published'"
+                        class="action-btn forward-btn"
+                        title="Forward to Chief Adviser"
+                        :disabled="
+                          project.status === 'Published' || project.status === 'To Chief Adviser'
+                        "
                       >
-                        <v-icon>mdi-publish</v-icon>
+                        <v-icon>mdi-arrow-right-circle</v-icon>
                       </v-btn>
 
-                      <!-- Approve Button -->
+                      <!-- Approve -->
                       <v-btn
                         @click="startApprove(project)"
                         variant="text"
@@ -589,19 +595,25 @@ onMounted(() => {
                         <v-icon>mdi-check-circle</v-icon>
                       </v-btn>
 
-                      <!-- Forward to Chief Adviser Button -->
+                      <!-- Publish -->
                       <v-btn
-                        @click="startForward(project)"
+                        @click="startPublish(project)"
                         variant="text"
                         icon
                         size="small"
-                        class="action-btn forward-btn"
-                        title="Forward to Chief Adviser"
+                        class="action-btn publish-btn"
+                        title="Publish Project"
                         :disabled="
-                          project.status === 'Published' || project.status === 'To Chief Adviser'
+                          project.status !== 'EIC Approved' && project.status !== 'To Publish'
                         "
                       >
-                        <v-icon>mdi-arrow-right-circle</v-icon>
+                        <v-icon>
+                          {{
+                            project.status !== 'EIC Approved' && project.status !== 'To Publish'
+                              ? 'mdi-lock'
+                              : 'mdi-publish'
+                          }}
+                        </v-icon>
                       </v-btn>
                     </div>
                   </td>
@@ -973,7 +985,7 @@ onMounted(() => {
 
 .projects-table td {
   padding: 16px;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .project-info {
@@ -985,6 +997,17 @@ onMounted(() => {
   color: #1f2937;
   margin-bottom: 4px;
   line-height: 1.4;
+}
+
+.project-title.clickable {
+  cursor: pointer;
+  color: #2563eb;
+  transition: color 0.2s ease;
+}
+
+.project-title.clickable:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
 }
 
 .project-meta {
@@ -1022,8 +1045,9 @@ onMounted(() => {
 
 .action-buttons {
   display: flex;
-  gap: 4px;
-  justify-content: center;
+  gap: 8px;
+  justify-content: flex-start;
+  align-items: center;
 }
 
 .action-btn {
