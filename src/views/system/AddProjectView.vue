@@ -130,44 +130,41 @@ const assignProject = () => {
       })
     : 'No deadline set'
 
-  // Ensure writers and artists are properly formatted
   const writersString = writers.value.length > 0 ? writers.value.join(', ') : 'Not assigned'
   const artistsString = artists.value.length > 0 ? artists.value.join(', ') : 'Not assigned'
 
   const newProject = {
-    id: Date.now(), // Simple ID generation
+    id: Date.now(),
     title: title.value.trim(),
-    type: categoryLabel.value,
+    type: routeType.value,
     sectionHead: sectionHead.value.trim() || 'Not assigned',
     dueDate: dueDateDisplay,
     dueDateISO,
     createdAtISO,
-    createdBy: 'Current User', // This should come from auth system
-    created_at: createdAtISO, // Alternative field name for compatibility
+    createdBy: 'Current User',
+    created_at: createdAtISO,
     description: description.value.trim() || 'No description provided',
     writers: writersString,
     artists: artistsString,
     isStarred: false,
     status: 'Draft',
-    content: '', // Initialize empty content
+    content: '',
     lastModified: new Date().toLocaleString(),
     mediaUploaded: 'No media',
     priority: 'Medium',
     department: getDepartmentFromType(routeType.value),
   }
 
-  // Store in localStorage for persistence across page refreshes
   const storageKey = `${routeType.value}_projects`
   const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-  existingProjects.unshift(newProject) // Add to beginning of array
+  existingProjects.unshift(newProject)
   localStorage.setItem(storageKey, JSON.stringify(existingProjects))
 
-  console.log('Project created and saved to localStorage:', {
+  console.log('✅ Project saved:', {
+    type: newProject.type,
     storageKey,
     project: newProject,
-    writers: newProject.writers,
-    artists: newProject.artists,
-    allProjects: existingProjects,
+    totalProjects: existingProjects.length,
   })
 
   // Create initial version for the project
@@ -177,15 +174,13 @@ const assignProject = () => {
       newProject.id,
       newProject,
       'Initial project creation',
-      'Current User', // This should come from auth system
+      'Current User',
       'draft',
     )
   } catch (error) {
     console.error('Error creating initial version:', error)
-    // Don't fail the project creation if versioning fails
   }
 
-  // Navigate back to the category view
   router.push(cancelPath.value)
 }
 
@@ -225,7 +220,7 @@ const saveAsDraft = () => {
   const draftProject = {
     id: Date.now(),
     title: title.value.trim(),
-    type: categoryLabel.value,
+    type: routeType.value, // Use routeType.value instead of categoryLabel.value
     sectionHead: sectionHead.value.trim() || 'Not assigned',
     dueDate: dueDateDisplay,
     dueDateISO,

@@ -8,62 +8,7 @@ import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
 const router = useRouter()
 
 // Sample magazine projects data
-const defaultProjects = [
-  {
-    id: 1,
-    title: 'Hope Magazine - The Gold Panicles 2020',
-    sectionHead: 'Mark Dela Cruz',
-    dueDate: 'Sep 7, 2020',
-    status: 'To Editor-in-Chief',
-    isStarred: true,
-    type: 'magazine',
-  },
-  {
-    id: 2,
-    title: 'Hope Magazine - The Gold Panicles 2020',
-    sectionHead: 'Rey Dela Cruz',
-    dueDate: 'Sep 7, 2020',
-    status: 'To Section Head',
-    isStarred: true,
-    type: 'magazine',
-  },
-  {
-    id: 3,
-    title: 'Hope Magazine - The Gold Panicles 2020',
-    sectionHead: 'Ella Domingo',
-    dueDate: 'Sep 7, 2020',
-    status: 'To Publish',
-    isStarred: true,
-    type: 'magazine',
-  },
-  {
-    id: 4,
-    title: 'Hope Magazine - The Gold Panicles 2021',
-    sectionHead: 'John Santos',
-    dueDate: 'Oct 10, 2021',
-    status: 'To Section Head',
-    isStarred: false,
-    type: 'magazine',
-  },
-  {
-    id: 5,
-    title: 'Hope Magazine - The Gold Panicles 2021',
-    sectionHead: 'James Rivera',
-    dueDate: 'Oct 10, 2021',
-    status: 'To Technical Editor',
-    isStarred: false,
-    type: 'magazine',
-  },
-  {
-    id: 6,
-    title: 'Hope Magazine - The Gold Panicles 2021',
-    sectionHead: 'Jane Rodriguez',
-    dueDate: 'Oct 10, 2021',
-    status: 'To Publish',
-    isStarred: false,
-    type: 'magazine',
-  },
-]
+const defaultProjects = []
 
 // Initialize projects with localStorage data
 const projects = ref([])
