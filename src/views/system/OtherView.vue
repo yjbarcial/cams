@@ -1,69 +1,15 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 // Sample social media posts data
-const defaultProjects = [
-  {
-    id: 1,
-    title: 'Instagram Post - Campus Event Promotion',
-    sectionHead: 'Jessica Park',
-    dueDate: 'Jan 18, 2025',
-    status: 'To Editor-in-Chief',
-    isStarred: true,
-    type: 'social-media',
-  },
-  {
-    id: 2,
-    title: 'Facebook Post - Student Achievement',
-    sectionHead: "Ryan O'Connor",
-    dueDate: 'Jan 22, 2025',
-    status: 'To Section Head',
-    isStarred: true,
-    type: 'social-media',
-  },
-  {
-    id: 3,
-    title: 'Twitter Thread - Campus News Update',
-    sectionHead: 'Maya Patel',
-    dueDate: 'Jan 25, 2025',
-    status: 'To Publish',
-    isStarred: true,
-    type: 'social-media',
-  },
-  {
-    id: 4,
-    title: 'LinkedIn Post - Alumni Spotlight',
-    sectionHead: 'Kevin Liu',
-    dueDate: 'Jan 28, 2025',
-    status: 'To Section Head',
-    isStarred: false,
-    type: 'social-media',
-  },
-  {
-    id: 5,
-    title: 'TikTok Video - Campus Life',
-    sectionHead: 'Sophie Anderson',
-    dueDate: 'Feb 2, 2025',
-    status: 'To Technical Editor',
-    isStarred: false,
-    type: 'social-media',
-  },
-  {
-    id: 6,
-    title: 'YouTube Short - Student Interview',
-    sectionHead: 'Marcus Johnson',
-    dueDate: 'Feb 5, 2025',
-    status: 'To Publish',
-    isStarred: false,
-    type: 'social-media',
-  },
-]
+const defaultProjects = []
 
 // Initialize projects with localStorage data
 const projects = ref([])
@@ -73,13 +19,37 @@ onMounted(() => {
   loadProjects()
 })
 
-const loadProjects = () => {
-  const savedProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
-  const allProjects = [...savedProjects, ...defaultProjects]
+// Watch for route changes to reload projects
+watch(
+  () => route.path,
+  () => {
+    if (route.path === '/other') {
+      loadProjects()
+    }
+  },
+)
 
-  // Remove duplicates based on title and merge data
+const loadProjects = () => {
+  // Load from 'social-media_projects' to match AddProjectView.vue
+  const savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
+
+  console.log('📂 Loading other projects:', {
+    total: savedProjects.length,
+    projects: savedProjects,
+  })
+
+  // Filter to ensure only social-media type projects are loaded
+  const otherProjects = savedProjects.filter((p) => p.type === 'social-media' || p.type === 'other')
+
+  console.log('✅ Filtered other projects:', otherProjects.length)
+
+  const allProjects = [...otherProjects, ...defaultProjects]
+
+  // Remove duplicates based on title and section head
   const uniqueProjects = allProjects.reduce((acc, project) => {
-    const existing = acc.find((p) => p.title === project.title)
+    const existing = acc.find(
+      (p) => p.title === project.title && p.sectionHead === project.sectionHead,
+    )
     if (!existing) {
       acc.push(project)
     }
@@ -115,12 +85,12 @@ const toggleStar = (projectId) => {
   const project = projects.value.find((p) => p.id === projectId)
   if (project) {
     project.isStarred = !project.isStarred
-    // Save to localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+    // Save to localStorage using social-media_projects
+    const savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
     const updatedProjects = savedProjects.map((p) =>
       p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
     )
-    localStorage.setItem('other_projects', JSON.stringify(updatedProjects))
+    localStorage.setItem('social-media_projects', JSON.stringify(updatedProjects))
   }
 }
 
@@ -210,12 +180,12 @@ const saveEdit = () => {
     // Update the project
     projects.value[projectIndex] = { ...editingProject.value }
 
-    // Save to localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+    // Save to localStorage using social-media_projects
+    const savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
     const updatedProjects = savedProjects.map((p) =>
       p.id === editingProject.value.id ? { ...editingProject.value } : p,
     )
-    localStorage.setItem('other_projects', JSON.stringify(updatedProjects))
+    localStorage.setItem('social-media_projects', JSON.stringify(updatedProjects))
   }
 
   // Close the dialog
@@ -243,10 +213,10 @@ const confirmDelete = () => {
     // Remove from projects array
     projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
 
-    // Remove from localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+    // Remove from localStorage using social-media_projects
+    const savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
     const updatedProjects = savedProjects.filter((p) => p.id !== projectToDelete.value.id)
-    localStorage.setItem('other_projects', JSON.stringify(updatedProjects))
+    localStorage.setItem('social-media_projects', JSON.stringify(updatedProjects))
   }
 
   showDeleteConfirm.value = false
@@ -276,10 +246,10 @@ const submitForApproval = (projectId) => {
     project.submittedDate = new Date().toISOString()
     project.submittedBy = currentUser.value
 
-    // Save to localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+    // Save to localStorage using social-media_projects
+    const savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
     const updatedProjects = savedProjects.map((p) => (p.id === projectId ? { ...project } : p))
-    localStorage.setItem('other_projects', JSON.stringify(updatedProjects))
+    localStorage.setItem('social-media_projects', JSON.stringify(updatedProjects))
 
     // Navigate to approval view
     router.push(`/approval/${projectId}`)
@@ -398,20 +368,6 @@ const submitForApproval = (projectId) => {
                   title="View and edit project"
                 >
                   <v-icon>mdi-eye</v-icon>
-                </v-btn>
-
-                <!-- Add Submit for Approval button -->
-                <v-btn
-                  v-if="project.status === 'Draft' || project.status.includes('Returned')"
-                  class="action-btn approval-btn"
-                  @click="submitForApproval(project.id)"
-                  variant="text"
-                  icon
-                  size="small"
-                  aria-label="Submit for approval"
-                  title="Submit for approval"
-                >
-                  <v-icon>mdi-send</v-icon>
                 </v-btn>
 
                 <v-btn

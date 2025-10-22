@@ -1,69 +1,15 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 // Sample folio projects data
-const defaultProjects = [
-  {
-    id: 1,
-    title: 'Laom Folio - Yaon 2021',
-    sectionHead: 'John Santos',
-    dueDate: 'Oct 10, 2021',
-    status: 'To Section Head',
-    isStarred: false,
-    type: 'folio',
-  },
-  {
-    id: 2,
-    title: 'Laom Folio - Yaon 2021',
-    sectionHead: 'James Rivera',
-    dueDate: 'Oct 10, 2021',
-    status: 'To Technical Editor',
-    isStarred: false,
-    type: 'folio',
-  },
-  {
-    id: 3,
-    title: 'Laom Folio - Yaon 2021',
-    sectionHead: 'Jane Rodriguez',
-    dueDate: 'Oct 10, 2021',
-    status: 'To Publish',
-    isStarred: false,
-    type: 'folio',
-  },
-  {
-    id: 4,
-    title: 'Laom Folio - Yaon 2022',
-    sectionHead: 'Maria Garcia',
-    dueDate: 'Nov 15, 2022',
-    status: 'To Editor-in-Chief',
-    isStarred: true,
-    type: 'folio',
-  },
-  {
-    id: 5,
-    title: 'Laom Folio - Yaon 2022',
-    sectionHead: 'Carlos Martinez',
-    dueDate: 'Nov 15, 2022',
-    status: 'To Section Head',
-    isStarred: true,
-    type: 'folio',
-  },
-  {
-    id: 6,
-    title: 'Laom Folio - Yaon 2022',
-    sectionHead: 'Ana Lopez',
-    dueDate: 'Nov 15, 2022',
-    status: 'To Publish',
-    isStarred: true,
-    type: 'folio',
-  },
-]
+const defaultProjects = []
 
 // Initialize projects with localStorage data
 const projects = ref([])
@@ -73,13 +19,33 @@ onMounted(() => {
   loadProjects()
 })
 
+// Add this watch to reload when route changes
+watch(
+  () => route.path,
+  () => {
+    loadProjects()
+  },
+)
+
 const loadProjects = () => {
   const savedProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
-  const allProjects = [...savedProjects, ...defaultProjects]
 
-  // Remove duplicates based on title and merge data
+  console.log('📂 Loading folio projects:', {
+    total: savedProjects.length,
+    projects: savedProjects,
+  })
+
+  const folioProjects = savedProjects.filter((p) => p.type === 'folio')
+
+  console.log('✅ Filtered folio projects:', folioProjects.length)
+
+  const allProjects = [...folioProjects, ...defaultProjects]
+
+  // Remove duplicates based on title and section head
   const uniqueProjects = allProjects.reduce((acc, project) => {
-    const existing = acc.find((p) => p.title === project.title)
+    const existing = acc.find(
+      (p) => p.title === project.title && p.sectionHead === project.sectionHead,
+    )
     if (!existing) {
       acc.push(project)
     }
@@ -398,20 +364,6 @@ const submitForApproval = (projectId) => {
                   title="View and edit project"
                 >
                   <v-icon>mdi-eye</v-icon>
-                </v-btn>
-
-                <!-- Add Submit for Approval button -->
-                <v-btn
-                  v-if="project.status === 'Draft' || project.status.includes('Returned')"
-                  class="action-btn approval-btn"
-                  @click="submitForApproval(project.id)"
-                  variant="text"
-                  icon
-                  size="small"
-                  aria-label="Submit for approval"
-                  title="Submit for approval"
-                >
-                  <v-icon>mdi-send</v-icon>
                 </v-btn>
 
                 <v-btn
