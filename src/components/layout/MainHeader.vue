@@ -37,11 +37,15 @@ const handleLogout = async () => {
     logoutLoading.value = false
   }
 }
+
+const goToDashboard = () => {
+  router.push('/dashboard')
+}
 </script>
 
 <template>
   <header class="main-header">
-    <div class="brand">
+    <div class="brand" @click="goToDashboard">
       <v-img src="/images/GoldQuill Logo.png" alt="GoldQuill" height="30px" width="30%" contain />
       <h3>GoldQuill.</h3>
     </div>
@@ -118,6 +122,12 @@ const handleLogout = async () => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.brand:hover {
+  opacity: 0.8;
 }
 
 .brand img {
@@ -125,9 +135,9 @@ const handleLogout = async () => {
   display: block;
 }
 
-.brand h4 {
+.brand h3 {
   margin: 0;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1;
   color: #353535;

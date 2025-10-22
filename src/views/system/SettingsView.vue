@@ -9,7 +9,7 @@ const emailNotifications = ref(true)
 
 // App info
 const appVersion = '1.0.0'
-const appCopyright = '© 2024 GoldQuill'
+const appCopyright = '© 2025 GoldQuill'
 </script>
 
 <template>
