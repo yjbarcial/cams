@@ -100,7 +100,37 @@ const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
 
 const handleView = (projectId) => {
-  // Navigate to project view with the project ID
+  // Find the project in the current list
+  const p = projects.value.find((pr) => String(pr.id) === String(projectId))
+
+  if (p) {
+    // Map statuses to the role that should view this project
+    const statusRoleMap = {
+      Draft: null, // Regular project view
+      'To Section Head': 'Section Head',
+      'To Technical Editor': 'Editor',
+      'To Editor-in-Chief': 'Editor-in-Chief',
+      'EIC Review': 'Editor-in-Chief',
+      'EIC Approved': 'Editor-in-Chief',
+      'To Chief Adviser': 'Chief Adviser',
+      'To Publish': 'Editor-in-Chief',
+      Published: 'Editor-in-Chief',
+      'Returned by Section Head': null,
+      'Returned by Editor': null,
+      'Returned by EIC': null,
+      'Returned by Chief Adviser': null,
+    }
+
+    const role = statusRoleMap[p.status]
+
+    if (role) {
+      // Open the section head detail view with the appropriate role
+      router.push(`/section-head/${projectId}?role=${encodeURIComponent(role)}`)
+      return
+    }
+  }
+
+  // Fallback: open standard project view for Draft or Returned projects
   router.push(`/project/${projectId}`)
 }
 

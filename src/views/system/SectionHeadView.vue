@@ -20,7 +20,7 @@ const projectId = route.params.id
 // Determine project type from route or project data
 const projectType = ref('magazine') // Default, will be determined from loaded project data
 
-// User role - Set to Section Head for temporary access
+// User role - determined from route query or default
 const currentUserRole = ref('Section Head')
 const currentUser = ref('Section Head User')
 
@@ -49,19 +49,19 @@ const editorContent = ref('')
 const quillEditorRef = ref(null)
 const isEditorEditable = ref(false) // Start as read-only
 
-// Auto-save state (like ProjectView)
+// Auto-save state
 const lastSaveTime = ref(null)
 const saveTimeout = ref(null)
 const hasUnsavedChanges = ref(false)
 
 // Approval state
 const showApprovalDialog = ref(false)
-const approvalAction = ref('') // 'approve', 'reject', 'return'
+const approvalAction = ref('') // 'approve', 'reject', 'return', 'forward', 'publish'
 const approvalComments = ref('')
 const approvalPriority = ref('Medium')
 
 // History and versioning state
-const showHistory = ref(true) // Always show by default
+const showHistory = ref(true)
 
 // Comments state
 const comments = ref([])
@@ -83,7 +83,7 @@ const showNotification = (message, color = 'success') => {
   showSnackbar.value = true
 }
 
-// Get last save time for display (like ProjectView)
+// Get last save time for display
 const getLastSaveDisplay = computed(() => {
   if (!lastSaveTime.value) return 'Never'
   const now = new Date()
@@ -103,7 +103,7 @@ const updateLastSaveTime = () => {
   project.value.lastModified = lastSaveTime.value
 }
 
-// Handle content changes (called on every keystroke when editable)
+// Handle content changes
 const handleContentChange = () => {
   if (isEditorEditable.value) {
     hasUnsavedChanges.value = true
@@ -124,50 +124,89 @@ const debouncedSave = () => {
   }, 1000)
 }
 
-// Available approval actions - UPDATED ORDER AND STYLING
+// Available approval actions - UPDATED FOR WORKFLOW
 const approvalActions = computed(() => {
-  const baseActions = [
+  const isEIC = currentUserRole.value === 'Editor-in-Chief'
+  const isAdviser = currentUserRole.value === 'Chief Adviser'
+  const isSectionHead = currentUserRole.value === 'Section Head'
+
+  if (isEIC) {
+    // Check if project is coming back from Chief Adviser
+    const isFromAdviser =
+      project.value.status === 'Adviser Approved' || project.value.status === 'From Chief Adviser'
+
+    return [
+      {
+        value: 'forward',
+        text: 'Forward to Chief Adviser',
+        color: 'purple',
+        icon: 'mdi-arrow-right-circle',
+        disabled: isFromAdviser, // Disable if already consulted
+      },
+      { value: 'approve', text: 'Approve', color: 'success', icon: 'mdi-check' },
+      {
+        value: 'publish',
+        text: 'Publish',
+        color: 'primary',
+        icon: 'mdi-publish',
+        disabled: !isFromAdviser, // Only enable after Chief Adviser consultation
+        tooltip: isFromAdviser
+          ? 'Publish this project to archive'
+          : 'Must consult Chief Adviser before publishing',
+      },
+    ]
+  }
+
+  if (isAdviser) {
+    return [
+      { value: 'return', text: 'Return to EIC', color: 'warning', icon: 'mdi-arrow-left-circle' },
+      {
+        value: 'approve',
+        text: 'Approve & Return to EIC',
+        color: 'success',
+        icon: 'mdi-check-decagram',
+      },
+    ]
+  }
+
+  // Section Head actions (default)
+  return [
     { value: 'return', text: 'Request to Edit', color: 'warning', icon: 'mdi-pencil' },
-    { value: 'approve', text: 'Approve', color: 'success', icon: 'mdi-check' },
+    { value: 'approve', text: 'Approve & Send to EIC', color: 'success', icon: 'mdi-check' },
     {
       value: 'publish',
       text: 'Publish',
       color: 'primary',
       icon: 'mdi-lock',
-      disabled: true, // Always disabled for Section Head
-      tooltip: 'Only Editor-in-Chief can publish after approval',
+      disabled: true,
+      tooltip: 'Only Editor-in-Chief can publish projects',
     },
   ]
-
-  return baseActions
 })
 
-// Get next status based on current role and action
+// Get next status based on current role and action - UPDATED WORKFLOW
 const getNextStatus = (action, currentStatus) => {
-  const statusMap = {
-    'Section Head': {
-      approve: 'To Editor-in-Chief', // Route directly to EIC after Section Head approval
-      return: 'Returned by Section Head',
-      reject: 'Rejected by Section Head',
-    },
-    Editor: {
-      approve: 'To Editor-in-Chief',
-      return: 'Returned by Editor',
-      reject: 'Rejected by Editor',
-    },
-    Director: {
-      approve: 'To Chief Adviser',
-      return: 'Returned by Director',
-      reject: 'Rejected by Director',
-    },
-    'Editor-in-Chief': {
-      approve: 'Published',
-      return: 'Returned by EIC',
-      reject: 'Rejected by EIC',
-    },
+  const role = currentUserRole.value
+
+  if (role === 'Section Head') {
+    if (action === 'approve') return 'To Editor-in-Chief'
+    if (action === 'return') return 'Returned by Section Head'
+    if (action === 'reject') return 'Rejected by Section Head'
   }
 
-  return statusMap[currentUserRole.value]?.[action] || currentStatus
+  if (role === 'Editor-in-Chief') {
+    if (action === 'forward') return 'To Chief Adviser'
+    if (action === 'approve') return 'EIC Approved'
+    if (action === 'publish') return 'Published'
+    if (action === 'return') return 'Returned by EIC'
+  }
+
+  if (role === 'Chief Adviser') {
+    if (action === 'approve') return 'Adviser Approved' // Returns to EIC
+    if (action === 'return') return 'Returned by Chief Adviser'
+  }
+
+  return currentStatus
 }
 
 // Save content changes to localStorage
@@ -182,7 +221,6 @@ const saveContentChanges = () => {
       projects[projectIndex].lastModified = new Date().toLocaleString()
       localStorage.setItem(storageKey, JSON.stringify(projects))
 
-      // Update local project state
       project.value.content = editorContent.value
       project.value.lastModified = new Date().toLocaleString()
 
@@ -200,9 +238,8 @@ const saveContentChanges = () => {
 // Approval functions
 const startApproval = (action) => {
   // Handle "Request to Edit" - make editor editable
-  if (action === 'return') {
+  if (action === 'return' && currentUserRole.value === 'Section Head') {
     isEditorEditable.value = true
-    // Update QuillEditor to be editable
     if (quillEditorRef.value) {
       quillEditorRef.value.setReadOnly(false)
     }
@@ -210,9 +247,10 @@ const startApproval = (action) => {
     return
   }
 
-  // Prevent publish action for Section Head
-  if (action === 'publish' && currentUserRole.value === 'Section Head') {
-    showNotification('Only Editor-in-Chief can publish projects', 'warning')
+  // Check if action is disabled
+  const actionConfig = approvalActions.value.find((a) => a.value === action)
+  if (actionConfig?.disabled) {
+    showNotification(actionConfig.tooltip || 'This action is not available', 'warning')
     return
   }
 
@@ -224,7 +262,19 @@ const startApproval = (action) => {
 const submitApproval = () => {
   if (!approvalAction.value) return
 
-  const newStatus = getNextStatus(approvalAction.value, project.value.status)
+  // ✅ STORE VALUES BEFORE CLEARING - THIS IS THE FIX
+  const currentAction = approvalAction.value
+  const currentRole = currentUserRole.value
+  const currentProjectType = projectType.value
+
+  const newStatus = getNextStatus(currentAction, project.value.status)
+
+  console.log('🔍 Submit Approval:', {
+    action: currentAction,
+    role: currentRole,
+    projectType: currentProjectType,
+    newStatus: newStatus,
+  })
 
   try {
     // Save any content changes before approval
@@ -233,29 +283,59 @@ const submitApproval = () => {
     }
 
     // Update project status in localStorage
-    const storageKey = `${projectType.value}_projects`
+    const storageKey = `${currentProjectType}_projects`
     const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
     const projectIndex = projects.findIndex((p) => p.id == projectId)
 
+    console.log('📦 Storage:', { key: storageKey, index: projectIndex, total: projects.length })
+
     if (projectIndex !== -1) {
+      const now = new Date().toISOString()
+
+      // Update basic fields
       projects[projectIndex].status = newStatus
       projects[projectIndex].lastModified = new Date().toLocaleString()
 
-      // Add approval fields if approving
-      if (approvalAction.value === 'approve') {
-        projects[projectIndex].approvedBy = currentUser.value
-        projects[projectIndex].approvedDate = new Date().toISOString()
-        projects[projectIndex].priority = approvalPriority.value
-
-        // Add Section Head specific approval fields
-        if (currentUserRole.value === 'Section Head') {
+      // Add role-specific approval fields
+      if (currentAction === 'approve') {
+        if (currentRole === 'Section Head') {
           projects[projectIndex].sectionHeadApprovedBy = currentUser.value
-          projects[projectIndex].sectionHeadApprovedDate = new Date().toISOString()
+          projects[projectIndex].sectionHeadApprovedDate = now
           projects[projectIndex].sectionHeadComments = approvalComments.value
+        } else if (currentRole === 'Editor-in-Chief') {
+          projects[projectIndex].eicApprovedBy = currentUser.value
+          projects[projectIndex].eicApprovedDate = now
+          projects[projectIndex].eicComments = approvalComments.value
+        } else if (currentRole === 'Chief Adviser') {
+          projects[projectIndex].adviserApprovedBy = currentUser.value
+          projects[projectIndex].adviserApprovedDate = now
+          projects[projectIndex].adviserComments = approvalComments.value
         }
+        projects[projectIndex].priority = approvalPriority.value
+      }
+
+      // Forward to Chief Adviser
+      if (currentAction === 'forward') {
+        projects[projectIndex].forwardedToAdviserBy = currentUser.value
+        projects[projectIndex].forwardedToAdviserDate = now
+        projects[projectIndex].forwardNotes = approvalComments.value
+        projects[projectIndex].priority = approvalPriority.value
+      }
+
+      // Publish to archive
+      if (currentAction === 'publish') {
+        projects[projectIndex].publishedBy = currentUser.value
+        projects[projectIndex].publishedDate = now
+        projects[projectIndex].publishNotes = approvalComments.value
       }
 
       localStorage.setItem(storageKey, JSON.stringify(projects))
+
+      console.log('✅ Project updated:', {
+        id: projectId,
+        newStatus: newStatus,
+        storage: storageKey,
+      })
 
       // Update local project state
       project.value.status = newStatus
@@ -263,55 +343,80 @@ const submitApproval = () => {
 
       // Add approval history entry
       const approvalEntry = {
-        action: approvalAction.value,
+        action: currentAction,
         approver: currentUser.value,
-        role: currentUserRole.value,
+        role: currentRole,
         comments: approvalComments.value,
-        timestamp: new Date().toISOString(),
+        timestamp: now,
         priority: approvalPriority.value,
+        newStatus: newStatus,
       }
 
-      // Save approval history to localStorage
+      // Save approval history
       const historyKey = `approval_history_${projectId}`
       const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]')
       existingHistory.push(approvalEntry)
       localStorage.setItem(historyKey, JSON.stringify(existingHistory))
 
-      // Close dialog and reset
+      // ✅ Close dialog and clear form AFTER storing values
       showApprovalDialog.value = false
       approvalAction.value = ''
       approvalComments.value = ''
+      approvalPriority.value = 'Medium'
 
-      const actionText =
-        approvalActions.value.find((a) => a.value === approvalAction.value)?.text || 'processed'
-
-      // Show success message with next step info
-      if (approvalAction.value === 'approve' && currentUserRole.value === 'Section Head') {
-        showNotification(
-          `Project approved! It will now go to Editor-in-Chief for review.`,
-          'success',
-        )
-      } else {
-        showNotification(`Project ${actionText.toLowerCase()} successfully!`, 'success')
+      // Show success notification based on STORED action
+      let message = 'Action completed successfully!'
+      if (currentAction === 'approve' && currentRole === 'Section Head') {
+        message = 'Project approved and sent to Editor-in-Chief!'
+      } else if (currentAction === 'forward') {
+        message = 'Project forwarded to Chief Adviser for consultation!'
+      } else if (currentAction === 'approve' && currentRole === 'Chief Adviser') {
+        message = 'Project approved and returned to Editor-in-Chief for publishing!'
+      } else if (currentAction === 'publish') {
+        message = 'Project published successfully!'
       }
 
-      // Navigate back after action with custom message
-      setTimeout(() => {
-        let navigationMessage = `Project ${actionText.toLowerCase()}!`
-        if (approvalAction.value === 'approve' && currentUserRole.value === 'Section Head') {
-          navigationMessage = `Project approved and sent to Editor-in-Chief!`
-        }
+      showNotification(message, 'success')
 
-        const confirmNavigation = confirm(
-          `${navigationMessage} Would you like to go back to the approval dashboard?`,
-        )
-        if (confirmNavigation) {
-          router.push('/approval')
+      console.log('🔔 Notification:', message)
+
+      // AUTO-NAVIGATE - Using STORED values
+      setTimeout(() => {
+        console.log('🚀 Navigating...', {
+          action: currentAction,
+          role: currentRole,
+          projectType: currentProjectType,
+        })
+
+        if (currentAction === 'publish') {
+          console.log('➡️ Going to /archive')
+          router.push('/archive')
+        } else if (currentRole === 'Editor-in-Chief') {
+          console.log('➡️ Going to /editor-in-chief')
+          router.push('/editor-in-chief')
+        } else if (currentRole === 'Chief Adviser') {
+          console.log('➡️ Going to /chief-adviser')
+          router.push('/chief-adviser')
+        } else {
+          // Section Head goes back to the CORRECT project type list
+          const routeMap = {
+            magazine: '/magazine',
+            newsletter: '/newsletter',
+            folio: '/folio',
+            other: '/other',
+          }
+
+          const targetRoute = routeMap[currentProjectType] || '/magazine'
+          console.log('➡️ Going to:', targetRoute, 'for', currentProjectType)
+          router.push(targetRoute)
         }
       }, 1500)
+    } else {
+      console.error('❌ Project not found at index:', projectIndex)
+      showNotification('Project not found in storage', 'error')
     }
   } catch (error) {
-    console.error('Error processing approval:', error)
+    console.error('❌ Error processing approval:', error)
     showNotification('Error processing approval', 'error')
   }
 }
@@ -333,14 +438,12 @@ const getDepartmentFromProject = () => {
   return typeMap[projectType.value] || 'General'
 }
 
-// Navigation functions - UPDATED
+// Navigation functions
 const goBackToProjectList = () => {
-  // Save any changes before going back
   if (isEditorEditable.value && hasUnsavedChanges.value) {
     saveContentChanges()
   }
 
-  // Navigate to the appropriate project list based on project type
   const routeMap = {
     magazine: '/magazine',
     newsletter: '/newsletter',
@@ -367,7 +470,6 @@ const loadProjectData = () => {
   try {
     console.log('Searching for project ID:', projectId)
 
-    // Try to find the project in all project types
     const projectTypes = ['magazine', 'newsletter', 'folio', 'other']
 
     for (const type of projectTypes) {
@@ -380,7 +482,6 @@ const loadProjectData = () => {
       if (foundProject) {
         console.log('Found project:', foundProject)
 
-        // Update project data
         project.value = {
           ...foundProject,
           id: String(projectId),
@@ -403,16 +504,9 @@ const loadProjectData = () => {
           dueDate: foundProject.dueDate || 'Not set',
         }
 
-        // Set project type
         projectType.value = type
-
-        // Set editor content
         editorContent.value = foundProject.content || ''
-
-        // Initialize last save time
         updateLastSaveTime()
-
-        // Load comments for this project
         loadProjectComments()
 
         console.log('Project loaded successfully:', project.value.title)
@@ -420,7 +514,6 @@ const loadProjectData = () => {
       }
     }
 
-    // If project not found, show error
     console.error('Project not found with ID:', projectId)
     showNotification('Project not found. Please check the project ID.', 'error')
   } catch (error) {
@@ -437,7 +530,7 @@ const addComment = () => {
         projectType.value,
         projectId,
         newComment.value.trim(),
-        currentUser.value, // Current approver
+        currentUser.value,
       )
       comments.value.unshift(comment)
       newComment.value = ''
@@ -459,7 +552,6 @@ const filteredComments = computed(() => {
   )
 })
 
-// Comment action functions
 const deleteComment = (commentId) => {
   if (confirm('Are you sure you want to delete this comment?')) {
     try {
@@ -467,7 +559,6 @@ const deleteComment = (commentId) => {
       if (success) {
         comments.value = comments.value.filter((c) => c.id !== commentId)
         showNotification('Comment deleted successfully')
-        console.log('Comment deleted successfully')
       }
     } catch (error) {
       console.error('Error deleting comment:', error)
@@ -485,7 +576,6 @@ const toggleCommentApprovalStatus = (commentId) => {
         comment.isApproved = !comment.isApproved
       }
       showNotification('Comment approval toggled')
-      console.log('Comment approval toggled')
     }
   } catch (error) {
     console.error('Error toggling comment approval:', error)
@@ -508,7 +598,6 @@ const handleDeleteHighlightComment = (commentId) => {
     const success = quillEditorRef.value.deleteHighlightComment(commentId)
     if (success) {
       showNotification('Highlight comment deleted')
-      console.log('Highlight comment deleted')
     }
   }
 }
@@ -543,13 +632,16 @@ const getStatusColor = (status) => {
     'To Section Head': 'warning',
     'To Technical Editor': 'info',
     'To Editor-in-Chief': 'primary',
+    'EIC Approved': 'success',
     'To Chief Adviser': 'purple',
+    'Adviser Approved': 'success',
+    'From Chief Adviser': 'success',
     Published: 'success',
     Rejected: 'error',
     'Returned by Section Head': 'warning',
     'Returned by Editor': 'warning',
-    'Returned by Director': 'warning',
     'Returned by EIC': 'warning',
+    'Returned by Chief Adviser': 'warning',
   }
   return statusColors[status] || 'default'
 }
@@ -564,33 +656,25 @@ const formatDate = (dateString) => {
   })
 }
 
-// Check if current user can approve this project - UPDATED FOR SECTION HEAD ACCESS
+// Check if current user can approve this project
 const canApproveProject = computed(() => {
-  // Always allow Section Head to approve (for temporary access)
-  if (currentUserRole.value === 'Section Head') {
-    return true
-  }
-
-  // Normal approval flow mapping
-  const statusRoleMap = {
-    'To Section Head': 'Section Head',
-    'To Technical Editor': 'Editor',
-    'To Editor-in-Chief': 'Editor-in-Chief',
-  }
-  return statusRoleMap[project.value.status] === currentUserRole.value
+  // TEMPORARY: Allow all access during development
+  return true
 })
 
 // Get comment placeholder based on action
 const getCommentPlaceholder = () => {
   const placeholders = {
-    approve: 'Add any comments or notes for the next reviewer...',
-    return: 'Explain what needs to be revised and provide specific feedback...',
+    approve: 'Add any comments or notes...',
+    forward: 'Add consultation notes for Chief Adviser...',
+    return: 'Explain what needs to be revised...',
     reject: 'Provide detailed reasons for rejection...',
+    publish: 'Add publishing notes (optional)...',
   }
   return placeholders[approvalAction.value] || 'Add your comments...'
 }
 
-// Watch for QuillEditor to be ready and load highlight comments
+// Watch for QuillEditor to be ready
 watch(
   () => quillEditorRef.value,
   (newEditor) => {
@@ -613,12 +697,10 @@ onMounted(() => {
   console.log('Loading project for approval:', projectId)
   loadProjectData()
 
-  // Determine user role from route query or default to Section Head
+  // Determine user role from route query
   if (route.query.role) {
     currentUserRole.value = route.query.role
-  } else {
-    // Default to Section Head for access
-    currentUserRole.value = 'Section Head'
+    currentUser.value = `${route.query.role} User`
   }
 
   console.log('Current user role for approval:', currentUserRole.value)
@@ -627,10 +709,8 @@ onMounted(() => {
 
 <template>
   <v-app class="section-head-page">
-    <!-- RENAMED CLASS -->
     <MainHeader />
 
-    <!-- Back Button - UPDATED TEXT -->
     <div class="back-button-container">
       <v-btn
         @click="goBackToProjectList"
@@ -645,7 +725,7 @@ onMounted(() => {
     <v-main class="main-content">
       <v-container fluid class="project-container pa-5">
         <v-row>
-          <!-- Left Panel - Project Details and Editor -->
+          <!-- Left Panel -->
           <v-col cols="12" lg="8" class="left-panel">
             <!-- Project Title -->
             <div class="title-section">
@@ -708,23 +788,9 @@ onMounted(() => {
                   <span class="value">{{ project.department }}</span>
                 </div>
               </div>
-              <div class="metadata-row">
-                <div class="metadata-item">
-                  <span class="label">Section Head:</span>
-                  <span class="value">{{ project.sectionHead }}</span>
-                </div>
-                <div class="metadata-item">
-                  <span class="label">Writer:</span>
-                  <span class="value">{{ project.writers || 'Not assigned' }}</span>
-                </div>
-                <div class="metadata-item">
-                  <span class="label">Artist:</span>
-                  <span class="value">{{ project.artists || 'Not assigned' }}</span>
-                </div>
-              </div>
             </div>
 
-            <!-- Auto-save Notice (like ProjectView) -->
+            <!-- Auto-save Notice -->
             <div class="auto-save-notice">
               <div class="save-status">
                 <v-icon size="16" :color="hasUnsavedChanges ? 'warning' : 'success'">
@@ -739,7 +805,7 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- Rich Text Editor - READ-ONLY by default -->
+            <!-- Rich Text Editor -->
             <div class="editor-section">
               <QuillEditor
                 ref="quillEditorRef"
@@ -754,47 +820,53 @@ onMounted(() => {
               />
             </div>
 
-            <!-- Section Head Action Buttons - NO ICONS, ALL CAPS -->
+            <!-- Action Buttons -->
             <div class="action-buttons" v-if="canApproveProject">
-              <!-- Request to Edit Button -->
-              <v-btn @click="startApproval('return')" variant="outlined" class="return-btn">
-                REQUEST TO EDIT
-              </v-btn>
+              <template v-for="action in approvalActions" :key="action.value">
+                <v-tooltip v-if="action.tooltip" location="top">
+                  <template v-slot:activator="{ props }">
+                    <v-btn
+                      @click="startApproval(action.value)"
+                      variant="outlined"
+                      :class="{
+                        'return-btn': action.value === 'return' || action.value === 'forward',
+                        'approve-btn': action.value === 'approve',
+                        'publish-btn': action.value === 'publish',
+                        locked: action.disabled,
+                      }"
+                      :disabled="action.disabled"
+                      v-bind="props"
+                      :prepend-icon="
+                        action.value === 'publish'
+                          ? action.disabled
+                            ? 'mdi-lock'
+                            : 'mdi-publish'
+                          : undefined
+                      "
+                    >
+                      {{ action.text.toUpperCase() }}
+                    </v-btn>
+                  </template>
+                  <span>{{ action.tooltip }}</span>
+                </v-tooltip>
 
-              <!-- Approve Button -->
-              <v-btn @click="startApproval('approve')" variant="outlined" class="approve-btn">
-                APPROVE & SEND TO EIC
-              </v-btn>
-
-              <!-- Publish Button (Locked for Section Head) -->
-              <v-tooltip location="top">
-                <template v-slot:activator="{ props }">
-                  <v-btn
-                    @click="startApproval('publish')"
-                    variant="outlined"
-                    class="publish-btn locked"
-                    :disabled="true"
-                    v-bind="props"
-                    prepend-icon="mdi-lock"
-                  >
-                    PUBLISH
-                  </v-btn>
-                </template>
-                <span>Only Editor-in-Chief can publish after approval</span>
-              </v-tooltip>
-            </div>
-
-            <!-- Not Authorized Message -->
-            <div v-else class="not-authorized">
-              <v-alert type="warning" variant="outlined">
-                <strong>Access Restricted:</strong> You are not authorized to approve this project
-                at its current status. Current status requires approval from:
-                {{ project.status.replace('To ', '') }}
-              </v-alert>
+                <v-btn
+                  v-else
+                  @click="startApproval(action.value)"
+                  variant="outlined"
+                  :class="{
+                    'return-btn': action.value === 'return' || action.value === 'forward',
+                    'approve-btn': action.value === 'approve',
+                    'publish-btn': action.value === 'publish',
+                  }"
+                >
+                  {{ action.text.toUpperCase() }}
+                </v-btn>
+              </template>
             </div>
           </v-col>
 
-          <!-- Right Panel - Comments and History -->
+          <!-- Right Panel -->
           <v-col cols="12" lg="4" class="right-panel">
             <!-- Approval History -->
             <div class="history-section mb-4">
@@ -835,20 +907,15 @@ onMounted(() => {
 
             <!-- Comments Section -->
             <div class="comments-section">
-              <!-- Comments Header -->
               <div class="comments-header">
                 <h3>Approval Comments</h3>
                 <div class="header-actions">
                   <v-btn icon size="small" variant="text" @click="loadProjectComments">
                     <v-icon>mdi-refresh</v-icon>
                   </v-btn>
-                  <v-btn icon size="small" variant="text">
-                    <v-icon>mdi-comment-multiple</v-icon>
-                  </v-btn>
                 </div>
               </div>
 
-              <!-- Search Comments -->
               <div class="comment-search">
                 <v-text-field
                   v-model="commentSearch"
@@ -860,7 +927,6 @@ onMounted(() => {
                 />
               </div>
 
-              <!-- Add Comment -->
               <div class="add-comment">
                 <v-textarea
                   v-model="newComment"
@@ -874,7 +940,6 @@ onMounted(() => {
                 />
               </div>
 
-              <!-- Comments List -->
               <div class="comments-list">
                 <div v-for="comment in filteredComments" :key="comment.id" class="comment-item">
                   <div class="comment-avatar">
@@ -930,9 +995,6 @@ onMounted(() => {
             {{ approvalActions.find((a) => a.value === approvalAction)?.icon }}
           </v-icon>
           {{ approvalActions.find((a) => a.value === approvalAction)?.text }}
-          <span v-if="approvalAction === 'approve' && currentUserRole === 'Section Head'">
-            & Send to EIC
-          </span>
         </v-card-title>
 
         <v-card-text class="approval-dialog-content">
@@ -945,87 +1007,87 @@ onMounted(() => {
 
           <v-form @submit.prevent="submitApproval">
             <v-select
-              v-if="approvalAction === 'approve'"
+              v-if="approvalAction === 'approve' || approvalAction === 'forward'"
               v-model="approvalPriority"
-              label="Set Priority for Next Stage"
+              label="Set Priority"
               :items="['High', 'Medium', 'Low']"
               variant="outlined"
               class="mb-4"
-              hint="Priority level for the Editor-in-Chief review"
-              persistent-hint
             />
 
             <v-textarea
               v-model="approvalComments"
               :label="
-                approvalAction === 'return'
-                  ? 'Comments for Author (Required)'
+                approvalAction === 'return' || approvalAction === 'forward'
+                  ? 'Comments (Required)'
                   : 'Comments (Optional)'
               "
               :placeholder="getCommentPlaceholder()"
               variant="outlined"
               rows="4"
               :rules="
-                approvalAction === 'reject' || approvalAction === 'return'
-                  ? [(v) => !!v || 'Comments are required for this action']
+                approvalAction === 'return' || approvalAction === 'forward'
+                  ? [(v) => !!v || 'Comments are required']
                   : []
               "
             />
 
             <v-alert
-              v-if="approvalAction === 'approve'"
+              v-if="approvalAction === 'approve' && currentUserRole === 'Section Head'"
               type="success"
               variant="outlined"
               class="mt-4"
             >
-              <strong>Next Step:</strong>
-              Project will be forwarded to Editor-in-Chief for final review and potential
-              publication.
+              <strong>Next:</strong> Project will be forwarded to Editor-in-Chief
             </v-alert>
 
             <v-alert
-              v-else-if="approvalAction === 'return'"
-              type="warning"
+              v-else-if="approvalAction === 'forward'"
+              type="info"
               variant="outlined"
               class="mt-4"
             >
-              <strong>Action:</strong> Project will be returned to the author for editing and
-              resubmission.
+              <strong>Next:</strong> Project will be sent to Chief Adviser for consultation
             </v-alert>
 
             <v-alert
-              v-else-if="approvalAction === 'reject'"
-              type="error"
+              v-else-if="approvalAction === 'approve' && currentUserRole === 'Chief Adviser'"
+              type="success"
               variant="outlined"
               class="mt-4"
             >
-              <strong>Action:</strong> Project will be permanently rejected and removed from
-              workflow.
+              <strong>Next:</strong> Project will return to EIC for publishing
+            </v-alert>
+
+            <v-alert
+              v-else-if="approvalAction === 'publish'"
+              type="primary"
+              variant="outlined"
+              class="mt-4"
+            >
+              <strong>Action:</strong> Project will be published to archive
             </v-alert>
           </v-form>
         </v-card-text>
 
         <v-card-actions class="approval-dialog-actions">
-          <v-btn @click="cancelApproval" variant="outlined"> Cancel </v-btn>
+          <v-btn @click="cancelApproval" variant="outlined">Cancel</v-btn>
           <v-spacer />
           <v-btn
             @click="submitApproval"
             :color="approvalActions.find((a) => a.value === approvalAction)?.color"
             :disabled="
-              (approvalAction === 'reject' || approvalAction === 'return') &&
+              (approvalAction === 'return' || approvalAction === 'forward') &&
               !approvalComments.trim()
             "
           >
-            Confirm {{ approvalActions.find((a) => a.value === approvalAction)?.text }}
-            <span v-if="approvalAction === 'approve' && currentUserRole === 'Section Head'">
-              & Send to EIC
-            </span>
+            Confirm
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- Snackbar for notifications -->
+    <!-- Snackbar -->
     <v-snackbar
       v-model="showSnackbar"
       :color="snackbarColor"
@@ -1034,7 +1096,7 @@ onMounted(() => {
     >
       {{ snackbarMessage }}
       <template v-slot:actions>
-        <v-btn variant="text" @click="showSnackbar = false"> Close </v-btn>
+        <v-btn variant="text" @click="showSnackbar = false">Close</v-btn>
       </template>
     </v-snackbar>
   </v-app>
@@ -1042,7 +1104,6 @@ onMounted(() => {
 
 <style scoped>
 .section-head-page {
-  /* RENAMED CLASS */
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -1168,7 +1229,6 @@ onMounted(() => {
   margin-left: 8px;
 }
 
-/* Enhanced Auto-save Notice (like ProjectView) */
 .auto-save-notice {
   display: flex;
   align-items: center;
@@ -1217,7 +1277,6 @@ onMounted(() => {
   margin-bottom: 24px;
 }
 
-/* Match ProjectView Button Styling EXACTLY - Same Size */
 .return-btn,
 .approve-btn,
 .publish-btn {
@@ -1227,20 +1286,26 @@ onMounted(() => {
   font-weight: bold !important;
   text-transform: uppercase !important;
   font-size: 14px !important;
-  padding: 8px 16px !important; /* Match ProjectView padding */
-  height: 36px !important; /* Match ProjectView height */
-  min-height: 36px !important; /* Match ProjectView min-height */
-  line-height: 1.2 !important; /* Match ProjectView line-height */
+  padding: 8px 16px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  line-height: 1.2 !important;
 }
 
 .approve-btn {
-  background: #f5c52b !important; /* Yellow like ProjectView Submit button */
-  color: #353535 !important; /* Dark text like ProjectView */
+  background: #f5c52b !important;
+  color: #353535 !important;
   border: 1px solid #f5c52b !important;
 }
 
 .publish-btn {
-  background: #8b5cf6 !important; /* Purple like ProjectView version button */
+  background: #8b5cf6 !important;
+  color: white !important;
+  border: 1px solid #8b5cf6 !important;
+}
+
+.return-btn {
+  background: #8b5cf6 !important;
   color: white !important;
   border: 1px solid #8b5cf6 !important;
 }
@@ -1253,10 +1318,9 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-/* Hover effects */
 .return-btn:hover {
-  background: #1f2937 !important;
-  border-color: #1f2937 !important;
+  background: #7c3aed !important;
+  border-color: #7c3aed !important;
 }
 
 .approve-btn:hover {
@@ -1269,7 +1333,6 @@ onMounted(() => {
   border-color: #7c3aed !important;
 }
 
-/* Allow the lock icon to show on publish button only */
 .return-btn .v-icon,
 .approve-btn .v-icon {
   display: none !important;
@@ -1277,16 +1340,12 @@ onMounted(() => {
 
 .publish-btn .v-icon {
   display: inline-flex !important;
-  margin-right: 4px !important; /* Smaller margin to match size */
-  font-size: 16px !important; /* Smaller icon size */
+  margin-right: 4px !important;
+  font-size: 16px !important;
 }
 
 .publish-btn.locked .v-icon {
   color: #6b7280 !important;
-}
-
-.not-authorized {
-  margin-bottom: 24px;
 }
 
 .comments-section {
@@ -1412,7 +1471,6 @@ onMounted(() => {
   border-top: 1px solid #e5e7eb;
 }
 
-/* Responsive Design */
 @media (max-width: 1024px) {
   .left-panel,
   .right-panel {
