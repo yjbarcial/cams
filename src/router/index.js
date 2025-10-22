@@ -12,8 +12,9 @@ import DeliverableView from '@/views/system/DeliverableView.vue'
 import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
-import ApprovalView from '@/views/system/ApprovalView.vue'
+import SectionHeadView from '@/views/system/SectionHeadView.vue' // RENAMED
 import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
+import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -74,20 +75,34 @@ const router = createRouter({
       component: AdminView,
     },
     {
-      path: '/approval',
-      name: 'approval',
-      component: ApprovalView,
+      path: '/section-head',
+      name: 'section-head',
+      component: SectionHeadView,
     },
     {
-      path: '/approval/:id',
-      name: 'approval-detail',
-      component: ApprovalView,
+      path: '/section-head/:id',
+      name: 'section-head-detail',
+      component: SectionHeadView,
       props: true,
     },
     {
       path: '/editor-in-chief',
       name: 'editor-in-chief',
       component: EditorInChiefView,
+    },
+    {
+      path: '/chief-adviser',
+      name: 'chief-adviser',
+      component: ChiefAdviserView,
+    },
+    // Legacy routes for backwards compatibility
+    {
+      path: '/approval',
+      redirect: '/section-head',
+    },
+    {
+      path: '/approval/:id',
+      redirect: (to) => `/section-head/${to.params.id}`,
     },
     { path: '/magazine/new', name: 'magazine-new', component: AddProjectView },
     { path: '/newsletter/new', name: 'newsletter-new', component: AddProjectView },
