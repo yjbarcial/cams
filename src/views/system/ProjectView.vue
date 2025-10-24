@@ -269,60 +269,40 @@ const submitForApproval = () => {
 
 const confirmSubmitForApproval = async () => {
   try {
-    console.log('Starting project submission for approval...')
-
-    // First, save any current content changes
-    saveContent()
-
     const storageKey = `${projectType.value}_projects`
     const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
-
-    console.log(`Found project at index: ${projectIndex}`)
+    const projectIndex = projects.findIndex((p) => p.id == projectId)
 
     if (projectIndex !== -1) {
-      // Update project with approval fields
-      const updatedProject = {
-        ...projects[projectIndex],
-        status: 'To Section Head', // Start approval workflow
-        submittedBy: 'Current User', // This should come from auth system
-        submittedDate: new Date().toISOString(),
-        priority: submitPriority.value,
-        department: getDepartmentFromProject(),
-        lastModified: new Date().toLocaleString(),
-        submitComments: submitComments.value,
-      }
+      projects[projectIndex].status = 'To Section Head'
+      projects[projectIndex].priority = submitPriority.value
+      projects[projectIndex].submittedBy = 'Current User'
+      projects[projectIndex].submittedDate = new Date().toISOString()
+      projects[projectIndex].lastModified = new Date().toLocaleString()
+      projects[projectIndex].submissionComments = submitComments.value
 
-      console.log('Updated project data:', updatedProject)
-
-      projects[projectIndex] = updatedProject
       localStorage.setItem(storageKey, JSON.stringify(projects))
 
-      // Update local project state
       project.value.status = 'To Section Head'
-      project.value.priority = submitPriority.value
-      project.value.submittedDate = new Date().toISOString()
+      hasUnsavedChanges.value = false
 
-      console.log('Project successfully updated in localStorage')
-
-      // Close dialog and reset
-      showSubmitDialog.value = false
-      submitComments.value = ''
-      submitPriority.value = 'Medium'
-
-      // Show success notification
       showNotification('Project submitted for approval successfully!', 'success')
+      showSubmitDialog.value = false
 
-      // Small delay to ensure UI updates, then navigate
+      // Navigate back to project list based on type
+      const listRoutes = {
+        magazine: '/magazine',
+        newsletter: '/newsletter',
+        folio: '/folio',
+        'social-media': '/other',
+      }
+
       setTimeout(() => {
-        console.log(`Navigating to approval view: /approval/${projectId}`)
-        router.push(`/approval/${projectId}`)
-      }, 500)
-    } else {
-      throw new Error(`Project not found in storage with ID: ${projectId}`)
+        router.push(listRoutes[projectType.value] || '/magazine')
+      }, 600)
     }
   } catch (error) {
-    console.error('Error submitting project for approval:', error)
+    console.error('Error submitting project:', error)
     showNotification('Error submitting project for approval', 'error')
   }
 }
