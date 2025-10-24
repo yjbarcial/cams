@@ -304,17 +304,6 @@ const saveAsDraft = () => {
                     </v-col>
 
                     <v-col cols="12" class="form-group">
-                      <v-label class="label">Deadline:</v-label>
-                      <v-text-field
-                        v-model="deadline"
-                        type="date"
-                        class="date-input"
-                        variant="outlined"
-                        hide-details
-                      />
-                    </v-col>
-
-                    <v-col cols="12" class="form-group">
                       <v-label class="label">Description (Optional):</v-label>
                       <v-textarea
                         v-model="description"
@@ -356,7 +345,7 @@ const saveAsDraft = () => {
                                   variant="outlined"
                                   @click="addSelected('writer')"
                                 >
-                                  +Add Another Writer
+                                  +Add Writer
                                 </v-btn>
                               </v-col>
                             </v-row>
@@ -419,7 +408,7 @@ const saveAsDraft = () => {
                                   variant="outlined"
                                   @click="addSelected('artist')"
                                 >
-                                  +Add Another Artist
+                                  +Add Artist
                                 </v-btn>
                               </v-col>
                             </v-row>
@@ -456,6 +445,17 @@ const saveAsDraft = () => {
                           </v-container>
                         </v-card-text>
                       </v-card>
+                    </v-col>
+
+                    <v-col cols="12" class="form-group">
+                      <v-label class="label">Deadline:</v-label>
+                      <v-text-field
+                        v-model="deadline"
+                        type="date"
+                        class="date-input"
+                        variant="outlined"
+                        hide-details
+                      />
                     </v-col>
                   </v-row>
                 </v-container>
@@ -568,7 +568,7 @@ const saveAsDraft = () => {
 }
 
 :deep(.v-textarea .v-field) {
-  min-height: 120px !important;
+  min-height: 162px !important;
 }
 
 /* Remove focus outlines from select fields */
@@ -620,10 +620,9 @@ const saveAsDraft = () => {
 .listbox {
   border: 2px solid #d1d5db !important;
   border-radius: 8px !important;
-  min-height: 100px;
+  height: 95px !important;
   background: #fff !important;
   overflow-y: auto;
-  max-height: 200px;
 }
 
 .listbox-empty {
@@ -648,7 +647,7 @@ const saveAsDraft = () => {
 }
 
 .assign-block {
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .ghost-btn {
