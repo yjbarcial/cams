@@ -390,21 +390,16 @@ const goBack = () => {
   performNavigation()
 }
 
+const projectTypeMap = {
+  magazine: '/magazine',
+  newsletter: '/newsletter',
+  folio: '/folio',
+  other: '/other',
+}
+
 const performNavigation = () => {
-  // Try to go back to the previous page, fallback to the appropriate project list
-  if (window.history.length > 1) {
-    router.go(-1)
-  } else {
-    // Fallback to the appropriate project list based on project type
-    const projectTypeMap = {
-      magazine: '/magazine',
-      newsletter: '/newsletter',
-      folio: '/folio',
-      other: '/other',
-    }
-    const fallbackRoute = projectTypeMap[projectType.value] || '/'
-    router.push(fallbackRoute)
-  }
+  const route = projectTypeMap[projectType.value] || '/magazine'
+  router.push(route)
 }
 
 // Load comments for the current project
@@ -424,12 +419,17 @@ const loadProjectData = () => {
     console.log('Loading project data for ID:', projectId)
 
     // Try to find the project in all project types
-    const projectTypes = ['magazine', 'newsletter', 'folio', 'other']
+    const projectTypes = [
+      { type: 'magazine', storageKey: 'magazine_projects' },
+      { type: 'newsletter', storageKey: 'newsletter_projects' },
+      { type: 'folio', storageKey: 'folio_projects' },
+      { type: 'other', storageKey: 'other_projects' },
+      { type: 'social-media', storageKey: 'social-media_projects' }, // Add for backward compatibility
+    ]
 
-    for (const type of projectTypes) {
-      const storageKey = `${type}_projects`
+    for (const { type, storageKey } of projectTypes) {
       const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-      console.log(`Checking ${type} projects:`, projects.length, 'projects found')
+      console.log(`Checking ${type} projects (${storageKey}):`, projects.length, 'projects found')
 
       const foundProject = projects.find((p) => String(p.id) === String(projectId))
 
@@ -471,17 +471,7 @@ const loadProjectData = () => {
           highlightComments.value = storedComments
         }
 
-        console.log('Project loaded successfully:', {
-          id: project.value.id,
-          title: project.value.title,
-          description: project.value.description,
-          writers: project.value.writers,
-          artists: project.value.artists,
-          sectionHead: project.value.sectionHead,
-          status: project.value.status,
-          content: project.value.content,
-        })
-
+        console.log('Project loaded successfully')
         return
       }
     }
@@ -666,6 +656,17 @@ onUnmounted(() => {
     clearTimeout(saveTimeout.value)
   }
 })
+
+// Add this computed property after the other computed properties
+const getBackButtonText = computed(() => {
+  const typeNames = {
+    magazine: 'Magazine',
+    newsletter: 'Newsletter',
+    folio: 'Folio',
+    other: 'Social Media',
+  }
+  return `Back to ${typeNames[projectType.value] || 'Magazine'} Projects`
+})
 </script>
 
 <template>
@@ -675,7 +676,7 @@ onUnmounted(() => {
     <!-- Back Button -->
     <div class="back-button-container">
       <v-btn @click="goBack" variant="outlined" prepend-icon="mdi-arrow-left" class="back-button">
-        Back
+        {{ getBackButtonText }}
       </v-btn>
     </div>
 

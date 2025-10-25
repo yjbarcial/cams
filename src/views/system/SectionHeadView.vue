@@ -148,6 +148,17 @@ const getCommentPlaceholder = () => {
   return 'Add your comments...'
 }
 
+// ADD THIS NEW COMPUTED PROPERTY HERE
+const getBackButtonText = computed(() => {
+  const typeNames = {
+    magazine: 'Magazine',
+    newsletter: 'Newsletter',
+    folio: 'Folio',
+    other: 'Social Media',
+  }
+  return `Back to ${typeNames[projectType.value] || 'Magazine'} Projects`
+})
+
 const saveContentChanges = () => {
   try {
     const storageKey = `${projectType.value}_projects`
@@ -281,6 +292,7 @@ const goBack = () => {
     other: '/other',
   }
 
+  // Use the projectType to determine where to go back
   router.push(listRoutes[projectType.value] || '/magazine')
 }
 
@@ -459,7 +471,7 @@ onMounted(() => {
 
     <div class="back-button-container">
       <v-btn @click="goBack" variant="outlined" prepend-icon="mdi-arrow-left" class="back-button">
-        Back to Magazine List
+        {{ getBackButtonText }}
       </v-btn>
     </div>
 

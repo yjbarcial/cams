@@ -27,7 +27,14 @@ watch(
 )
 
 const loadProjects = () => {
-  const savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
+  // Try both storage keys for backward compatibility
+  let savedProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+
+  // If 'other_projects' is empty, try 'social-media_projects'
+  if (savedProjects.length === 0) {
+    savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
+  }
+
   projects.value = savedProjects.filter((p) => p.type === 'social-media' || p.type === 'other')
 }
 
@@ -70,11 +77,14 @@ const toggleStar = (projectId) => {
   const project = projects.value.find((p) => p.id === projectId)
   if (project) {
     project.isStarred = !project.isStarred
-    const savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
+
+    // Save to the correct storage key based on project type
+    const storageKey = project.type === 'other' ? 'other_projects' : 'social-media_projects'
+    const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
     const updatedProjects = savedProjects.map((p) =>
       p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
     )
-    localStorage.setItem('social-media_projects', JSON.stringify(updatedProjects))
+    localStorage.setItem(storageKey, JSON.stringify(updatedProjects))
   }
 }
 
@@ -151,11 +161,15 @@ const saveEdit = () => {
   const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
   if (projectIndex !== -1) {
     projects.value[projectIndex] = { ...editingProject.value }
-    const savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
+
+    // Save to the correct storage key based on project type
+    const storageKey =
+      editingProject.value.type === 'other' ? 'other_projects' : 'social-media_projects'
+    const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
     const updatedProjects = savedProjects.map((p) =>
       p.id === editingProject.value.id ? { ...editingProject.value } : p,
     )
-    localStorage.setItem('social-media_projects', JSON.stringify(updatedProjects))
+    localStorage.setItem(storageKey, JSON.stringify(updatedProjects))
   }
 
   editingProject.value = null
@@ -175,9 +189,13 @@ const startDelete = (project) => {
 const confirmDelete = () => {
   if (projectToDelete.value) {
     projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
-    const savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
+
+    // Delete from the correct storage key based on project type
+    const storageKey =
+      projectToDelete.value.type === 'other' ? 'other_projects' : 'social-media_projects'
+    const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
     const updatedProjects = savedProjects.filter((p) => p.id !== projectToDelete.value.id)
-    localStorage.setItem('social-media_projects', JSON.stringify(updatedProjects))
+    localStorage.setItem(storageKey, JSON.stringify(updatedProjects))
   }
 
   showDeleteConfirm.value = false
