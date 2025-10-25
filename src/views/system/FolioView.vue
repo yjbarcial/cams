@@ -8,9 +8,6 @@ import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
 const router = useRouter()
 const route = useRoute()
 
-// Sample folio projects data
-const defaultProjects = []
-
 // Initialize projects with localStorage data
 const projects = ref([])
 
@@ -19,40 +16,19 @@ onMounted(() => {
   loadProjects()
 })
 
-// Add this watch to reload when route changes
+// Watch for route changes to reload projects
 watch(
   () => route.path,
   () => {
-    loadProjects()
+    if (route.path === '/folio') {
+      loadProjects()
+    }
   },
 )
 
 const loadProjects = () => {
   const savedProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
-
-  console.log('📂 Loading folio projects:', {
-    total: savedProjects.length,
-    projects: savedProjects,
-  })
-
-  const folioProjects = savedProjects.filter((p) => p.type === 'folio')
-
-  console.log('✅ Filtered folio projects:', folioProjects.length)
-
-  const allProjects = [...folioProjects, ...defaultProjects]
-
-  // Remove duplicates based on title and section head
-  const uniqueProjects = allProjects.reduce((acc, project) => {
-    const existing = acc.find(
-      (p) => p.title === project.title && p.sectionHead === project.sectionHead,
-    )
-    if (!existing) {
-      acc.push(project)
-    }
-    return acc
-  }, [])
-
-  projects.value = uniqueProjects
+  projects.value = savedProjects.filter((p) => p.type === 'folio')
 }
 
 const searchQuery = ref('')
@@ -64,24 +40,36 @@ const editingProject = ref(null)
 const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
-const currentUser = ref('Current User') // This would come from auth system
 
 const handleView = (projectId) => {
-  console.log(`View folio project ${projectId}`)
-  // Navigate to ProjectView with the project ID
-  router.push(`/project/${projectId}`)
-}
+  const project = projects.value.find((p) => String(p.id) === String(projectId))
 
-const handleAddProject = () => {
-  console.log('Add new folio project')
-  // Handle add project logic here
+  if (!project) {
+    console.error('Project not found')
+    return
+  }
+
+  console.log('Viewing folio project:', project.title, 'Status:', project.status)
+
+  // Route based on status - SECTION HEAD ONLY
+  if (project.status === 'Draft') {
+    router.push(`/project/${projectId}`)
+  } else if (
+    project.status === 'To Section Head' ||
+    project.status === 'Returned by Section Head'
+  ) {
+    router.push(`/section-head/${projectId}`)
+  } else if (project.status === 'Published') {
+    router.push(`/project/${projectId}`)
+  } else {
+    router.push(`/project/${projectId}`)
+  }
 }
 
 const toggleStar = (projectId) => {
   const project = projects.value.find((p) => p.id === projectId)
   if (project) {
     project.isStarred = !project.isStarred
-    // Save to localStorage
     const savedProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
     const updatedProjects = savedProjects.map((p) =>
       p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
@@ -114,7 +102,6 @@ const getCreatedMs = (p) => {
 const filteredProjects = computed(() => {
   let filtered = projects.value
 
-  // Filter by search query
   if (searchQuery.value) {
     filtered = filtered.filter(
       (project) =>
@@ -123,12 +110,10 @@ const filteredProjects = computed(() => {
     )
   }
 
-  // Filter by starred status
   if (showOnlyStarred.value) {
     filtered = filtered.filter((project) => project.isStarred)
   }
 
-  // Sort projects
   const order = sortOrder.value
   filtered = [...filtered].sort((a, b) => {
     if (order === 'A - Z') return a.title.localeCompare(b.title)
@@ -148,21 +133,13 @@ const filteredProjects = computed(() => {
   return filtered
 })
 
-// Permission checking
 const canEditProject = (project) => {
-  // For development/demo purposes, allow editing all projects
-  // In production, this would check against actual user authentication
   return true
 }
 
-// Edit functionality
 const startEdit = (project) => {
-  if (canEditProject(project)) {
-    editingProject.value = { ...project }
-    showEditDialog.value = true
-  } else {
-    alert('Only the section head who created this project can edit it.')
-  }
+  editingProject.value = { ...project }
+  showEditDialog.value = true
 }
 
 const saveEdit = () => {
@@ -173,10 +150,7 @@ const saveEdit = () => {
 
   const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
   if (projectIndex !== -1) {
-    // Update the project
     projects.value[projectIndex] = { ...editingProject.value }
-
-    // Save to localStorage
     const savedProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
     const updatedProjects = savedProjects.map((p) =>
       p.id === editingProject.value.id ? { ...editingProject.value } : p,
@@ -184,7 +158,6 @@ const saveEdit = () => {
     localStorage.setItem('folio_projects', JSON.stringify(updatedProjects))
   }
 
-  // Close the dialog
   editingProject.value = null
   showEditDialog.value = false
 }
@@ -194,22 +167,14 @@ const cancelEdit = () => {
   showEditDialog.value = false
 }
 
-// Delete functionality
 const startDelete = (project) => {
-  if (canEditProject(project)) {
-    projectToDelete.value = project
-    showDeleteConfirm.value = true
-  } else {
-    alert('Only the section head who created this project can delete it.')
-  }
+  projectToDelete.value = project
+  showDeleteConfirm.value = true
 }
 
 const confirmDelete = () => {
   if (projectToDelete.value) {
-    // Remove from projects array
     projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
-
-    // Remove from localStorage
     const savedProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
     const updatedProjects = savedProjects.filter((p) => p.id !== projectToDelete.value.id)
     localStorage.setItem('folio_projects', JSON.stringify(updatedProjects))
@@ -224,31 +189,11 @@ const cancelDelete = () => {
   projectToDelete.value = null
 }
 
-// Delete from edit dialog
 const deleteFromEdit = () => {
   if (editingProject.value) {
     projectToDelete.value = editingProject.value
     showEditDialog.value = false
     showDeleteConfirm.value = true
-  }
-}
-
-// Add approval functionality
-const submitForApproval = (projectId) => {
-  const project = projects.value.find((p) => p.id === projectId)
-  if (project) {
-    // Update project status to indicate it's submitted for approval
-    project.status = 'To Section Head'
-    project.submittedDate = new Date().toISOString()
-    project.submittedBy = currentUser.value
-
-    // Save to localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
-    const updatedProjects = savedProjects.map((p) => (p.id === projectId ? { ...project } : p))
-    localStorage.setItem('folio_projects', JSON.stringify(updatedProjects))
-
-    // Navigate to approval view
-    router.push(`/approval/${projectId}`)
   }
 }
 </script>

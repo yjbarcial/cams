@@ -44,39 +44,31 @@ const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
 
+// UPDATED: Section Head ONLY routing
 const handleView = (projectId) => {
-  // Find the project in the current list
-  const p = projects.value.find((pr) => String(pr.id) === String(projectId))
+  const project = projects.value.find((p) => String(p.id) === String(projectId))
 
-  if (p) {
-    // Map statuses to the role that should view this project
-    const statusRoleMap = {
-      Draft: null, // Regular project view
-      'To Section Head': 'Section Head',
-      'To Technical Editor': 'Editor',
-      'To Editor-in-Chief': 'Editor-in-Chief',
-      'EIC Review': 'Editor-in-Chief',
-      'EIC Approved': 'Editor-in-Chief',
-      'To Chief Adviser': 'Chief Adviser',
-      'To Publish': 'Editor-in-Chief',
-      Published: 'Editor-in-Chief',
-      'Returned by Section Head': null,
-      'Returned by Editor': null,
-      'Returned by EIC': null,
-      'Returned by Chief Adviser': null,
-    }
-
-    const role = statusRoleMap[p.status]
-
-    if (role) {
-      // Open the section head detail view with the appropriate role
-      router.push(`/section-head/${projectId}?role=${encodeURIComponent(role)}`)
-      return
-    }
+  if (!project) {
+    console.error('Project not found')
+    return
   }
 
-  // Fallback: open standard project view for Draft or Returned projects
-  router.push(`/project/${projectId}`)
+  console.log('Viewing project:', project.title, 'Status:', project.status)
+
+  // Route based on status - SECTION HEAD ONLY
+  if (project.status === 'Draft') {
+    router.push(`/project/${projectId}`)
+  } else if (
+    project.status === 'To Section Head' ||
+    project.status === 'Returned by Section Head'
+  ) {
+    router.push(`/section-head/${projectId}`) // Section Head approval ONLY
+  } else if (project.status === 'Published') {
+    router.push(`/project/${projectId}`)
+  } else {
+    // For other statuses (EIC, Chief Adviser, etc.), just view as read-only
+    router.push(`/project/${projectId}`)
+  }
 }
 
 const handleAddProject = () => {

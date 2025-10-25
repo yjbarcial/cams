@@ -7,65 +7,7 @@ import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
 
 const router = useRouter()
 
-// Sample newsletter projects data
-const defaultProjects = [
-  {
-    id: 1,
-    title: 'Weekly Newsletter - Campus Updates',
-    sectionHead: 'Sarah Johnson',
-    dueDate: 'Jan 15, 2025',
-    status: 'To Editor-in-Chief',
-    isStarred: true,
-    type: 'newsletter',
-  },
-  {
-    id: 2,
-    title: 'Monthly Newsletter - Student Spotlight',
-    sectionHead: 'Michael Chen',
-    dueDate: 'Jan 20, 2025',
-    status: 'To Section Head',
-    isStarred: true,
-    type: 'newsletter',
-  },
-  {
-    id: 3,
-    title: 'Special Edition - Graduation Issue',
-    sectionHead: 'Emily Rodriguez',
-    dueDate: 'Jan 25, 2025',
-    status: 'To Publish',
-    isStarred: true,
-    type: 'newsletter',
-  },
-  {
-    id: 4,
-    title: 'Weekly Newsletter - Events & Activities',
-    sectionHead: 'David Kim',
-    dueDate: 'Feb 1, 2025',
-    status: 'To Section Head',
-    isStarred: false,
-    type: 'newsletter',
-  },
-  {
-    id: 5,
-    title: 'Monthly Newsletter - Faculty Features',
-    sectionHead: 'Lisa Wang',
-    dueDate: 'Feb 5, 2025',
-    status: 'To Technical Editor',
-    isStarred: false,
-    type: 'newsletter',
-  },
-  {
-    id: 6,
-    title: 'Weekly Newsletter - Sports & Recreation',
-    sectionHead: 'Alex Thompson',
-    dueDate: 'Feb 10, 2025',
-    status: 'To Publish',
-    isStarred: false,
-    type: 'newsletter',
-  },
-]
-
-// Initialize projects with localStorage data
+// Initialize projects - NO DEFAULT PROJECTS
 const projects = ref([])
 
 // Load projects from localStorage on component mount
@@ -75,15 +17,7 @@ onMounted(() => {
 
 const loadProjects = () => {
   const savedProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
-
-  if (savedProjects.length === 0) {
-    // If no saved projects, use defaults and save them to localStorage
-    projects.value = [...defaultProjects]
-    localStorage.setItem('newsletter_projects', JSON.stringify(defaultProjects))
-  } else {
-    // Only show saved projects - don't merge with defaults anymore
-    projects.value = savedProjects
-  }
+  projects.value = savedProjects
 }
 
 const searchQuery = ref('')
@@ -97,20 +31,35 @@ const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
 
 const handleView = (projectId) => {
-  // Navigate to project view with the project ID
-  router.push(`/project/${projectId}`)
-}
+  const project = projects.value.find((p) => String(p.id) === String(projectId))
 
-const handleAddProject = () => {
-  console.log('Add new newsletter project')
-  // Handle add project logic here
+  if (!project) {
+    console.error('Project not found')
+    return
+  }
+
+  console.log('Viewing project:', project.title, 'Status:', project.status)
+
+  // Route based on status - SECTION HEAD ONLY
+  if (project.status === 'Draft') {
+    router.push(`/project/${projectId}`)
+  } else if (
+    project.status === 'To Section Head' ||
+    project.status === 'Returned by Section Head'
+  ) {
+    router.push(`/section-head/${projectId}`) // Section Head approval ONLY
+  } else if (project.status === 'Published') {
+    router.push(`/project/${projectId}`)
+  } else {
+    // For other statuses (EIC, Chief Adviser, etc.), just view as read-only
+    router.push(`/project/${projectId}`)
+  }
 }
 
 const toggleStar = (projectId) => {
   const project = projects.value.find((p) => p.id === projectId)
   if (project) {
     project.isStarred = !project.isStarred
-    // Save to localStorage
     localStorage.setItem('newsletter_projects', JSON.stringify(projects.value))
   }
 }
@@ -175,19 +124,13 @@ const filteredProjects = computed(() => {
 
 // Permission checking
 const canEditProject = (project) => {
-  // For development/demo purposes, allow editing all projects
-  // In production, this would check against actual user authentication
-  return true
+  return true // Allow editing all projects for now
 }
 
 // Edit functionality
 const startEdit = (project) => {
-  if (canEditProject(project)) {
-    editingProject.value = { ...project }
-    showEditDialog.value = true
-  } else {
-    alert('Only the section head who created this project can edit it.')
-  }
+  editingProject.value = { ...project }
+  showEditDialog.value = true
 }
 
 const saveEdit = () => {
@@ -198,14 +141,10 @@ const saveEdit = () => {
 
   const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
   if (projectIndex !== -1) {
-    // Update the project
     projects.value[projectIndex] = { ...editingProject.value }
-
-    // Save to localStorage
     localStorage.setItem('newsletter_projects', JSON.stringify(projects.value))
   }
 
-  // Close the dialog
   editingProject.value = null
   showEditDialog.value = false
 }
@@ -217,20 +156,13 @@ const cancelEdit = () => {
 
 // Delete functionality
 const startDelete = (project) => {
-  if (canEditProject(project)) {
-    projectToDelete.value = project
-    showDeleteConfirm.value = true
-  } else {
-    alert('Only the section head who created this project can delete it.')
-  }
+  projectToDelete.value = project
+  showDeleteConfirm.value = true
 }
 
 const confirmDelete = () => {
   if (projectToDelete.value) {
-    // Remove from projects array
     projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
-
-    // Save to localStorage
     localStorage.setItem('newsletter_projects', JSON.stringify(projects.value))
   }
 
@@ -255,41 +187,25 @@ const deleteFromEdit = () => {
 // Format date for the date picker
 const formatDateForPicker = (dateString) => {
   if (!dateString) return ''
-
-  // Try to parse the date
   const date = new Date(dateString)
   if (isNaN(date.getTime())) {
-    // If it's not a valid date, try to parse it as a readable format
     const parsedDate = new Date(Date.parse(dateString))
     if (!isNaN(parsedDate.getTime())) {
       return parsedDate.toISOString().split('T')[0]
     }
     return ''
   }
-
   return date.toISOString().split('T')[0]
-}
-
-// Format date for display
-const formatDateForDisplay = (dateString) => {
-  if (!dateString) return ''
-
-  const date = new Date(dateString)
-  if (isNaN(date.getTime())) {
-    return dateString // Return original if can't parse
-  }
-
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
 }
 
 // Update due date handling in edit
 const updateDueDate = (newDate) => {
   if (editingProject.value && newDate) {
-    editingProject.value.dueDate = formatDateForDisplay(newDate)
+    editingProject.value.dueDate = new Date(newDate).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
     editingProject.value.dueDateISO = newDate
   }
 }
