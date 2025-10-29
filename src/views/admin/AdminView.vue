@@ -1,8 +1,9 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import ArchiveHeader from '@/components/layout/ArchiveHeader.vue'
+import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
+import UploadView from '@/views/system/UploadView.vue'
 
 const router = useRouter()
 
@@ -21,12 +22,18 @@ const projects = ref([])
 const loading = ref(true)
 const error = ref(null)
 const search = ref('')
-const statusFilter = ref('all')
 const departmentFilter = ref('all')
-const sortBy = ref('created_at')
 const showAllDialog = ref(false)
 const showAllType = ref('')
 const allRecords = ref([])
+const showAddUserDialog = ref(false)
+const showUploadView = ref(false)
+const newUser = ref({
+  full_name: '',
+  email: '',
+  department: '',
+  role: '',
+})
 
 // Departments for filtering
 const departments = ['News', 'Sports', 'Arts', 'Opinion', 'Features']
@@ -362,35 +369,17 @@ const getRoleFromName = (name) => {
 
 // Computed properties for filtered users
 const filteredUsers = computed(() => {
-  return users.value
-    .filter((user) => {
-      const matchesSearch =
-        !search.value ||
-        user.email.toLowerCase().includes(search.value.toLowerCase()) ||
-        user.full_name?.toLowerCase().includes(search.value.toLowerCase())
+  return users.value.filter((user) => {
+    const matchesSearch =
+      !search.value ||
+      user.email.toLowerCase().includes(search.value.toLowerCase()) ||
+      user.full_name?.toLowerCase().includes(search.value.toLowerCase())
 
-      const matchesStatus =
-        statusFilter.value === 'all' ||
-        (statusFilter.value === 'active' && user.status === 'active') ||
-        (statusFilter.value === 'inactive' && user.status !== 'active')
+    const matchesDepartment =
+      departmentFilter.value === 'all' || user.department === departmentFilter.value
 
-      const matchesDepartment =
-        departmentFilter.value === 'all' || user.department === departmentFilter.value
-
-      return matchesSearch && matchesStatus && matchesDepartment
-    })
-    .sort((a, b) => {
-      if (sortBy.value === 'created_at') {
-        return new Date(b.created_at) - new Date(a.created_at)
-      }
-      if (sortBy.value === 'email') {
-        return a.email.localeCompare(b.email)
-      }
-      if (sortBy.value === 'full_name') {
-        return (a.full_name || '').localeCompare(b.full_name || '')
-      }
-      return 0
-    })
+    return matchesSearch && matchesDepartment
+  })
 })
 
 // Format date helper
@@ -404,26 +393,47 @@ const formatDate = (date) => {
   })
 }
 
-// Update user status
-const updateUserStatus = async (userId, newStatus) => {
-  try {
-    const userIndex = users.value.findIndex((u) => u.id === userId)
-    if (userIndex !== -1) {
-      users.value[userIndex].status = newStatus
-      // Update active users count
-      statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
-    }
-    console.log(`Updated user ${userId} status to ${newStatus}`)
-  } catch (err) {
-    console.error('Error updating user status:', err)
-    error.value = 'Failed to update user status'
+// Add new user
+const addUser = () => {
+  if (!newUser.value.full_name || !newUser.value.email) {
+    alert('Please fill in all required fields')
+    return
   }
+
+  const newId = Math.max(...users.value.map((u) => u.id), 0) + 1
+  users.value.push({
+    id: newId,
+    full_name: newUser.value.full_name,
+    email: newUser.value.email,
+    department: newUser.value.department || departments[0],
+    role: newUser.value.role || 'Writer',
+    status: 'active',
+    created_at: new Date().toISOString(),
+  })
+
+  // Reset form
+  newUser.value = {
+    full_name: '',
+    email: '',
+    department: '',
+    role: '',
+  }
+
+  showAddUserDialog.value = false
+  statistics.value.totalUsers = users.value.length
+  statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
 }
 
-// View user details
-const viewUserDetails = (userId) => {
-  console.log('Viewing user details:', userId)
-  // Implement user details view
+// Remove user
+const removeUser = (userId) => {
+  if (confirm('Are you sure you want to remove this user?')) {
+    const index = users.value.findIndex((u) => u.id === userId)
+    if (index !== -1) {
+      users.value.splice(index, 1)
+      statistics.value.totalUsers = users.value.length
+      statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
+    }
+  }
 }
 
 // Navigation helper
@@ -449,7 +459,7 @@ const fetchAllRecords = async (type) => {
 
 <template>
   <v-app class="admin-page">
-    <ArchiveHeader />
+    <MainHeader />
 
     <v-main class="main-content">
       <v-container class="py-8">
@@ -712,15 +722,14 @@ const fetchAllRecords = async (type) => {
               <v-tabs v-model="activeTab" color="primary">
                 <v-tab value="users">User Management</v-tab>
                 <v-tab value="content">Content Management</v-tab>
-                <v-tab value="settings">System Settings</v-tab>
               </v-tabs>
 
               <v-window v-model="activeTab">
                 <!-- User Management Tab -->
                 <v-window-item value="users">
                   <v-card-text>
-                    <!-- Filters -->
-                    <v-row class="mb-4">
+                    <!-- Filters and Add User Button -->
+                    <v-row class="mb-4" align="center">
                       <v-col cols="12" md="4">
                         <v-text-field
                           v-model="search"
@@ -733,16 +742,6 @@ const fetchAllRecords = async (type) => {
                       </v-col>
                       <v-col cols="12" md="3">
                         <v-select
-                          v-model="statusFilter"
-                          label="Status"
-                          :items="['all', 'active', 'inactive']"
-                          variant="outlined"
-                          density="comfortable"
-                          hide-details
-                        ></v-select>
-                      </v-col>
-                      <v-col cols="12" md="3">
-                        <v-select
                           v-model="departmentFilter"
                           label="Department"
                           :items="['all', ...departments, 'Administration', 'Editorial']"
@@ -751,19 +750,11 @@ const fetchAllRecords = async (type) => {
                           hide-details
                         ></v-select>
                       </v-col>
-                      <v-col cols="12" md="2">
-                        <v-select
-                          v-model="sortBy"
-                          label="Sort by"
-                          :items="[
-                            { title: 'Date', value: 'created_at' },
-                            { title: 'Email', value: 'email' },
-                            { title: 'Name', value: 'full_name' },
-                          ]"
-                          variant="outlined"
-                          density="comfortable"
-                          hide-details
-                        ></v-select>
+                      <v-col cols="12" md="3" class="d-flex justify-end">
+                        <v-btn color="primary" @click="showAddUserDialog = true">
+                          <v-icon left>mdi-plus</v-icon>
+                          Add User
+                        </v-btn>
                       </v-col>
                     </v-row>
 
@@ -775,7 +766,6 @@ const fetchAllRecords = async (type) => {
                           <th>Email</th>
                           <th>Department</th>
                           <th>Role</th>
-                          <th>Status</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -786,63 +776,85 @@ const fetchAllRecords = async (type) => {
                           <td>{{ user.department || 'N/A' }}</td>
                           <td>{{ user.role || 'N/A' }}</td>
                           <td>
-                            <v-chip
-                              :color="user.status === 'active' ? 'success' : 'error'"
-                              @click="
-                                updateUserStatus(
-                                  user.id,
-                                  user.status === 'active' ? 'inactive' : 'active',
-                                )
-                              "
-                            >
-                              {{ user.status || 'active' }}
-                            </v-chip>
-                          </td>
-                          <td>
                             <v-btn
                               icon
                               variant="text"
-                              color="primary"
-                              @click="viewUserDetails(user.id)"
+                              color="error"
+                              size="small"
+                              @click="removeUser(user.id)"
+                              title="Remove User"
                             >
-                              <v-icon>mdi-eye</v-icon>
+                              <v-icon>mdi-delete</v-icon>
                             </v-btn>
                           </td>
                         </tr>
                       </tbody>
                     </v-table>
+
+                    <!-- Add User Dialog -->
+                    <v-dialog v-model="showAddUserDialog" max-width="600">
+                      <v-card>
+                        <v-card-title class="text-h6">
+                          <v-icon class="mr-2">mdi-account-plus</v-icon>
+                          Add New User
+                        </v-card-title>
+                        <v-card-text>
+                          <v-text-field
+                            v-model="newUser.full_name"
+                            label="Full Name"
+                            variant="outlined"
+                            class="mb-3"
+                            required
+                          ></v-text-field>
+                          <v-text-field
+                            v-model="newUser.email"
+                            label="Email"
+                            type="email"
+                            variant="outlined"
+                            class="mb-3"
+                            required
+                          ></v-text-field>
+                          <v-select
+                            v-model="newUser.department"
+                            label="Department"
+                            :items="[...departments, 'Administration', 'Editorial']"
+                            variant="outlined"
+                            class="mb-3"
+                          ></v-select>
+                          <v-text-field
+                            v-model="newUser.role"
+                            label="Role"
+                            variant="outlined"
+                            placeholder="e.g., Writer, Editor, Section Head"
+                          ></v-text-field>
+                        </v-card-text>
+                        <v-card-actions>
+                          <v-spacer></v-spacer>
+                          <v-btn variant="text" @click="showAddUserDialog = false">Cancel</v-btn>
+                          <v-btn color="primary" @click="addUser">Add User</v-btn>
+                        </v-card-actions>
+                      </v-card>
+                    </v-dialog>
                   </v-card-text>
                 </v-window-item>
 
                 <!-- Content Management Tab -->
                 <v-window-item value="content">
                   <v-card-text>
-                    <div class="text-center py-8">
-                      <v-icon size="64" color="grey">mdi-folder-multiple</v-icon>
-                      <h3 class="text-h6 mt-4">Content Management</h3>
-                      <p class="text-grey">
-                        Manage newsletters, folios, and other content submissions
-                      </p>
-                      <v-btn color="primary" class="mt-4">
-                        <v-icon left>mdi-plus</v-icon>
-                        Add Content
-                      </v-btn>
+                    <div v-if="!showUploadView" class="content-management">
+                      <div class="text-center py-8">
+                        <v-icon size="64" color="grey">mdi-folder-multiple</v-icon>
+                        <h3 class="text-h6 mt-4">Content Management</h3>
+                        <p class="text-grey">
+                          Manage newsletters, folios, and other content submissions
+                        </p>
+                        <v-btn color="primary" class="mt-4" @click="showUploadView = true">
+                          <v-icon left>mdi-cloud-upload</v-icon>
+                          Upload Content
+                        </v-btn>
+                      </div>
                     </div>
-                  </v-card-text>
-                </v-window-item>
-
-                <!-- System Settings Tab -->
-                <v-window-item value="settings">
-                  <v-card-text>
-                    <div class="text-center py-8">
-                      <v-icon size="64" color="grey">mdi-cog</v-icon>
-                      <h3 class="text-h6 mt-4">System Settings</h3>
-                      <p class="text-grey">Configure system settings and preferences</p>
-                      <v-btn color="primary" class="mt-4">
-                        <v-icon left>mdi-cog</v-icon>
-                        Open Settings
-                      </v-btn>
-                    </div>
+                    <UploadView v-else @close="showUploadView = false" />
                   </v-card-text>
                 </v-window-item>
               </v-window>
