@@ -1,10 +1,24 @@
 <script setup>
+import { computed } from 'vue'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const showAccountMenu = ref(false)
 const logoutLoading = ref(false)
+
+// Admin email list - must match router adminEmails
+const adminEmails = [
+  'yssahjulianah.barcial@carsu.edu.ph',
+  'lovellhudson.clavel@carsu.edu.ph',
+  'altheaguila.gorres@carsu.edu.ph',
+]
+
+// Check if current user is an admin
+const isAdmin = computed(() => {
+  const userEmail = localStorage.getItem('userEmail')
+  return userEmail && adminEmails.includes(userEmail)
+})
 
 const handleSettings = () => {
   console.log('Settings clicked')
@@ -60,6 +74,17 @@ const goToDashboard = () => {
         title="Notifications"
       >
         <span class="mdi mdi-bell" aria-hidden="true"></span>
+      </RouterLink>
+
+      <!-- Admin icon - only visible for admins -->
+      <RouterLink
+        v-if="isAdmin"
+        to="/admin"
+        class="icon-button"
+        aria-label="Admin Panel"
+        title="Admin Panel"
+      >
+        <span class="mdi mdi-shield-outline" aria-hidden="true"></span>
       </RouterLink>
 
       <!-- Account dropdown menu -->

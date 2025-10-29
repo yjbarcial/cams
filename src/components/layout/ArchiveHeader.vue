@@ -3,23 +3,12 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-// Admin access control - temporarily allow access for testing
-const isAdmin = () => {
-  // Temporarily return true to show admin view
-  // TODO: Add proper authentication later
-  return true
-}
-
-const goToAdmin = () => {
-  if (isAdmin()) {
-    router.push('/admin')
-  } else {
-    alert('Access denied. Admin privileges required.')
-  }
-}
-
 const goToPublications = () => {
   router.push('/archive')
+}
+
+const goToLogin = () => {
+  router.push('/login')
 }
 </script>
 
@@ -38,11 +27,6 @@ const goToPublications = () => {
         title="Publications"
       >
         <span class="mdi mdi-bookshelf" aria-hidden="true"></span>
-      </button>
-
-      <!-- Admin icon - temporarily always visible -->
-      <button @click="goToAdmin" class="icon-button" aria-label="Admin Panel" title="Admin Panel">
-        <span class="mdi mdi-shield-outline" aria-hidden="true"></span>
       </button>
 
       <RouterLink to="/login" class="icon-button" aria-label="Login" title="Login">

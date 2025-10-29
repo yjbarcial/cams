@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ArchiveView from '@/views/system/ArchiveView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
-import ContributorDashboard from '@/views/system/ContributorDashboard.vue'
+import DashboardView from '@/views/system/DashboardView.vue'
 import NotificationsView from '@/views/system/NotificationsView.vue'
 import AddProjectView from '@/views/system/AddProjectView.vue'
 import MagazineView from '@/views/system/MagazineView.vue'
@@ -15,6 +15,40 @@ import AdminView from '@/views/admin/AdminView.vue'
 import SectionHeadView from '@/views/system/SectionHeadView.vue' // RENAMED
 import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
 import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
+
+// Admin email list - users with admin privileges
+const adminEmails = [
+  'yssahjulianah.barcial@carsu.edu.ph',
+  'lovellhudson.clavel@carsu.edu.ph',
+  'altheaguila.gorres@carsu.edu.ph',
+]
+
+// Authentication guard
+const requireAuth = (to, from, next) => {
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+  if (!isLoggedIn) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+  } else {
+    next()
+  }
+}
+
+// Admin guard - requires authentication and admin privileges
+const requireAdmin = (to, from, next) => {
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+  if (!isLoggedIn) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  const userEmail = localStorage.getItem('userEmail')
+  if (!userEmail || !adminEmails.includes(userEmail)) {
+    // Not an admin, redirect to dashboard
+    next({ name: 'dashboard' })
+  } else {
+    next()
+  }
+}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -32,7 +66,8 @@ const router = createRouter({
     {
       path: '/dashboard',
       name: 'dashboard',
-      component: ContributorDashboard,
+      component: DashboardView,
+      beforeEnter: requireAuth,
     },
     {
       path: '/archive',
@@ -73,6 +108,7 @@ const router = createRouter({
       path: '/admin',
       name: 'admin',
       component: AdminView,
+      beforeEnter: requireAdmin,
     },
     {
       path: '/section-head',
