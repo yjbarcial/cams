@@ -169,8 +169,9 @@ const loadAllProjects = () => {
       acc.push({
         ...project,
         user: project.user || {
-          full_name: project.sectionHead,
-          email: `${project.sectionHead?.toLowerCase().replace(/\s+/g, '.')}@campus.edu`,
+          full_name: project.sectionHead || '',
+          // Ensure we don't call toLowerCase on undefined; fall back to empty string
+          email: `${(project.sectionHead || '').toLowerCase().replace(/\s+/g, '.')}@campus.edu`,
         },
       })
     }
@@ -346,8 +347,10 @@ const getDepartmentFromEmail = (email) => {
     features: 'Features',
   }
 
+  const e = (email || '').toLowerCase()
+
   for (const [key, dept] of Object.entries(domains)) {
-    if (email.toLowerCase().includes(key)) {
+    if (e.includes(key)) {
       return dept
     }
   }
@@ -358,10 +361,11 @@ const getDepartmentFromEmail = (email) => {
 
 const getRoleFromName = (name) => {
   const roles = ['Section Head', 'Writer', 'Technical Editor', 'Assistant Editor']
-  if (name.toLowerCase().includes('mark') || name.toLowerCase().includes('sarah')) {
+  const n = (name || '').toLowerCase()
+  if (n.includes('mark') || n.includes('sarah')) {
     return 'Section Head'
   }
-  if (name.toLowerCase().includes('john') || name.toLowerCase().includes('jane')) {
+  if (n.includes('john') || n.includes('jane')) {
     return 'Editor-in-Chief'
   }
   return roles[Math.floor(Math.random() * roles.length)]
@@ -369,11 +373,12 @@ const getRoleFromName = (name) => {
 
 // Computed properties for filtered users
 const filteredUsers = computed(() => {
+  const key = (search.value || '').toLowerCase()
   return users.value.filter((user) => {
-    const matchesSearch =
-      !search.value ||
-      user.email.toLowerCase().includes(search.value.toLowerCase()) ||
-      user.full_name?.toLowerCase().includes(search.value.toLowerCase())
+    const email = (user?.email || '').toLowerCase()
+    const name = (user?.full_name || '').toLowerCase()
+
+    const matchesSearch = !key || email.includes(key) || name.includes(key)
 
     const matchesDepartment =
       departmentFilter.value === 'all' || user.department === departmentFilter.value
