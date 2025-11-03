@@ -12,6 +12,7 @@ import {
   deleteProjectComment,
   toggleCommentApproval,
 } from '@/services/commentsService.js'
+import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -159,7 +160,7 @@ const getBackButtonText = computed(() => {
   return `Back to ${typeNames[projectType.value] || 'Magazine'} Projects`
 })
 
-const saveContentChanges = () => {
+const saveContentChanges = async () => {
   try {
     const storageKey = `${projectType.value}_projects`
     const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
@@ -204,7 +205,7 @@ const startApproval = (action) => {
   showApprovalDialog.value = true
 }
 
-const submitApproval = () => {
+const submitApproval = async () => {
   if (!approvalAction.value) return
 
   const action = approvalAction.value
@@ -212,7 +213,7 @@ const submitApproval = () => {
 
   try {
     if (isEditorEditable.value) {
-      saveContentChanges()
+      await saveContentChanges()
     }
 
     const storageKey = `${projectType.value}_projects`
@@ -232,6 +233,26 @@ const submitApproval = () => {
 
       localStorage.setItem(storageKey, JSON.stringify(projects))
       project.value.status = newStatus
+
+      // Also save to Supabase
+      try {
+        await createProjectVersionSupabase(
+          projectType.value,
+          null, // Let Supabase assign its own ID
+          {
+            ...projects[projectIndex],
+            status: newStatus,
+            content: editorContent.value || '',
+          },
+          action === 'approve' ? 'Approved by Section Head' : 'Returned by Section Head for edits',
+          currentUser.value,
+          action === 'approve' ? 'approved' : 'returned',
+        )
+        console.log('Project saved to Supabase successfully')
+      } catch (err) {
+        console.warn('Failed to save project to Supabase:', err)
+        // Don't block the UI flow if Supabase save fails
+      }
 
       // Save to history
       const historyKey = `approval_history_${projectId}`

@@ -37,25 +37,37 @@ export const createProjectVersion = async (
 
     // If project doesn't exist, create it
     if (!project) {
+      // Only set the explicit id when projectId is a valid positive integer.
+      // The projects.id column is BIGSERIAL; inserting a non-numeric id will cause errors.
+      const parsedId = Number(projectId)
+      const shouldIncludeId = Number.isInteger(parsedId) && parsedId > 0
+
+      const insertPayload = {
+        title: projectData.title,
+        description: projectData.description,
+        content: projectData.content || '',
+        status: projectData.status,
+        section_head: projectData.sectionHead,
+        writers: projectData.writers,
+        artists: projectData.artists,
+        due_date: projectData.dueDateISO
+          ? new Date(projectData.dueDateISO).toISOString().split('T')[0]
+          : null,
+        due_date_iso: projectData.dueDateISO,
+        media_uploaded: projectData.mediaUploaded,
+        project_type: projectType,
+        is_starred: projectData.isStarred || false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      if (shouldIncludeId) {
+        insertPayload.id = parsedId
+      }
+
       const { data: newProject, error: createError } = await supabase
         .from('projects')
-        .insert({
-          id: projectId,
-          title: projectData.title,
-          description: projectData.description,
-          content: projectData.content || '',
-          status: projectData.status,
-          section_head: projectData.sectionHead,
-          writers: projectData.writers,
-          artists: projectData.artists,
-          due_date: projectData.dueDateISO ? new Date(projectData.dueDateISO).toISOString().split('T')[0] : null,
-          due_date_iso: projectData.dueDateISO,
-          media_uploaded: projectData.mediaUploaded,
-          project_type: projectType,
-          is_starred: projectData.isStarred || false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        .insert(insertPayload)
         .select()
         .single()
 
@@ -73,10 +85,7 @@ export const createProjectVersion = async (
     const nextVersionNumber = versions?.length > 0 ? versions[0].version_number + 1 : 1
 
     // Mark all previous versions as inactive
-    await supabase
-      .from('project_history')
-      .update({ is_active: false })
-      .eq('project_id', projectId)
+    await supabase.from('project_history').update({ is_active: false }).eq('project_id', projectId)
 
     // Create new version
     const versionData = {
@@ -109,10 +118,12 @@ export const createProjectVersion = async (
     const { data: version, error } = await supabase
       .from('project_history')
       .insert(versionData)
-      .select(`
+      .select(
+        `
         *,
         project_history_comments (*)
-      `)
+      `,
+      )
       .single()
 
     if (error) throw error
@@ -135,10 +146,12 @@ export const getProjectHistory = async (projectType, projectId) => {
   try {
     const { data, error } = await supabase
       .from('project_history')
-      .select(`
+      .select(
+        `
         *,
         project_history_comments (*)
-      `)
+      `,
+      )
       .eq('project_id', projectId)
       .eq('is_deleted', false)
       .order('created_at', { ascending: false })
@@ -173,10 +186,12 @@ export const getProjectVersion = async (projectType, projectId, versionId) => {
   try {
     const { data, error } = await supabase
       .from('project_history')
-      .select(`
+      .select(
+        `
         *,
         project_history_comments (*)
-      `)
+      `,
+      )
       .eq('id', versionId)
       .eq('project_id', projectId)
       .single()
@@ -219,7 +234,9 @@ export const restoreProjectVersion = async (projectType, projectId, versionId) =
         section_head: version.data.sectionHead,
         writers: version.data.writers,
         artists: version.data.artists,
-        due_date: version.data.dueDateISO ? new Date(version.data.dueDateISO).toISOString().split('T')[0] : null,
+        due_date: version.data.dueDateISO
+          ? new Date(version.data.dueDateISO).toISOString().split('T')[0]
+          : null,
         due_date_iso: version.data.dueDateISO,
         media_uploaded: version.data.mediaUploaded,
         updated_at: new Date().toISOString(),
@@ -321,10 +338,12 @@ export const getProjectStatistics = async (projectType, projectId) => {
   try {
     const { data: versions, error } = await supabase
       .from('project_history')
-      .select(`
+      .select(
+        `
         *,
         project_history_comments (*)
-      `)
+      `,
+      )
       .eq('project_id', projectId)
       .eq('is_deleted', false)
 
@@ -341,7 +360,10 @@ export const getProjectStatistics = async (projectType, projectId) => {
       }
     }
 
-    const totalComments = versions.reduce((sum, v) => sum + (v.project_history_comments?.length || 0), 0)
+    const totalComments = versions.reduce(
+      (sum, v) => sum + (v.project_history_comments?.length || 0),
+      0,
+    )
     const totalWords = versions.reduce((sum, v) => sum + (v.metadata?.wordCount || 0), 0)
     const versionTypes = versions.reduce((acc, v) => {
       acc[v.version_type] = (acc[v.version_type] || 0) + 1
@@ -429,7 +451,7 @@ const transformVersionFromDB = (dbVersion) => {
       mediaUploaded: dbVersion.project_data?.mediaUploaded || '',
       metadata: dbVersion.metadata || {},
     },
-    comments: (dbVersion.project_history_comments || []).map(comment => ({
+    comments: (dbVersion.project_history_comments || []).map((comment) => ({
       id: comment.id,
       author: comment.author,
       content: comment.content,
