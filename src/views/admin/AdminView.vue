@@ -1,9 +1,11 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { supabase } from '@/utils/supabase.js'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import UploadView from '@/views/system/UploadView.vue'
+import clearClientData from '@/utils/clearClientData'
 
 const router = useRouter()
 
@@ -28,6 +30,10 @@ const showAllType = ref('')
 const allRecords = ref([])
 const showAddUserDialog = ref(false)
 const showUploadView = ref(false)
+const showClearDialog = ref(false)
+const clearTypedConfirm = ref('')
+const clearInProgress = ref(false)
+const clearMessage = ref('')
 const newUser = ref({
   full_name: '',
   email: '',
@@ -260,7 +266,53 @@ onMounted(async () => {
 
     // Load all projects from localStorage and defaults
     const allProjects = loadAllProjects()
-    projects.value = allProjects
+
+    // Fetch projects from Supabase and merge them in (so test projects saved to Supabase show up)
+    const fetchProjectsFromSupabase = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('*')
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error('Error fetching projects from Supabase', error)
+          return []
+        }
+
+        return (data || []).map((p) => ({
+          id: p.id,
+          title: p.title,
+          sectionHead: p.section_head,
+          dueDate: p.due_date || '',
+          status: p.status || '',
+          type: p.project_type
+            ? String(p.project_type).charAt(0).toUpperCase() + String(p.project_type).slice(1)
+            : 'Magazine',
+          created_at: p.created_at,
+          user: {
+            full_name: p.section_head || '',
+            email: p.section_head
+              ? `${(p.section_head || '').toLowerCase().replace(/\s+/g, '.')}@campus.edu`
+              : '',
+          },
+          _raw: p,
+        }))
+      } catch (err) {
+        console.error('Error fetching projects from Supabase', err)
+        return []
+      }
+    }
+
+    const supaProjects = await fetchProjectsFromSupabase()
+
+    // Merge Supabase projects into local projects, avoiding duplicates by id or title
+    supaProjects.forEach((sp) => {
+      const exists = allProjects.find((p) => String(p.id) === String(sp.id) || p.title === sp.title)
+      if (!exists) allProjects.push(sp)
+    })
+
+    projects.value = allProjects.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
     // Load submissions
     const allSubmissions = loadSubmissions()
@@ -460,6 +512,25 @@ const fetchAllRecords = async (type) => {
     console.error('Error fetching all records:', err)
   }
 }
+
+// Clear client-side project data (localStorage) and reload UI
+const performClearClientData = async () => {
+  try {
+    if (clearTypedConfirm.value !== 'YES') return
+    clearInProgress.value = true
+    // Use helper to remove project-related localStorage entries
+    clearClientData({ confirm: true })
+    clearMessage.value = 'Local project data cleared. Reloading...'
+    // small delay so user can see message
+    setTimeout(() => {
+      window.location.reload()
+    }, 900)
+  } catch (err) {
+    console.error('Error clearing client data:', err)
+    clearMessage.value = `Error: ${err.message || String(err)}`
+    clearInProgress.value = false
+  }
+}
 </script>
 
 <template>
@@ -482,9 +553,19 @@ const fetchAllRecords = async (type) => {
         <v-row>
           <v-col cols="12">
             <v-card class="mb-6">
-              <v-card-title class="text-h5 font-weight-bold">
-                <v-icon class="mr-2" color="primary">mdi-view-dashboard</v-icon>
-                CAMS Admin Dashboard
+              <v-card-title
+                class="text-h5 font-weight-bold d-flex justify-space-between align-center"
+              >
+                <div class="d-flex align-center">
+                  <v-icon class="mr-2" color="primary">mdi-view-dashboard</v-icon>
+                  CAMS Admin Dashboard
+                </div>
+                <div>
+                  <v-btn color="error" variant="outlined" small @click="showClearDialog = true">
+                    <v-icon left>mdi-delete-alert</v-icon>
+                    Clear Local Data
+                  </v-btn>
+                </div>
               </v-card-title>
               <v-card-text>
                 <v-row>
@@ -651,6 +732,139 @@ const fetchAllRecords = async (type) => {
                     </v-card>
                   </v-col>
                 </v-row>
+
+                <!-- Clear Local Data Confirmation Dialog -->
+                <v-dialog v-model="showClearDialog" max-width="600">
+                  <v-card>
+                    <v-card-title class="text-h6 d-flex justify-space-between align-center">
+                      <div>
+                        <v-icon class="mr-2" color="error">mdi-delete-alert</v-icon>
+                        Confirm Clear Local Data
+                      </div>
+                      <v-btn icon @click="showClearDialog = false">
+                        <v-icon>mdi-close</v-icon>
+                      </v-btn>
+                    </v-card-title>
+                    <v-card-text>
+                      <p>
+                        This will remove project lists and project history stored in your browser's
+                        localStorage for this app. It will not affect Supabase data. This action is
+                        irreversible for the client copy.
+                      </p>
+                      <p class="mb-4">
+                        To confirm, type <strong>YES</strong> in the box below and press Confirm.
+                      </p>
+
+                      <v-text-field
+                        v-model="clearTypedConfirm"
+                        label="Type YES to confirm"
+                        variant="outlined"
+                      ></v-text-field>
+
+                      <div v-if="clearMessage" class="mt-3">
+                        <v-alert type="info">{{ clearMessage }}</v-alert>
+                      </div>
+                    </v-card-text>
+                    <v-card-actions>
+                      <v-spacer />
+                      <v-btn variant="text" @click="showClearDialog = false">Cancel</v-btn>
+                      <v-btn
+                        color="error"
+                        :disabled="clearTypedConfirm !== 'YES' || clearInProgress"
+                        @click="performClearClientData"
+                      >
+                        <v-icon left>mdi-delete</v-icon>
+                        <span v-if="!clearInProgress">Confirm</span>
+                        <span v-else>Clearing…</span>
+                      </v-btn>
+                    </v-card-actions>
+                  </v-card>
+                </v-dialog>
+
+                <!-- Reset Supabase DB Dialog -->
+                <v-dialog v-model="showResetDialog" max-width="700">
+                  <v-card>
+                    <v-card-title class="text-h6 d-flex justify-space-between align-center">
+                      <div>
+                        <v-icon class="mr-2" color="error">mdi-database-remove</v-icon>
+                        Reset Supabase DB (Protected)
+                      </div>
+                      <v-btn icon @click="showResetDialog = false">
+                        <v-icon>mdi-close</v-icon>
+                      </v-btn>
+                    </v-card-title>
+                    <v-card-text>
+                      <p>
+                        This action will permanently delete project data in Supabase (projects,
+                        project_history, project_history_comments). This UI calls a local reset
+                        server you must run with the service role key. See RESET_DATA.md for setup.
+                      </p>
+
+                      <v-text-field
+                        v-model="resetServerUrl"
+                        label="Reset server URL"
+                        variant="outlined"
+                        class="mb-3"
+                      ></v-text-field>
+
+                      <v-text-field
+                        v-model="resetSecret"
+                        label="Reset secret"
+                        variant="outlined"
+                        class="mb-3"
+                        type="password"
+                      ></v-text-field>
+
+                      <v-row>
+                        <v-col cols="12" md="6">
+                          <v-btn
+                            color="primary"
+                            @click.prevent="performResetServer({ dryRun: true })"
+                            :disabled="resetInProgress"
+                          >
+                            Dry run (show counts)
+                          </v-btn>
+                        </v-col>
+                        <v-col cols="12" md="6">
+                          <v-text-field
+                            v-model="resetTypedConfirm"
+                            label="Type DELETE DB to confirm"
+                            variant="outlined"
+                          ></v-text-field>
+                        </v-col>
+                      </v-row>
+
+                      <div v-if="resetResult" class="mt-3">
+                        <v-card class="pa-3">
+                          <pre style="white-space: pre-wrap">{{
+                            JSON.stringify(resetResult, null, 2)
+                          }}</pre>
+                        </v-card>
+                      </div>
+                    </v-card-text>
+                    <v-card-actions>
+                      <v-spacer />
+                      <v-btn variant="text" @click="showResetDialog = false">Cancel</v-btn>
+                      <v-btn
+                        color="error"
+                        :disabled="resetTypedConfirm !== 'DELETE DB' || resetInProgress"
+                        @click="performResetServer({ dryRun: false })"
+                      >
+                        <v-icon left>mdi-database-remove</v-icon>
+                        <span v-if="!resetInProgress">Delete DB</span>
+                        <span v-else>Working…</span>
+                      </v-btn>
+                    </v-card-actions>
+                  </v-card>
+                </v-dialog>
+
+                <!-- Snackbar for feedback -->
+                <v-snackbar v-model="snackbar" :color="snackbarColor" timeout="6000">
+                  {{ snackbarMessage }}
+                  <template #actions>
+                    <v-btn text @click="snackbar = false">Close</v-btn>
+                  </template>
+                </v-snackbar>
 
                 <!-- View All Dialog -->
                 <v-dialog v-model="showAllDialog" max-width="1200">
