@@ -1,3 +1,5 @@
+import { createProjectVersion as createProjectVersionRemote } from '@/services/supabaseProjectHistory.js'
+
 /**
  * Local Project History Service
  * Handles version control, history tracking, and project snapshots using localStorage
@@ -72,6 +74,26 @@ export const createProjectVersion = (
     localStorage.setItem(historyKey, JSON.stringify(trimmedHistory))
 
     console.log('Version created successfully:', version)
+
+    // Fire-and-forget sync to Supabase project history so UI-created projects also persist server-side.
+    // Don't block the local save; log any sync errors.
+    ;(async () => {
+      try {
+        // Pass null as projectId so Supabase assigns its own serial id (avoid collisions with local timestamps)
+        await createProjectVersionRemote(
+          projectType,
+          null,
+          projectData,
+          changeDescription,
+          author,
+          versionType,
+        )
+        console.log('Supabase sync: project version saved to Supabase for project', projectId)
+      } catch (err) {
+        console.warn('Supabase sync failed for project', projectId, err)
+      }
+    })()
+
     return version
   } catch (error) {
     console.error('Error creating project version:', error)
