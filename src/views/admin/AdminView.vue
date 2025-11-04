@@ -46,122 +46,15 @@ const departments = ['News', 'Sports', 'Arts', 'Opinion', 'Features']
 
 const activeTab = ref('users')
 
-// Function to load all projects from localStorage
+// ⭐ CLEANED: Function to load only real projects from localStorage and Supabase
 const loadAllProjects = () => {
   const magazineProjects = JSON.parse(localStorage.getItem('magazine_projects') || '[]')
   const folioProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
   const newsletterProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
   const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
 
-  // Default projects from each view
-  const defaultMagazineProjects = [
-    {
-      id: 1,
-      title: 'Hope Magazine - The Gold Panicles 2020',
-      sectionHead: 'Mark Dela Cruz',
-      dueDate: 'Sep 7, 2020',
-      status: 'To Editor-in-Chief',
-      type: 'Magazine',
-      created_at: new Date('2020-09-01').toISOString(),
-      user: { full_name: 'Mark Dela Cruz', email: 'mark.delacruz@campus.edu' },
-    },
-    {
-      id: 2,
-      title: 'Hope Magazine - The Gold Panicles 2020',
-      sectionHead: 'Rey Dela Cruz',
-      dueDate: 'Sep 7, 2020',
-      status: 'To Section Head',
-      type: 'Magazine',
-      created_at: new Date('2020-09-01').toISOString(),
-      user: { full_name: 'Rey Dela Cruz', email: 'rey.delacruz@campus.edu' },
-    },
-    {
-      id: 3,
-      title: 'Hope Magazine - The Gold Panicles 2020',
-      sectionHead: 'Ella Domingo',
-      dueDate: 'Sep 7, 2020',
-      status: 'To Publish',
-      type: 'Magazine',
-      created_at: new Date('2020-09-01').toISOString(),
-      user: { full_name: 'Ella Domingo', email: 'ella.domingo@campus.edu' },
-    },
-  ]
-
-  const defaultFolioProjects = [
-    {
-      id: 11,
-      title: 'Laom Folio - Yaon 2021',
-      sectionHead: 'John Santos',
-      dueDate: 'Oct 10, 2021',
-      status: 'To Section Head',
-      type: 'Folio',
-      created_at: new Date('2021-10-01').toISOString(),
-      user: { full_name: 'John Santos', email: 'john.santos@campus.edu' },
-    },
-    {
-      id: 12,
-      title: 'Laom Folio - Yaon 2021',
-      sectionHead: 'James Rivera',
-      dueDate: 'Oct 10, 2021',
-      status: 'To Technical Editor',
-      type: 'Folio',
-      created_at: new Date('2021-10-01').toISOString(),
-      user: { full_name: 'James Rivera', email: 'james.rivera@campus.edu' },
-    },
-  ]
-
-  const defaultNewsletterProjects = [
-    {
-      id: 21,
-      title: 'Weekly Newsletter - Campus Updates',
-      sectionHead: 'Sarah Johnson',
-      dueDate: 'Jan 15, 2025',
-      status: 'To Editor-in-Chief',
-      type: 'Newsletter',
-      created_at: new Date('2025-01-10').toISOString(),
-      user: { full_name: 'Sarah Johnson', email: 'sarah.johnson@campus.edu' },
-    },
-    {
-      id: 22,
-      title: 'Monthly Newsletter - Student Spotlight',
-      sectionHead: 'Michael Chen',
-      dueDate: 'Jan 20, 2025',
-      status: 'To Section Head',
-      type: 'Newsletter',
-      created_at: new Date('2025-01-10').toISOString(),
-      user: { full_name: 'Michael Chen', email: 'michael.chen@campus.edu' },
-    },
-  ]
-
-  const defaultOtherProjects = [
-    {
-      id: 31,
-      title: 'Instagram Post - Campus Event Promotion',
-      sectionHead: 'Jessica Park',
-      dueDate: 'Jan 18, 2025',
-      status: 'To Editor-in-Chief',
-      type: 'Social Media',
-      created_at: new Date('2025-01-15').toISOString(),
-      user: { full_name: 'Jessica Park', email: 'jessica.park@campus.edu' },
-    },
-    {
-      id: 32,
-      title: 'Facebook Post - Student Achievement',
-      sectionHead: "Ryan O'Connor",
-      dueDate: 'Jan 22, 2025',
-      status: 'To Section Head',
-      type: 'Social Media',
-      created_at: new Date('2025-01-15').toISOString(),
-      user: { full_name: "Ryan O'Connor", email: 'ryan.oconnor@campus.edu' },
-    },
-  ]
-
-  // Combine all projects
+  // ✅ NO DEFAULT PROJECTS - Only user-created projects
   const allProjects = [
-    ...defaultMagazineProjects,
-    ...defaultFolioProjects,
-    ...defaultNewsletterProjects,
-    ...defaultOtherProjects,
     ...magazineProjects.map((p) => ({ ...p, type: 'Magazine' })),
     ...folioProjects.map((p) => ({ ...p, type: 'Folio' })),
     ...newsletterProjects.map((p) => ({ ...p, type: 'Newsletter' })),
@@ -176,7 +69,6 @@ const loadAllProjects = () => {
         ...project,
         user: project.user || {
           full_name: project.sectionHead || '',
-          // Ensure we don't call toLowerCase on undefined; fall back to empty string
           email: `${(project.sectionHead || '').toLowerCase().replace(/\s+/g, '.')}@campus.edu`,
         },
       })
@@ -187,75 +79,44 @@ const loadAllProjects = () => {
   return uniqueProjects.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 }
 
-// Function to load submissions data
+// ⭐ CLEANED: Function to load only real submissions (empty for now)
 const loadSubmissions = () => {
-  // Mock submissions - expanded for demo
-  return [
-    {
-      id: 1,
-      title: 'Breaking News - Campus Event',
-      type: 'News Article',
-      department: 'News',
-      created_at: new Date().toISOString(),
-      user: { full_name: 'John Doe', email: 'john.doe@campus.edu' },
-    },
-    {
-      id: 2,
-      title: 'Basketball Game Highlights',
-      type: 'Sports Report',
-      department: 'Sports',
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-      user: { full_name: 'Jane Smith', email: 'jane.smith@campus.edu' },
-    },
-    {
-      id: 3,
-      title: 'Gallery Opening Review',
-      type: 'Arts Review',
-      department: 'Arts',
-      created_at: new Date(Date.now() - 172800000).toISOString(),
-      user: { full_name: 'Mike Johnson', email: 'mike.johnson@campus.edu' },
-    },
-    {
-      id: 4,
-      title: 'Student Opinion Survey Results',
-      type: 'Opinion Piece',
-      department: 'Opinion',
-      created_at: new Date(Date.now() - 259200000).toISOString(),
-      user: { full_name: 'Sarah Wilson', email: 'sarah.wilson@campus.edu' },
-    },
-    {
-      id: 5,
-      title: 'Campus Life Feature Story',
-      type: 'Feature Article',
-      department: 'Features',
-      created_at: new Date(Date.now() - 345600000).toISOString(),
-      user: { full_name: 'David Brown', email: 'david.brown@campus.edu' },
-    },
-    {
-      id: 6,
-      title: 'Football Team Victory Report',
-      type: 'Sports Report',
-      department: 'Sports',
-      created_at: new Date(Date.now() - 432000000).toISOString(),
-      user: { full_name: 'Carlos Rodriguez', email: 'carlos.rodriguez@campus.edu' },
-    },
-    {
-      id: 7,
-      title: 'Art Exhibition Opening',
-      type: 'Arts Review',
-      department: 'Arts',
-      created_at: new Date(Date.now() - 518400000).toISOString(),
-      user: { full_name: 'Emily Chen', email: 'emily.chen@campus.edu' },
-    },
-    {
-      id: 8,
-      title: 'Student Government Elections',
-      type: 'News Article',
-      department: 'News',
-      created_at: new Date(Date.now() - 604800000).toISOString(),
-      user: { full_name: 'Alex Thompson', email: 'alex.thompson@campus.edu' },
-    },
-  ]
+  // ✅ NO DEFAULT SUBMISSIONS - Only real submissions from Supabase
+  return []
+}
+
+// Fetch real users from Supabase profiles table
+const fetchRealUsers = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching profiles:', error)
+      return []
+    }
+
+    if (!data || data.length === 0) {
+      console.warn('No users found in profiles table')
+      return []
+    }
+
+    return data.map((profile) => ({
+      id: profile.id,
+      full_name: profile.full_name || 'N/A',
+      email: profile.email,
+      department: profile.department || 'N/A',
+      role: profile.role || 'User',
+      status: 'active',
+      created_at: profile.created_at,
+      last_sign_in: profile.last_sign_in_at,
+    }))
+  } catch (err) {
+    console.error('Error fetching real users:', err)
+    return []
+  }
 }
 
 // Load data on mount
@@ -264,10 +125,10 @@ onMounted(async () => {
     console.log('Starting to fetch admin data...')
     loading.value = true
 
-    // Load all projects from localStorage and defaults
+    // Load projects from localStorage (no defaults)
     const allProjects = loadAllProjects()
 
-    // Fetch projects from Supabase and merge them in (so test projects saved to Supabase show up)
+    // Fetch projects from Supabase and merge
     const fetchProjectsFromSupabase = async () => {
       try {
         const { data, error } = await supabase
@@ -306,7 +167,7 @@ onMounted(async () => {
 
     const supaProjects = await fetchProjectsFromSupabase()
 
-    // Merge Supabase projects into local projects, avoiding duplicates by id or title
+    // Merge Supabase projects
     supaProjects.forEach((sp) => {
       const exists = allProjects.find((p) => String(p.id) === String(sp.id) || p.title === sp.title)
       if (!exists) allProjects.push(sp)
@@ -314,66 +175,36 @@ onMounted(async () => {
 
     projects.value = allProjects.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
-    // Load submissions
+    // Load submissions (empty - no defaults)
     const allSubmissions = loadSubmissions()
 
-    // Extract unique users from projects
-    const uniqueUsers = new Map()
+    // Fetch REAL users from profiles table
+    const realUsers = await fetchRealUsers()
 
-    // Add users from projects
-    allProjects.forEach((project) => {
-      if (project.user) {
-        const userId = project.user.email
-        if (!uniqueUsers.has(userId)) {
-          uniqueUsers.set(userId, {
-            id: uniqueUsers.size + 1,
-            full_name: project.user.full_name,
-            email: project.user.email,
-            department: getDepartmentFromEmail(project.user.email),
-            status: 'active',
-            created_at: new Date().toISOString(),
-            role: getRoleFromName(project.user.full_name),
-          })
-        }
-      }
-    })
+    if (realUsers.length > 0) {
+      users.value = realUsers
+    } else {
+      users.value = [
+        {
+          id: 1,
+          full_name: 'No users yet',
+          email: 'Users will appear here when they login',
+          department: 'N/A',
+          role: 'N/A',
+          status: 'active',
+          created_at: new Date().toISOString(),
+        },
+      ]
+    }
 
-    // Add mock admin users
-    const adminUsers = [
-      {
-        id: uniqueUsers.size + 1,
-        full_name: 'Admin User',
-        email: 'admin@campus.edu',
-        department: 'Administration',
-        status: 'active',
-        created_at: new Date().toISOString(),
-        role: 'Administrator',
-      },
-      {
-        id: uniqueUsers.size + 2,
-        full_name: 'Editor Chief',
-        email: 'editor.chief@campus.edu',
-        department: 'Editorial',
-        status: 'active',
-        created_at: new Date().toISOString(),
-        role: 'Editor-in-Chief',
-      },
-    ]
-
-    adminUsers.forEach((user) => {
-      uniqueUsers.set(user.email, user)
-    })
-
-    users.value = Array.from(uniqueUsers.values())
-
-    // Update statistics - show all data in fixed tables
+    // Update statistics
     statistics.value = {
       totalUsers: users.value.length,
       activeUsers: users.value.filter((u) => u.status === 'active').length,
       totalProjects: allProjects.length,
       totalSubmissions: allSubmissions.length,
-      recentProjects: allProjects, // All projects in fixed table
-      recentSubmissions: allSubmissions, // All submissions in fixed table
+      recentProjects: allProjects,
+      recentSubmissions: allSubmissions,
     }
 
     console.log('All data loaded successfully:', {
@@ -388,40 +219,6 @@ onMounted(async () => {
     loading.value = false
   }
 })
-
-// Helper functions
-const getDepartmentFromEmail = (email) => {
-  const domains = {
-    news: 'News',
-    sports: 'Sports',
-    arts: 'Arts',
-    opinion: 'Opinion',
-    features: 'Features',
-  }
-
-  const e = (email || '').toLowerCase()
-
-  for (const [key, dept] of Object.entries(domains)) {
-    if (e.includes(key)) {
-      return dept
-    }
-  }
-
-  // Default assignment based on name patterns
-  return departments[Math.floor(Math.random() * departments.length)]
-}
-
-const getRoleFromName = (name) => {
-  const roles = ['Section Head', 'Writer', 'Technical Editor', 'Assistant Editor']
-  const n = (name || '').toLowerCase()
-  if (n.includes('mark') || n.includes('sarah')) {
-    return 'Section Head'
-  }
-  if (n.includes('john') || n.includes('jane')) {
-    return 'Editor-in-Chief'
-  }
-  return roles[Math.floor(Math.random() * roles.length)]
-}
 
 // Computed properties for filtered users
 const filteredUsers = computed(() => {
@@ -450,46 +247,76 @@ const formatDate = (date) => {
   })
 }
 
-// Add new user
-const addUser = () => {
+// Add user to Supabase profiles table
+const addUser = async () => {
   if (!newUser.value.full_name || !newUser.value.email) {
     alert('Please fill in all required fields')
     return
   }
 
-  const newId = Math.max(...users.value.map((u) => u.id), 0) + 1
-  users.value.push({
-    id: newId,
-    full_name: newUser.value.full_name,
-    email: newUser.value.email,
-    department: newUser.value.department || departments[0],
-    role: newUser.value.role || 'Writer',
-    status: 'active',
-    created_at: new Date().toISOString(),
-  })
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert([
+        {
+          email: newUser.value.email,
+          full_name: newUser.value.full_name,
+          department: newUser.value.department || departments[0],
+          role: newUser.value.role || 'Writer',
+        },
+      ])
+      .select()
 
-  // Reset form
-  newUser.value = {
-    full_name: '',
-    email: '',
-    department: '',
-    role: '',
+    if (error) throw error
+
+    users.value.push({
+      id: data[0].id,
+      full_name: newUser.value.full_name,
+      email: newUser.value.email,
+      department: newUser.value.department || departments[0],
+      role: newUser.value.role || 'Writer',
+      status: 'active',
+      created_at: new Date().toISOString(),
+    })
+
+    newUser.value = {
+      full_name: '',
+      email: '',
+      department: '',
+      role: '',
+    }
+
+    showAddUserDialog.value = false
+    statistics.value.totalUsers = users.value.length
+    statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
+
+    alert('User added successfully!')
+  } catch (err) {
+    console.error('Error adding user:', err)
+    alert(`Failed to add user: ${err.message}`)
   }
-
-  showAddUserDialog.value = false
-  statistics.value.totalUsers = users.value.length
-  statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
 }
 
-// Remove user
-const removeUser = (userId) => {
-  if (confirm('Are you sure you want to remove this user?')) {
+// Remove user from Supabase
+const removeUser = async (userId) => {
+  if (!confirm('Are you sure you want to remove this user?')) return
+
+  try {
+    const { error } = await supabase.from('profiles').delete().eq('id', userId)
+
+    if (error) throw error
+
     const index = users.value.findIndex((u) => u.id === userId)
     if (index !== -1) {
       users.value.splice(index, 1)
       statistics.value.totalUsers = users.value.length
       statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
     }
+
+    alert('User removed successfully!')
+  } catch (err) {
+    console.error('Error removing user:', err)
+    alert(`Failed to remove user: ${err.message}`)
   }
 }
 
@@ -513,15 +340,13 @@ const fetchAllRecords = async (type) => {
   }
 }
 
-// Clear client-side project data (localStorage) and reload UI
+// Clear client-side project data
 const performClearClientData = async () => {
   try {
     if (clearTypedConfirm.value !== 'YES') return
     clearInProgress.value = true
-    // Use helper to remove project-related localStorage entries
     clearClientData({ confirm: true })
     clearMessage.value = 'Local project data cleared. Reloading...'
-    // small delay so user can see message
     setTimeout(() => {
       window.location.reload()
     }, 900)
@@ -781,91 +606,6 @@ const performClearClientData = async () => {
                   </v-card>
                 </v-dialog>
 
-                <!-- Reset Supabase DB Dialog -->
-                <v-dialog v-model="showResetDialog" max-width="700">
-                  <v-card>
-                    <v-card-title class="text-h6 d-flex justify-space-between align-center">
-                      <div>
-                        <v-icon class="mr-2" color="error">mdi-database-remove</v-icon>
-                        Reset Supabase DB (Protected)
-                      </div>
-                      <v-btn icon @click="showResetDialog = false">
-                        <v-icon>mdi-close</v-icon>
-                      </v-btn>
-                    </v-card-title>
-                    <v-card-text>
-                      <p>
-                        This action will permanently delete project data in Supabase (projects,
-                        project_history, project_history_comments). This UI calls a local reset
-                        server you must run with the service role key. See RESET_DATA.md for setup.
-                      </p>
-
-                      <v-text-field
-                        v-model="resetServerUrl"
-                        label="Reset server URL"
-                        variant="outlined"
-                        class="mb-3"
-                      ></v-text-field>
-
-                      <v-text-field
-                        v-model="resetSecret"
-                        label="Reset secret"
-                        variant="outlined"
-                        class="mb-3"
-                        type="password"
-                      ></v-text-field>
-
-                      <v-row>
-                        <v-col cols="12" md="6">
-                          <v-btn
-                            color="primary"
-                            @click.prevent="performResetServer({ dryRun: true })"
-                            :disabled="resetInProgress"
-                          >
-                            Dry run (show counts)
-                          </v-btn>
-                        </v-col>
-                        <v-col cols="12" md="6">
-                          <v-text-field
-                            v-model="resetTypedConfirm"
-                            label="Type DELETE DB to confirm"
-                            variant="outlined"
-                          ></v-text-field>
-                        </v-col>
-                      </v-row>
-
-                      <div v-if="resetResult" class="mt-3">
-                        <v-card class="pa-3">
-                          <pre style="white-space: pre-wrap">{{
-                            JSON.stringify(resetResult, null, 2)
-                          }}</pre>
-                        </v-card>
-                      </div>
-                    </v-card-text>
-                    <v-card-actions>
-                      <v-spacer />
-                      <v-btn variant="text" @click="showResetDialog = false">Cancel</v-btn>
-                      <v-btn
-                        color="error"
-                        :disabled="resetTypedConfirm !== 'DELETE DB' || resetInProgress"
-                        @click="performResetServer({ dryRun: false })"
-                      >
-                        <v-icon left>mdi-database-remove</v-icon>
-                        <span v-if="!resetInProgress">Delete DB</span>
-                        <span v-else>Working…</span>
-                      </v-btn>
-                    </v-card-actions>
-                  </v-card>
-                </v-dialog>
-
-                <!-- Snackbar for feedback -->
-                <v-snackbar v-model="snackbar" :color="snackbarColor" timeout="6000">
-                  {{ snackbarMessage }}
-                  <template #actions>
-                    <v-btn text @click="snackbar = false">Close</v-btn>
-                  </template>
-                </v-snackbar>
-
                 <!-- View All Dialog -->
                 <v-dialog v-model="showAllDialog" max-width="1200">
                   <v-card>
@@ -977,7 +717,7 @@ const performClearClientData = async () => {
                       </v-col>
                     </v-row>
 
-                    <!-- Users Table - Fixed, No Scroll -->
+                    <!-- Users Table -->
                     <v-table>
                       <thead>
                         <tr>
@@ -1117,7 +857,6 @@ const performClearClientData = async () => {
   cursor: pointer;
 }
 
-/* Fixed Table Styles */
 .v-table thead th {
   background-color: #f8fafc;
   border-bottom: 2px solid #e0e0e0;
@@ -1139,7 +878,6 @@ const performClearClientData = async () => {
   border-bottom: 1px solid #f0f0f0;
 }
 
-/* Mobile responsive */
 @media (max-width: 768px) {
   .v-table thead th,
   .v-table tbody td {

@@ -19,6 +19,8 @@ import {
   isEmptyArray,
   isObject,
 } from '@/utils/validators'
+import { supabase } from '@/utils/supabase.js'
+import { addUserToProfiles } from '@/utils/autoAddUser.js'
 import libBg from '/images/lib-hd.jpg'
 
 const router = useRouter()
@@ -39,25 +41,20 @@ const carsuEmails = [
 
 // CARSU email validator using your existing validators
 const carsuEmailValidator = (value) => {
-  // First check if required
   const requiredValidation = requiredValidator(value)
   if (requiredValidation !== true) return requiredValidation
 
-  // Then check if it's a valid email using your validator
   const emailValidation = emailValidator(value)
   if (emailValidation !== true) return emailValidation
 
-  // Don't show validation error here
   return true
 }
 
 // Password validator using your existing required validator
 const carsuPasswordValidator = (value) => {
-  // Use your existing required validator
   const requiredValidation = requiredValidator(value)
   if (requiredValidation !== true) return requiredValidation
 
-  // Add minimum length check for CARSU login
   if (value.length < 6) {
     return 'Password must be at least 6 characters'
   }
@@ -73,10 +70,8 @@ const form = ref(null)
 
 // Handle back button navigation prevention
 const handlePopState = (event) => {
-  // Check if user is trying to go back to dashboard after logout
   const isLoggedIn = localStorage.getItem('isLoggedIn')
   if (!isLoggedIn || isLoggedIn === 'false') {
-    // User is not logged in, prevent going back to dashboard
     window.history.pushState(null, '', window.location.href)
     console.log('Navigation to dashboard prevented - please login first')
   }
@@ -84,48 +79,34 @@ const handlePopState = (event) => {
 
 // Prevent navigation to dashboard when not logged in
 const preventUnauthorizedNavigation = () => {
-  // Clear any existing session if user navigated here after logout
   const isLoggedIn = localStorage.getItem('isLoggedIn')
   if (!isLoggedIn || isLoggedIn === 'false') {
-    // Replace current history entry to prevent going back to dashboard
     window.history.replaceState(null, '', window.location.href)
-
-    // Add a new state to catch back button attempts
     window.history.pushState(null, '', window.location.href)
   }
 }
 
 onMounted(() => {
-  // Check if user was redirected here from logout
   const urlParams = new URLSearchParams(window.location.search)
   const fromLogout = urlParams.get('logout')
 
   if (fromLogout === 'true') {
-    // Clear URL parameters
     window.history.replaceState(null, '', window.location.pathname)
-
-    // Show logout message (optional)
     console.log('Successfully logged out')
   }
 
-  // Ensure session is properly cleared
   const isLoggedIn = localStorage.getItem('isLoggedIn')
   if (!isLoggedIn || isLoggedIn === 'false') {
-    // Clear any residual session data
     localStorage.removeItem('userEmail')
     localStorage.removeItem('user')
     localStorage.setItem('isLoggedIn', 'false')
   }
 
-  // Prevent unauthorized navigation
   preventUnauthorizedNavigation()
-
-  // Listen for back button attempts
   window.addEventListener('popstate', handlePopState)
 })
 
 onUnmounted(() => {
-  // Clean up event listener
   window.removeEventListener('popstate', handlePopState)
 })
 
@@ -160,7 +141,23 @@ async function submit() {
     // Simulate API call delay
     await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    // Store user session (no password check needed)
+    // ⭐ NEW: Auto-add user to profiles (without password for now)
+    const mockUser = {
+      email: email.value,
+      user_metadata: {
+        full_name: email.value
+          .split('@')[0]
+          .replace(/\./g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase()),
+        department: 'N/A',
+        role: 'User',
+      },
+    }
+
+    // Add user to Supabase profiles
+    await addUserToProfiles(mockUser)
+
+    // Store user session
     localStorage.setItem('userEmail', email.value)
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem(
@@ -171,9 +168,9 @@ async function submit() {
       }),
     )
 
-    console.log('Login successful for:', email.value)
+    console.log('✅ Login successful for:', email.value)
 
-    // Clear browser history to prevent going back to login after successful login
+    // Clear browser history
     window.history.replaceState(null, '', '/dashboard')
 
     // Navigate to dashboard
@@ -266,7 +263,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 <span v-else>Authenticating...</span>
               </v-btn>
 
-              <!-- CARSU Domain Info - Only show after login attempt with non-CARSU email -->
+              <!-- CARSU Domain Info -->
               <div v-if="showDomainPopup" class="domain-info mt-3">
                 <v-icon size="14" color="error">mdi-alert-circle-outline</v-icon>
                 <span class="info-text error-text"
@@ -303,7 +300,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   content: '';
   position: absolute;
   inset: 0;
-  background: rgb(10, 9, 6); /* #100E07 solid tint behind image */
+  background: rgb(10, 9, 6);
   pointer-events: none;
 }
 
@@ -312,11 +309,11 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   position: absolute;
   inset: 0;
   background-image: var(--login-bg-url);
-  background-size: 100% auto; /* reduce zoom while keeping aspect */
+  background-size: 100% auto;
   background-position: center;
   background-repeat: no-repeat;
   filter: grayscale(100%);
-  opacity: 0.15; /* image at 15% opacity */
+  opacity: 0.15;
   pointer-events: none;
 }
 
@@ -445,12 +442,12 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   top: 16px;
   left: 16px;
   z-index: 10;
-  background: rgba(20, 20, 20, 0.575) !important; /* subtle glass look */
+  background: rgba(20, 20, 20, 0.575) !important;
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.11) !important;
   font-size: 13px;
   font-weight: 500;
-  border-radius: 999px !important; /* pill style */
+  border-radius: 999px !important;
   padding: 4px 12px !important;
   text-transform: none !important;
 }
