@@ -1,28 +1,31 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
-import App from './App.vue'
-import router from './router'
-
-const app = createApp(App)
-
-app.use(createPinia())
-app.use(router)
-
-app.mount('#app')
-
-// Vuetify
+// Vuetify imports FIRST
 import 'vuetify/styles'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 
+import App from './App.vue'
+import router from './router'
+
+// Create Vuetify instance
 const vuetify = createVuetify({
   components,
   directives,
 })
 
+// Create app
+const app = createApp(App)
+
+// Register plugins BEFORE mounting
+app.use(createPinia())
+app.use(router)
 app.use(vuetify)
+
+// Mount app LAST
+app.mount('#app')
 
 // Set favicon to bundled GoldQuill logo (works in dev/prod)
 const setFavicon = () => {

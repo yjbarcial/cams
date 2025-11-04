@@ -14,7 +14,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.4",
+    "@supabase/supabase-js": "^2.78.0",
     "esbuild": "^0.25.9",
     "pinia": "^3.0.3",
     "quill": "^2.0.3",
