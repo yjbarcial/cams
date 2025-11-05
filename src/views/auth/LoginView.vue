@@ -111,24 +111,17 @@ onUnmounted(() => {
 })
 
 async function submit() {
-  // Reset popup state
   showDomainPopup.value = false
 
-  // Validate form first
   const { valid } = await form.value.validate()
+  if (!valid) return
 
-  if (!valid) {
-    return
-  }
-
-  // Check CARSU email domain - show popup if not CARSU
   if (!email.value.endsWith('@carsu.edu.ph')) {
     showDomainPopup.value = true
     errorMessage.value = ''
     return
   }
 
-  // Check if email is in the approved CARSU emails list
   if (!carsuEmails.includes(email.value)) {
     errorMessage.value = 'This CARSU email is not authorized to access the system.'
     return
@@ -138,10 +131,11 @@ async function submit() {
   errorMessage.value = ''
 
   try {
-    // Simulate API call delay
     await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    // ⭐ NEW: Auto-add user to profiles (without password for now)
+    // ⭐ ADD MORE DEBUG LOGS
+    console.log('🚀 Creating user profile for:', email.value)
+
     const mockUser = {
       email: email.value,
       user_metadata: {
@@ -154,8 +148,12 @@ async function submit() {
       },
     }
 
+    console.log('📝 Mock user object:', mockUser)
+
     // Add user to Supabase profiles
+    console.log('⏳ Calling addUserToProfiles...')
     await addUserToProfiles(mockUser)
+    console.log('✅ addUserToProfiles completed')
 
     // Store user session
     localStorage.setItem('userEmail', email.value)
@@ -170,14 +168,11 @@ async function submit() {
 
     console.log('✅ Login successful for:', email.value)
 
-    // Clear browser history
     window.history.replaceState(null, '', '/dashboard')
-
-    // Navigate to dashboard
     router.push('/dashboard')
   } catch (error) {
     errorMessage.value = 'Login failed. Please try again.'
-    console.error('Login error:', error)
+    console.error('❌ Login error:', error)
   } finally {
     loading.value = false
   }

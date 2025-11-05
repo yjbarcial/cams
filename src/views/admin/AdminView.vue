@@ -88,33 +88,39 @@ const loadSubmissions = () => {
 // Fetch real users from Supabase profiles table
 const fetchRealUsers = async () => {
   try {
+    console.log('🔍 Fetching users from users table...')
+
     const { data, error } = await supabase
-      .from('profiles')
+      .from('users') // ⭐ Changed from 'profiles' to 'users'
       .select('*')
       .order('created_at', { ascending: false })
 
+    console.log('📊 Users query result:', { data, error })
+
     if (error) {
-      console.error('Error fetching profiles:', error)
+      console.error('❌ Error fetching users:', error)
       return []
     }
 
     if (!data || data.length === 0) {
-      console.warn('No users found in profiles table')
+      console.warn('⚠️ No users found in users table')
       return []
     }
 
-    return data.map((profile) => ({
-      id: profile.id,
-      full_name: profile.full_name || 'N/A',
-      email: profile.email,
-      department: profile.department || 'N/A',
-      role: profile.role || 'User',
-      status: 'active',
-      created_at: profile.created_at,
-      last_sign_in: profile.last_sign_in_at,
+    console.log('✅ Found users:', data.length)
+
+    return data.map((user) => ({
+      id: user.id,
+      full_name: user.full_name || 'N/A',
+      email: user.email,
+      department: user.department || 'N/A',
+      role: user.role || 'User',
+      status: user.status || 'active', // ⭐ Now using real status field
+      created_at: user.created_at,
+      last_sign_in: user.last_login, // ⭐ Changed from last_sign_in_at
     }))
   } catch (err) {
-    console.error('Error fetching real users:', err)
+    console.error('❌ Error fetching real users:', err)
     return []
   }
 }
