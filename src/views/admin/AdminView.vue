@@ -85,13 +85,20 @@ const loadSubmissions = () => {
   return []
 }
 
+// Admin emails to hide from user management
+const ADMIN_EMAILS = [
+  'lovellhudson.clavel@carsu.edu.ph',
+  'yssahjulianah.barcial@carsu.edu.ph',
+  'altheaguila.gorres@carsu.edu.ph',
+]
+
 // Fetch real users from Supabase profiles table
 const fetchRealUsers = async () => {
   try {
     console.log('🔍 Fetching users from users table...')
 
     const { data, error } = await supabase
-      .from('users') // ⭐ Changed from 'profiles' to 'users'
+      .from('users')
       .select('*')
       .order('created_at', { ascending: false })
 
@@ -107,17 +114,20 @@ const fetchRealUsers = async () => {
       return []
     }
 
-    console.log('✅ Found users:', data.length)
+    // ⭐ Filter out admin emails
+    const regularUsers = data.filter((user) => !ADMIN_EMAILS.includes(user.email.toLowerCase()))
 
-    return data.map((user) => ({
+    console.log('✅ Found users:', regularUsers.length, '(excluding admins)')
+
+    return regularUsers.map((user) => ({
       id: user.id,
       full_name: user.full_name || 'N/A',
       email: user.email,
       department: user.department || 'N/A',
       role: user.role || 'User',
-      status: user.status || 'active', // ⭐ Now using real status field
+      status: user.status || 'active',
       created_at: user.created_at,
-      last_sign_in: user.last_login, // ⭐ Changed from last_sign_in_at
+      last_sign_in: user.last_login,
     }))
   } catch (err) {
     console.error('❌ Error fetching real users:', err)
