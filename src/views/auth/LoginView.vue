@@ -116,16 +116,18 @@ async function submit() {
   const { valid } = await form.value.validate()
   if (!valid) return
 
+  // ⭐ Check CARSU email domain
   if (!email.value.endsWith('@carsu.edu.ph')) {
     showDomainPopup.value = true
     errorMessage.value = ''
     return
   }
 
-  if (!carsuEmails.includes(email.value)) {
-    errorMessage.value = 'This CARSU email is not authorized to access the system.'
-    return
-  }
+  // ⭐ REMOVE THIS CHECK - Allow all @carsu.edu.ph emails
+  // if (!carsuEmails.includes(email.value)) {
+  //   errorMessage.value = 'This CARSU email is not authorized to access the system.'
+  //   return
+  // }
 
   loading.value = true
   errorMessage.value = ''
