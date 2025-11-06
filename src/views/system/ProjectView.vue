@@ -942,7 +942,7 @@ const getBackButtonText = computed(() => {
     <v-dialog v-model="showSubmitDialog" max-width="600px" persistent>
       <v-card class="submit-dialog-card">
         <v-card-title class="submit-dialog-header">
-          <v-icon class="mr-2" size="24" color="#353535">mdi-send-check</v-icon>
+          <v-icon class="mr-2" size="24" color="#FFFFFF">mdi-send-check</v-icon>
           <span>Submit for Approval</span>
         </v-card-title>
 

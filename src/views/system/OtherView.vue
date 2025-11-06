@@ -369,78 +369,144 @@ const deleteFromEdit = () => {
       </v-container>
     </v-main>
 
-    <!-- Edit Project Modal -->
-    <v-dialog v-model="showEditDialog" persistent max-width="500px">
-      <v-card class="modal-content">
-        <v-card-title>Edit Project</v-card-title>
-        <v-card-text>
-          <v-form @submit.prevent="saveEdit">
-            <v-container class="pa-0">
-              <v-row>
-                <v-col cols="12" class="form-group">
-                  <v-label>Project Title:</v-label>
-                  <v-text-field
-                    v-model="editingProject.title"
-                    variant="outlined"
-                    required
-                    hide-details
-                  />
-                </v-col>
-                <v-col cols="12" class="form-group">
-                  <v-label>Section Head:</v-label>
-                  <v-text-field
-                    v-model="editingProject.sectionHead"
-                    variant="outlined"
-                    required
-                    hide-details
-                  />
-                </v-col>
-                <v-col cols="12" class="form-group">
-                  <v-label>Due Date:</v-label>
-                  <v-text-field v-model="editingProject.dueDate" variant="outlined" hide-details />
-                </v-col>
-                <v-col cols="12" class="form-group">
-                  <v-label>Status:</v-label>
-                  <v-select
-                    v-model="editingProject.status"
-                    :items="[
-                      'To Editor-in-Chief',
-                      'To Section Head',
-                      'To Technical Editor',
-                      'To Publish',
-                      'Published',
-                    ]"
-                    variant="outlined"
-                    hide-details
-                  />
-                </v-col>
-              </v-row>
-            </v-container>
+    <!-- Edit Project Modal - COPIED FROM MAGAZINEVIEW -->
+    <v-dialog v-model="showEditDialog" max-width="550px" persistent>
+      <v-card class="edit-dialog-card">
+        <v-card-title class="edit-dialog-header">
+          <v-icon class="mr-2" size="24">mdi-pencil</v-icon>
+          <span>Edit Project</span>
+        </v-card-title>
+
+        <v-divider class="dialog-divider" />
+
+        <v-card-text class="edit-dialog-content">
+          <v-form @submit.prevent="saveEdit" v-if="editingProject">
+            <div class="form-field">
+              <label class="field-label">Project Title</label>
+              <v-text-field
+                v-model="editingProject.title"
+                variant="outlined"
+                density="comfortable"
+                placeholder="Enter project title"
+                hide-details="auto"
+                :rules="[(v) => !!v || 'Title is required']"
+              />
+            </div>
+
+            <div class="form-field">
+              <label class="field-label">Section Head</label>
+              <v-text-field
+                v-model="editingProject.sectionHead"
+                variant="outlined"
+                density="comfortable"
+                placeholder="Enter section head name"
+                hide-details
+              />
+            </div>
+
+            <div class="form-field">
+              <label class="field-label">Due Date</label>
+              <v-text-field
+                v-model="editingProject.dueDate"
+                type="date"
+                variant="outlined"
+                density="comfortable"
+                hide-details
+                prepend-inner-icon="mdi-calendar"
+              />
+            </div>
+
+            <div class="form-field">
+              <label class="field-label">Status</label>
+              <v-select
+                v-model="editingProject.status"
+                :items="[
+                  'Draft',
+                  'To Section Head',
+                  'To Editor-in-Chief',
+                  'To Technical Editor',
+                  'To Publish',
+                  'Published',
+                ]"
+                variant="outlined"
+                density="comfortable"
+                hide-details
+              />
+            </div>
           </v-form>
         </v-card-text>
-        <v-card-actions class="modal-actions">
-          <v-btn class="cancel-btn" @click="cancelEdit" variant="outlined">Cancel</v-btn>
-          <v-btn class="delete-btn" @click="deleteFromEdit" color="error" variant="outlined">
-            <v-icon class="mr-1">mdi-delete</v-icon>
+
+        <v-divider class="dialog-divider" />
+
+        <v-card-actions class="edit-dialog-actions">
+          <v-btn
+            @click="deleteFromEdit"
+            variant="outlined"
+            size="default"
+            class="delete-from-edit-btn"
+            prepend-icon="mdi-delete"
+          >
             Delete
           </v-btn>
           <v-spacer />
-          <v-btn class="save-btn" @click="saveEdit" color="primary">Save Changes</v-btn>
+          <v-btn @click="cancelEdit" variant="outlined" size="default" class="cancel-btn">
+            Cancel
+          </v-btn>
+          <v-btn
+            @click="saveEdit"
+            variant="flat"
+            size="default"
+            class="save-btn"
+            prepend-icon="mdi-content-save"
+          >
+            Save Changes
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- Delete Confirmation Modal -->
-    <v-dialog v-model="showDeleteConfirm" persistent max-width="500px">
-      <v-card class="modal-content delete-modal">
-        <v-card-title>Confirm Delete</v-card-title>
-        <v-card-text>
-          <p>Are you sure you want to delete the project "{{ projectToDelete?.title }}"?</p>
-          <p class="warning-text">This action cannot be undone.</p>
+    <!-- Delete Confirmation Modal - COPIED FROM MAGAZINEVIEW -->
+    <v-dialog v-model="showDeleteConfirm" max-width="500px" persistent>
+      <v-card class="delete-dialog-card">
+        <v-card-title class="delete-dialog-header">
+          <v-icon class="mr-2" size="24">mdi-alert-circle</v-icon>
+          <span>Confirm Delete</span>
+        </v-card-title>
+
+        <v-divider class="dialog-divider" />
+
+        <v-card-text class="delete-dialog-content" v-if="projectToDelete">
+          <div class="delete-info-box">
+            <p class="delete-message">
+              Are you sure you want to delete the project
+              <strong>"{{ projectToDelete.title }}"</strong>?
+            </p>
+          </div>
+
+          <v-alert type="error" variant="tonal" density="comfortable" class="warning-alert">
+            <template v-slot:prepend>
+              <v-icon size="20">mdi-alert</v-icon>
+            </template>
+            <div class="alert-text"><strong>Warning:</strong> This action cannot be undone.</div>
+          </v-alert>
         </v-card-text>
-        <v-card-actions class="modal-actions">
-          <v-btn class="cancel-btn" @click="cancelDelete" variant="outlined">Cancel</v-btn>
-          <v-btn class="delete-btn" @click="confirmDelete" color="error">Delete Project</v-btn>
+
+        <v-divider class="dialog-divider" />
+
+        <v-card-actions class="delete-dialog-actions">
+          <v-btn @click="cancelDelete" variant="outlined" size="default" class="cancel-btn">
+            Cancel
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            @click="confirmDelete"
+            variant="flat"
+            size="default"
+            prepend-icon="mdi-delete"
+            class="confirm-delete-btn"
+          >
+            Delete Project
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -824,7 +890,283 @@ const deleteFromEdit = () => {
   margin-top: 8px !important;
 }
 
-/* Responsive design */
+/* ========================================
+   Edit Dialog Styles - COPIED FROM MAGAZINEVIEW
+   ======================================== */
+.edit-dialog-card {
+  border: 2px solid #353535 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+:deep(.v-overlay--active .v-overlay__content) {
+  align-self: center !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.edit-dialog-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 24px !important;
+  background: #353535 !important;
+  color: white !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.dialog-divider {
+  border-color: #e0e0e0 !important;
+  opacity: 1 !important;
+}
+
+.edit-dialog-content {
+  padding: 24px !important;
+  background: white !important;
+}
+
+.form-field {
+  margin-bottom: 20px;
+}
+
+.form-field:last-child {
+  margin-bottom: 0;
+}
+
+.field-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #353535;
+  margin-bottom: 8px;
+}
+
+:deep(.form-field .v-field) {
+  background: white !important;
+  border-radius: 6px !important;
+}
+
+:deep(.form-field .v-field__outline) {
+  border-color: #d0d0d0 !important;
+  border-width: 1px !important;
+}
+
+:deep(.form-field .v-field--focused .v-field__outline) {
+  border-color: #353535 !important;
+  border-width: 2px !important;
+}
+
+:deep(.form-field .v-field__input) {
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+  color: #353535 !important;
+}
+
+:deep(.form-field .v-select__selection-text) {
+  font-size: 14px !important;
+  color: #353535 !important;
+}
+
+:deep(.form-field input[type='date']) {
+  color: #353535 !important;
+  font-size: 14px !important;
+  cursor: pointer !important;
+}
+
+:deep(.form-field input[type='date']::-webkit-calendar-picker-indicator) {
+  cursor: pointer !important;
+  filter: invert(0.2);
+}
+
+.edit-dialog-actions {
+  padding: 16px 24px !important;
+  background: #fafafa !important;
+  border-top: 1px solid #e0e0e0 !important;
+}
+
+.delete-from-edit-btn {
+  border: 2px solid #ef4444 !important;
+  color: #ef4444 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+}
+
+.delete-from-edit-btn:hover {
+  background: #fef2f2 !important;
+}
+
+.cancel-btn {
+  border: 2px solid #353535 !important;
+  color: #353535 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+}
+
+.cancel-btn:hover {
+  background: #f5f5f5 !important;
+}
+
+.save-btn {
+  background: #353535 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 28px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.save-btn:hover {
+  background: #1f1f1f !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* ========================================
+   Delete Dialog Styles - COPIED FROM MAGAZINEVIEW
+   ======================================== */
+.delete-dialog-card {
+  border: 2px solid #353535 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+.delete-dialog-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 24px !important;
+  background: #353535 !important;
+  color: white !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.delete-dialog-content {
+  padding: 24px !important;
+  background: white !important;
+}
+
+.delete-info-box {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-left: 4px solid #353535;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.delete-message {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #555;
+  margin: 0;
+}
+
+.delete-message strong {
+  color: #353535;
+  font-weight: 600;
+}
+
+.warning-alert {
+  border-left: 4px solid #353535 !important;
+  background: #f8f8f8 !important;
+  border-radius: 6px !important;
+  padding: 12px 16px !important;
+}
+
+:deep(.warning-alert .v-alert__prepend) {
+  margin-right: 12px !important;
+  color: #353535 !important;
+}
+
+.alert-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #555;
+}
+
+.alert-text strong {
+  display: inline;
+  font-weight: 600;
+  color: #353535;
+}
+
+.delete-dialog-actions {
+  padding: 16px 24px !important;
+  background: #fafafa !important;
+  border-top: 1px solid #e0e0e0 !important;
+}
+
+.confirm-delete-btn {
+  background: #353535 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 28px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.confirm-delete-btn:hover {
+  background: #1f1f1f !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Responsive adjustments for modals */
+@media (max-width: 600px) {
+  .edit-dialog-header,
+  .delete-dialog-header {
+    padding: 16px 20px !important;
+    font-size: 16px !important;
+  }
+
+  .edit-dialog-content,
+  .delete-dialog-content {
+    padding: 20px !important;
+  }
+
+  .delete-info-box {
+    padding: 12px;
+  }
+
+  .delete-message {
+    font-size: 13px;
+  }
+
+  .edit-dialog-actions,
+  .delete-dialog-actions {
+    padding: 12px 20px !important;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cancel-btn,
+  .save-btn,
+  .confirm-delete-btn,
+  .delete-from-edit-btn {
+    width: 100%;
+  }
+
+  .edit-dialog-actions .v-spacer,
+  .delete-dialog-actions .v-spacer {
+    display: none;
+  }
+
+  .edit-dialog-actions .delete-from-edit-btn {
+    order: 3;
+  }
+}
+
+/* Responsive design for main table */
 @media (max-width: 1024px) {
   .controls-section {
     flex-direction: column !important;
