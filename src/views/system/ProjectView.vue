@@ -938,28 +938,34 @@ const getBackButtonText = computed(() => {
 
     <Footer />
 
-    <!-- Submit for Approval Dialog -->
+    <!-- Submit for Approval Dialog - UPDATED -->
     <v-dialog v-model="showSubmitDialog" max-width="600px" persistent>
-      <v-card>
-        <v-card-title>
-          <v-icon class="mr-2" color="primary">mdi-send</v-icon>
-          Submit for Approval
+      <v-card class="submit-dialog-card">
+        <v-card-title class="submit-dialog-header">
+          <v-icon class="mr-2" size="24" color="#353535">mdi-send-check</v-icon>
+          <span>Submit for Approval</span>
         </v-card-title>
 
-        <v-card-text>
-          <p class="mb-4">
-            Submit "{{ project.title }}" for approval. This will send your project to the Section
-            Head for review.
-          </p>
+        <v-divider class="dialog-divider" />
+
+        <v-card-text class="submit-dialog-content">
+          <div class="submit-info-box">
+            <p class="submit-message">
+              Submit <strong>"{{ project.title }}"</strong> for approval. This will send your
+              project to the Section Head for review.
+            </p>
+          </div>
 
           <v-select
             v-model="submitPriority"
             label="Priority Level"
             :items="['High', 'Medium', 'Low']"
             variant="outlined"
-            class="mb-4"
+            density="comfortable"
+            prepend-inner-icon="mdi-flag"
             hint="Select the priority level for this submission"
             persistent-hint
+            class="priority-field"
           />
 
           <v-textarea
@@ -967,21 +973,37 @@ const getBackButtonText = computed(() => {
             label="Submission Comments (Optional)"
             placeholder="Add any comments or notes for the reviewers..."
             variant="outlined"
-            rows="3"
+            rows="4"
             hint="These comments will be visible to all reviewers"
             persistent-hint
+            class="comments-field"
           />
 
-          <v-alert type="info" variant="outlined" class="mt-4">
-            <strong>Next Step:</strong> Your project will be forwarded to the Section Head for
-            initial review.
+          <v-alert type="info" variant="tonal" class="next-step-alert" density="comfortable">
+            <template v-slot:prepend>
+              <v-icon size="20">mdi-information-outline</v-icon>
+            </template>
+            <div class="alert-text">
+              <strong>Next Step:</strong> Your project will be forwarded to the Section Head for
+              initial review.
+            </div>
           </v-alert>
         </v-card-text>
 
-        <v-card-actions>
-          <v-btn @click="cancelSubmitDialog" variant="outlined"> Cancel </v-btn>
+        <v-divider class="dialog-divider" />
+
+        <v-card-actions class="submit-dialog-actions">
+          <v-btn @click="cancelSubmitDialog" variant="outlined" size="default" class="cancel-btn">
+            Cancel
+          </v-btn>
           <v-spacer />
-          <v-btn @click="confirmSubmitForApproval" color="primary" prepend-icon="mdi-send">
+          <v-btn
+            @click="confirmSubmitForApproval"
+            variant="flat"
+            size="default"
+            class="confirm-submit-btn"
+            prepend-icon="mdi-send"
+          >
             Submit for Approval
           </v-btn>
         </v-card-actions>
@@ -1444,58 +1466,187 @@ const getBackButtonText = computed(() => {
   gap: 4px;
 }
 
-/* Responsive Design */
-@media (max-width: 1024px) {
-  .left-panel,
-  .right-panel {
-    padding: 0;
-  }
-
-  .right-panel {
-    margin-top: 24px;
-  }
-
-  .metadata-row {
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .title-edit-container {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .title-edit-actions {
-    align-self: flex-start;
-  }
-
-  .auto-save-notice {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-  }
+/* Submit for Approval Dialog - UPDATED */
+.submit-dialog-card {
+  border: 2px solid #353535 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
 }
 
-@media (max-width: 768px) {
-  .project-container {
-    padding: 16px !important;
+.submit-dialog-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 24px !important;
+  background: #353535 !important;
+  color: white !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.dialog-divider {
+  border-color: #e0e0e0 !important;
+  opacity: 1 !important;
+}
+
+.submit-dialog-content {
+  padding: 24px !important;
+  background: white !important;
+}
+
+.submit-info-box {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-left: 4px solid #353535;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.submit-message {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #555;
+  margin: 0;
+}
+
+.submit-message strong {
+  color: #353535;
+  font-weight: 600;
+}
+
+.priority-field {
+  margin-bottom: 16px !important;
+}
+
+:deep(.priority-field .v-field) {
+  background: white !important;
+  border-radius: 6px !important;
+}
+
+:deep(.priority-field .v-field__outline) {
+  border-color: #d0d0d0 !important;
+  border-width: 1px !important;
+}
+
+:deep(.priority-field .v-field--focused .v-field__outline) {
+  border-color: #353535 !important;
+  border-width: 2px !important;
+}
+
+.comments-field {
+  margin-bottom: 16px !important;
+}
+
+:deep(.comments-field .v-field) {
+  background: white !important;
+  border-radius: 6px !important;
+}
+
+:deep(.comments-field .v-field__outline) {
+  border-color: #d0d0d0 !important;
+  border-width: 1px !important;
+}
+
+:deep(.comments-field .v-field--focused .v-field__outline) {
+  border-color: #353535 !important;
+  border-width: 2px !important;
+}
+
+.next-step-alert {
+  border-left: 4px solid #353535 !important;
+  border-radius: 6px !important;
+  background: #f8f8f8 !important;
+  padding: 12px 16px !important;
+}
+
+:deep(.next-step-alert .v-alert__prepend) {
+  margin-right: 12px !important;
+  color: #353535 !important;
+}
+
+.alert-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #555;
+}
+
+.alert-text strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #353535;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.submit-dialog-actions {
+  padding: 16px 24px !important;
+  background: #fafafa !important;
+  border-top: 1px solid #e0e0e0 !important;
+}
+
+.cancel-btn {
+  border: 2px solid #353535 !important;
+  color: #353535 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+}
+
+.cancel-btn:hover {
+  background: #f5f5f5 !important;
+}
+
+.confirm-submit-btn {
+  background: #353535 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 28px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.confirm-submit-btn:hover {
+  background: #1f1f1f !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Responsive adjustments for dialog */
+@media (max-width: 600px) {
+  .submit-dialog-header {
+    padding: 16px 20px !important;
+    font-size: 16px !important;
   }
 
-  .project-title,
-  :deep(.title-input .v-field__input) {
-    font-size: 24px !important;
+  .submit-dialog-content {
+    padding: 20px !important;
   }
 
-  .action-buttons {
+  .submit-info-box {
+    padding: 12px;
+  }
+
+  .submit-message {
+    font-size: 13px;
+  }
+
+  .submit-dialog-actions {
+    padding: 12px 20px !important;
     flex-direction: column;
+    gap: 8px;
   }
 
-  .comments-section {
-    max-height: 500px;
+  .cancel-btn,
+  .confirm-submit-btn {
+    width: 100%;
   }
 
-  .editable-title {
-    min-width: auto;
+  .submit-dialog-actions .v-spacer {
+    display: none;
   }
 }
 </style>
