@@ -20,6 +20,17 @@ const loadProjects = () => {
   projects.value = savedProjects
 }
 
+// ADD THIS FUNCTION
+const formatDate = (dateString) => {
+  if (!dateString) return 'No deadline set'
+
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return dateString
+
+  const options = { year: 'numeric', month: 'short', day: 'numeric' }
+  return date.toLocaleDateString('en-US', options)
+}
+
 const searchQuery = ref('')
 const sortOrder = ref('Date Added ↓')
 const showOnlyStarred = ref(false)
@@ -309,7 +320,7 @@ const updateDueDate = (newDate) => {
                 {{ project.title }}
               </v-col>
               <v-col class="table-cell">{{ project.sectionHead }}</v-col>
-              <v-col class="table-cell">{{ project.dueDate }}</v-col>
+              <v-col class="table-cell">{{ formatDate(project.dueDate) }}</v-col>
               <v-col class="table-cell">{{ project.status }}</v-col>
               <v-col class="table-cell actions-cell">
                 <v-btn

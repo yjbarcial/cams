@@ -30,12 +30,22 @@ const loadProjects = () => {
   // Try both storage keys for backward compatibility
   let savedProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
 
-  // If 'other_projects' is empty, try 'social-media_projects'
   if (savedProjects.length === 0) {
     savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
   }
 
   projects.value = savedProjects.filter((p) => p.type === 'social-media' || p.type === 'other')
+}
+
+// ADD THIS FUNCTION
+const formatDate = (dateString) => {
+  if (!dateString) return 'No deadline set'
+
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return dateString
+
+  const options = { year: 'numeric', month: 'short', day: 'numeric' }
+  return date.toLocaleDateString('en-US', options)
 }
 
 const searchQuery = ref('')
@@ -314,7 +324,7 @@ const deleteFromEdit = () => {
                 {{ project.title }}
               </v-col>
               <v-col class="table-cell">{{ project.sectionHead }}</v-col>
-              <v-col class="table-cell">{{ project.dueDate }}</v-col>
+              <v-col class="table-cell">{{ formatDate(project.dueDate) }}</v-col>
               <v-col class="table-cell">{{ project.status }}</v-col>
               <v-col class="table-cell actions-cell">
                 <v-btn
