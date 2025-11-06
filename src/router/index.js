@@ -12,7 +12,7 @@ import DeliverableView from '@/views/system/DeliverableView.vue'
 import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
-import SectionHeadView from '@/views/system/SectionHeadView.vue' // RENAMED
+import SectionHeadView from '@/views/system/SectionHeadView.vue'
 import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
 import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 
@@ -127,9 +127,21 @@ const router = createRouter({
       component: EditorInChiefView,
     },
     {
+      path: '/editor-in-chief/:id',
+      name: 'editor-in-chief-detail',
+      component: EditorInChiefView,
+      props: true,
+    },
+    {
       path: '/chief-adviser',
       name: 'chief-adviser',
       component: ChiefAdviserView,
+    },
+    {
+      path: '/chief-adviser/:id',
+      name: 'chief-adviser-detail',
+      component: ChiefAdviserView,
+      props: true,
     },
     // Legacy routes for backwards compatibility
     {

@@ -49,20 +49,18 @@ const handleView = (projectId) => {
     return
   }
 
-  console.log('Viewing project:', project.title, 'Status:', project.status)
-
-  // Route based on status - SECTION HEAD ONLY
-  if (project.status === 'Draft') {
+  // Route based on project status - CLEAN ROUTES
+  if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
     router.push(`/project/${projectId}`)
-  } else if (
-    project.status === 'To Section Head' ||
-    project.status === 'Returned by Section Head'
-  ) {
-    router.push(`/section-head/${projectId}`) // Section Head approval ONLY
+  } else if (project.status === 'To Section Head') {
+    router.push(`/section-head/${projectId}`)
+  } else if (project.status === 'To Editor-in-Chief' || project.status === 'EIC Review') {
+    router.push(`/editor-in-chief/${projectId}`)
+  } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
+    router.push(`/chief-adviser/${projectId}`)
   } else if (project.status === 'Published') {
     router.push(`/project/${projectId}`)
   } else {
-    // For other statuses (EIC, Chief Adviser, etc.), just view as read-only
     router.push(`/project/${projectId}`)
   }
 }

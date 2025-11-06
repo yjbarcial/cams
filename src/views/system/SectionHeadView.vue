@@ -727,60 +727,101 @@ onMounted(() => {
     <Footer />
 
     <v-dialog v-model="showApprovalDialog" max-width="600px" persistent>
-      <v-card>
-        <v-card-title class="approval-dialog-title">
-          <v-icon
-            class="mr-2"
-            :color="approvalActions.find((a) => a.value === approvalAction)?.color"
-          >
+      <v-card class="approval-dialog-card">
+        <v-card-title class="approval-dialog-header">
+          <v-icon class="mr-2" size="24" color="#FFFFFF">
             {{ approvalActions.find((a) => a.value === approvalAction)?.icon }}
           </v-icon>
-          {{ approvalActions.find((a) => a.value === approvalAction)?.text }}
+          <span>{{ approvalActions.find((a) => a.value === approvalAction)?.text }}</span>
         </v-card-title>
 
-        <v-card-text class="approval-dialog-content">
-          <v-select
-            v-if="approvalAction === 'approve'"
-            v-model="approvalPriority"
-            label="Set Priority for Editor-in-Chief"
-            :items="['High', 'Medium', 'Low']"
-            variant="outlined"
-            class="mb-4"
-          />
+        <v-divider class="dialog-divider" />
 
-          <v-textarea
-            v-model="approvalComments"
-            :label="approvalAction === 'return' ? 'Comments (Required)' : 'Comments (Optional)'"
-            :placeholder="getCommentPlaceholder()"
-            variant="outlined"
-            rows="4"
-          />
+        <v-card-text class="approval-dialog-content">
+          <div class="approval-info-box">
+            <p class="approval-message">
+              <template v-if="approvalAction === 'approve'">
+                Approve <strong>"{{ project.title }}"</strong> and forward to Editor-in-Chief for
+                final review.
+              </template>
+              <template v-else-if="approvalAction === 'return'">
+                Request edits for <strong>"{{ project.title }}"</strong>. The project will be
+                returned to the author.
+              </template>
+            </p>
+          </div>
+
+          <div v-if="approvalAction === 'approve'" class="form-field">
+            <label class="field-label">Priority Level</label>
+            <v-select
+              v-model="approvalPriority"
+              :items="['High', 'Medium', 'Low']"
+              variant="outlined"
+              density="comfortable"
+              prepend-inner-icon="mdi-flag"
+              hide-details
+              placeholder="Set priority for Editor-in-Chief"
+            />
+          </div>
+
+          <div class="form-field">
+            <label class="field-label">
+              {{ approvalAction === 'return' ? 'Comments (Required)' : 'Comments (Optional)' }}
+            </label>
+            <v-textarea
+              v-model="approvalComments"
+              :placeholder="getCommentPlaceholder()"
+              variant="outlined"
+              rows="4"
+              hide-details
+            />
+          </div>
 
           <v-alert
             v-if="approvalAction === 'approve'"
-            type="success"
-            variant="outlined"
-            class="mt-4"
+            type="info"
+            variant="tonal"
+            density="comfortable"
+            class="next-step-alert"
           >
-            <strong>Next Step:</strong> Project will be forwarded to Editor-in-Chief for review.
+            <template v-slot:prepend>
+              <v-icon size="20">mdi-information-outline</v-icon>
+            </template>
+            <div class="alert-text">
+              <strong>Next Step:</strong> Project will be forwarded to Editor-in-Chief for final
+              review.
+            </div>
           </v-alert>
 
           <v-alert
             v-else-if="approvalAction === 'return'"
             type="warning"
-            variant="outlined"
-            class="mt-4"
+            variant="tonal"
+            density="comfortable"
+            class="next-step-alert"
           >
-            <strong>Action:</strong> Project will be returned to the author for editing.
+            <template v-slot:prepend>
+              <v-icon size="20">mdi-alert-outline</v-icon>
+            </template>
+            <div class="alert-text">
+              <strong>Action:</strong> Project will be returned to the author for editing.
+            </div>
           </v-alert>
         </v-card-text>
 
+        <v-divider class="dialog-divider" />
+
         <v-card-actions class="approval-dialog-actions">
-          <v-btn @click="cancelApproval" variant="outlined">Cancel</v-btn>
+          <v-btn @click="cancelApproval" variant="outlined" size="default" class="cancel-btn">
+            Cancel
+          </v-btn>
           <v-spacer />
           <v-btn
             @click="submitApproval"
-            :color="approvalActions.find((a) => a.value === approvalAction)?.color"
+            variant="flat"
+            size="default"
+            class="confirm-approval-btn"
+            :prepend-icon="approvalActions.find((a) => a.value === approvalAction)?.icon"
             :disabled="approvalAction === 'return' && !approvalComments.trim()"
           >
             Confirm {{ approvalActions.find((a) => a.value === approvalAction)?.text }}
@@ -1048,25 +1089,205 @@ onMounted(() => {
   color: #374151;
 }
 
-.approval-dialog-title {
-  background-color: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
+/* Approval Dialog Styles - COPIED FROM PROJECTVIEW */
+.approval-dialog-card {
+  border: 2px solid #353535 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+:deep(.v-overlay--active .v-overlay__content) {
+  align-self: center !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.approval-dialog-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 24px !important;
+  background: #353535 !important;
+  color: white !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.dialog-divider {
+  border-color: #e0e0e0 !important;
+  opacity: 1 !important;
 }
 
 .approval-dialog-content {
-  padding: 24px;
+  padding: 24px !important;
+  background: white !important;
+}
+
+.approval-info-box {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-left: 4px solid #353535;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.approval-message {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #555;
+  margin: 0;
+}
+
+.approval-message strong {
+  color: #353535;
+  font-weight: 600;
+}
+
+.form-field {
+  margin-bottom: 20px;
+}
+
+.form-field:last-child {
+  margin-bottom: 0;
+}
+
+.field-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #353535;
+  margin-bottom: 8px;
+}
+
+:deep(.form-field .v-field) {
+  background: white !important;
+  border-radius: 6px !important;
+}
+
+:deep(.form-field .v-field__outline) {
+  border-color: #d0d0d0 !important;
+  border-width: 1px !important;
+}
+
+:deep(.form-field .v-field--focused .v-field__outline) {
+  border-color: #353535 !important;
+  border-width: 2px !important;
+}
+
+:deep(.form-field .v-field__input) {
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+  color: #353535 !important;
+}
+
+:deep(.form-field .v-select__selection-text) {
+  font-size: 14px !important;
+  color: #353535 !important;
+}
+
+.next-step-alert {
+  border-left: 4px solid #353535 !important;
+  border-radius: 6px !important;
+  background: #f8f8f8 !important;
+  padding: 12px 16px !important;
+  margin-top: 16px !important;
+}
+
+:deep(.next-step-alert .v-alert__prepend) {
+  margin-right: 12px !important;
+  color: #353535 !important;
+}
+
+.alert-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #555;
+}
+
+.alert-text strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #353535;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .approval-dialog-actions {
-  padding: 16px 24px;
-  background-color: #f8fafc;
-  border-top: 1px solid #e5e7eb;
+  padding: 16px 24px !important;
+  background: #fafafa !important;
+  border-top: 1px solid #e0e0e0 !important;
 }
 
-@media (max-width: 1024px) {
-  .left-panel,
-  .right-panel {
-    padding: 0;
+.cancel-btn {
+  border: 2px solid #353535 !important;
+  color: #353535 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+}
+
+.cancel-btn:hover {
+  background: #f5f5f5 !important;
+}
+
+.confirm-approval-btn {
+  background: #353535 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 28px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.confirm-approval-btn:hover {
+  background: #1f1f1f !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.confirm-approval-btn:disabled {
+  background: #9ca3af !important;
+  color: #d1d5db !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+}
+
+/* Responsive adjustments for approval dialog */
+@media (max-width: 600px) {
+  .approval-dialog-header {
+    padding: 16px 20px !important;
+    font-size: 16px !important;
+  }
+
+  .approval-dialog-content {
+    padding: 20px !important;
+  }
+
+  .approval-info-box {
+    padding: 12px;
+  }
+
+  .approval-message {
+    font-size: 13px;
+  }
+
+  .approval-dialog-actions {
+    padding: 12px 20px !important;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cancel-btn,
+  .confirm-approval-btn {
+    width: 100%;
+  }
+
+  .approval-dialog-actions .v-spacer {
+    display: none;
   }
 }
 </style>
