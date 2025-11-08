@@ -366,6 +366,41 @@ const formatDate = (dateString) => {
   }
 }
 
+// Format due date
+const formatDueDate = (dateString) => {
+  if (!dateString) return 'No deadline set'
+  try {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  } catch (error) {
+    return dateString
+  }
+}
+
+// Toggle star (for priority)
+const toggleStar = (projectId) => {
+  console.log('Toggle priority for project:', projectId)
+}
+
+// Helper methods for dialog close actions
+const handlePublishAndClose = (project) => {
+  startPublish(project)
+  closeDetailDialog()
+}
+
+const handleForwardAndClose = (project) => {
+  startForward(project)
+  closeDetailDialog()
+}
+
+const handleApproveAndClose = (project) => {
+  startApprove(project)
+  closeDetailDialog()
+}
+
 // Load data on mount
 onMounted(() => {
   loadProjects()
@@ -480,164 +515,135 @@ onMounted(() => {
         </div>
 
         <!-- Projects Table -->
-        <v-card class="projects-table-card">
-          <v-card-title class="table-header">
-            <span>Projects for EIC Review</span>
-            <v-btn @click="loadProjects" variant="text" icon size="small" class="refresh-btn">
-              <v-icon>mdi-refresh</v-icon>
-            </v-btn>
-          </v-card-title>
+        <v-container fluid class="projects-table pa-0">
+          <v-row class="table-header" no-gutters>
+            <v-col class="header-cell title-header">Project Details</v-col>
+            <v-col class="header-cell">Submitted By</v-col>
+            <v-col class="header-cell">Department</v-col>
+            <v-col class="header-cell">Priority</v-col>
+            <v-col class="header-cell">Status</v-col>
+            <v-col class="header-cell">Submitted Date</v-col>
+            <v-col class="header-cell actions-header">Actions</v-col>
+          </v-row>
 
-          <v-divider />
-
-          <div class="table-container">
-            <v-table class="projects-table">
-              <thead>
-                <tr>
-                  <th>Project Details</th>
-                  <th>Submitted By</th>
-                  <th>Department</th>
-                  <th>Priority</th>
-                  <th>Status</th>
-                  <th>Submitted Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="project in filteredProjects"
-                  :key="`${project.type}-${project.id}`"
-                  class="project-row"
+          <v-container fluid class="table-body pa-0">
+            <v-row
+              v-for="project in filteredProjects"
+              :key="`${project.type}-${project.id}`"
+              class="table-row"
+              no-gutters
+            >
+              <v-col class="table-cell title-cell">
+                <v-btn
+                  class="star-button"
+                  @click="toggleStar(project.id)"
+                  :class="{ starred: project.priority === 'High' }"
+                  variant="text"
+                  icon
+                  size="small"
+                  aria-label="Priority indicator"
                 >
-                  <td>
-                    <div class="project-info">
-                      <!-- Make title clickable -->
-                      <div class="project-title clickable" @click="handleViewProject(project)">
-                        {{ project.title }}
-                      </div>
-                      <div class="project-meta">
-                        <v-chip
-                          size="x-small"
-                          :color="
-                            project.type === 'magazine'
-                              ? 'blue'
-                              : project.type === 'newsletter'
-                                ? 'green'
-                                : project.type === 'folio'
-                                  ? 'purple'
-                                  : 'orange'
-                          "
-                        >
-                          {{ project.type }}
-                        </v-chip>
-                        <span class="project-id">#{{ project.id }}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="submitter-info">
-                      <div class="submitter-name">{{ project.submittedBy }}</div>
-                      <div class="submitter-role">{{ project.sectionHead }}</div>
-                    </div>
-                  </td>
-                  <td>
-                    <v-chip size="small" variant="outlined">
-                      {{ project.department }}
+                  <v-icon>{{
+                    project.priority === 'High' ? 'mdi-star' : 'mdi-star-outline'
+                  }}</v-icon>
+                </v-btn>
+                <div class="project-info">
+                  <div class="project-title clickable" @click="handleViewProject(project)">
+                    {{ project.title }}
+                  </div>
+                  <div class="project-meta">
+                    <v-chip
+                      size="x-small"
+                      :color="
+                        project.type === 'magazine'
+                          ? 'blue'
+                          : project.type === 'newsletter'
+                            ? 'green'
+                            : project.type === 'folio'
+                              ? 'purple'
+                              : 'orange'
+                      "
+                    >
+                      {{ project.type }}
                     </v-chip>
-                  </td>
-                  <td>
-                    <v-chip :color="getPriorityColor(project.priority)" size="small">
-                      {{ project.priority }}
-                    </v-chip>
-                  </td>
-                  <td>
-                    <v-chip :color="getStatusColor(project.status)" size="small">
-                      {{ project.status }}
-                    </v-chip>
-                  </td>
-                  <td>
-                    <div class="date-info">
-                      {{ formatDate(project.submittedDate) }}
-                    </div>
-                  </td>
-                  <td>
-                    <div class="action-buttons">
-                      <!-- View icon button -->
-                      <v-btn
-                        @click="handleViewProject(project)"
-                        variant="text"
-                        icon
-                        size="small"
-                        class="action-btn view-btn"
-                        title="View Project"
-                      >
-                        <v-icon>mdi-eye</v-icon>
-                      </v-btn>
+                    <span class="project-id">#{{ project.id }}</span>
+                  </div>
+                </div>
+              </v-col>
+              <v-col class="table-cell">
+                <div class="submitter-info">
+                  <div class="submitter-name">{{ project.submittedBy }}</div>
+                  <div class="submitter-role">{{ project.sectionHead }}</div>
+                </div>
+              </v-col>
+              <v-col class="table-cell">
+                <v-chip size="small" variant="outlined">
+                  {{ project.department }}
+                </v-chip>
+              </v-col>
+              <v-col class="table-cell">
+                <v-chip :color="getPriorityColor(project.priority)" size="small">
+                  {{ project.priority }}
+                </v-chip>
+              </v-col>
+              <v-col class="table-cell">
+                <v-chip :color="getStatusColor(project.status)" size="small">
+                  {{ project.status }}
+                </v-chip>
+              </v-col>
+              <v-col class="table-cell">
+                <div class="date-info">
+                  {{ formatDate(project.submittedDate) }}
+                </div>
+              </v-col>
+              <v-col class="table-cell actions-cell">
+                <v-btn
+                  class="action-btn view-btn"
+                  @click="handleViewProject(project)"
+                  variant="text"
+                  icon
+                  size="small"
+                  aria-label="View project"
+                >
+                  <v-icon>mdi-eye</v-icon>
+                </v-btn>
 
-                      <!-- Forward -->
-                      <v-btn
-                        @click="startForward(project)"
-                        variant="text"
-                        icon
-                        size="small"
-                        class="action-btn forward-btn"
-                        title="Forward to Chief Adviser"
-                        :disabled="
-                          project.status === 'Published' || project.status === 'To Chief Adviser'
-                        "
-                      >
-                        <v-icon>mdi-arrow-right-circle</v-icon>
-                      </v-btn>
+                <v-btn
+                  class="action-btn edit-btn"
+                  @click="startApprove(project)"
+                  variant="text"
+                  icon
+                  size="small"
+                  aria-label="Approve"
+                  :disabled="project.status === 'Published' || project.status === 'EIC Approved'"
+                >
+                  <v-icon>mdi-pencil</v-icon>
+                </v-btn>
 
-                      <!-- Approve -->
-                      <v-btn
-                        @click="startApprove(project)"
-                        variant="text"
-                        icon
-                        size="small"
-                        class="action-btn approve-btn"
-                        title="Approve Project"
-                        :disabled="
-                          project.status === 'Published' || project.status === 'EIC Approved'
-                        "
-                      >
-                        <v-icon>mdi-check-circle</v-icon>
-                      </v-btn>
+                <v-btn
+                  class="action-btn delete-btn"
+                  @click="startForward(project)"
+                  variant="text"
+                  icon
+                  size="small"
+                  aria-label="Forward"
+                  :disabled="
+                    project.status === 'Published' || project.status === 'To Chief Adviser'
+                  "
+                >
+                  <v-icon>mdi-dots-horizontal-circle-outline</v-icon>
+                </v-btn>
+              </v-col>
+            </v-row>
+          </v-container>
 
-                      <!-- Publish -->
-                      <v-btn
-                        @click="startPublish(project)"
-                        variant="text"
-                        icon
-                        size="small"
-                        class="action-btn publish-btn"
-                        title="Publish Project"
-                        :disabled="
-                          project.status !== 'EIC Approved' && project.status !== 'To Publish'
-                        "
-                      >
-                        <v-icon>
-                          {{
-                            project.status !== 'EIC Approved' && project.status !== 'To Publish'
-                              ? 'mdi-lock'
-                              : 'mdi-publish'
-                          }}
-                        </v-icon>
-                      </v-btn>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </v-table>
-
-            <!-- Empty State -->
-            <div v-if="filteredProjects.length === 0" class="empty-state">
-              <v-icon size="64" color="grey-lighten-1">mdi-crown-outline</v-icon>
-              <h3>No projects found</h3>
-              <p>There are no projects for EIC review at this time.</p>
-            </div>
+          <!-- Empty State -->
+          <div v-if="filteredProjects.length === 0" class="empty-state">
+            <v-icon size="64" color="grey-lighten-1">mdi-crown-outline</v-icon>
+            <h3>No projects found</h3>
+            <p>There are no projects for EIC review at this time.</p>
           </div>
-        </v-card>
+        </v-container>
       </v-container>
     </v-main>
 
@@ -922,14 +928,16 @@ onMounted(() => {
 .eic-container {
   max-width: 1400px;
   margin: 0 auto;
+  width: 100% !important;
 }
 
+/* Compact Header */
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 32px;
-  padding: 24px 0;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px 0;
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -940,77 +948,82 @@ onMounted(() => {
 .page-title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 32px;
+  gap: 8px;
+  font-size: 24px;
   font-weight: 700;
   color: #1f2937;
-  margin: 0 0 8px 0;
+  margin: 0 0 4px 0;
 }
 
 .title-icon {
   color: #f59e0b;
-  font-size: 36px;
+  font-size: 28px;
 }
 
 .page-subtitle {
-  font-size: 16px;
+  font-size: 13px;
   color: #6b7280;
   margin: 0;
 }
 
+/* Compact Stats */
 .header-stats {
   display: flex;
-  gap: 24px;
+  gap: 16px;
 }
 
 .stat-card {
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 6px;
+  padding: 12px 16px;
   text-align: center;
-  min-width: 120px;
+  min-width: 100px;
 }
 
 .stat-number {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   color: #1f2937;
   line-height: 1;
 }
 
 .stat-label {
-  font-size: 14px;
+  font-size: 12px;
   color: #6b7280;
   margin-top: 4px;
 }
 
+/* Controls */
 .controls-section {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .view-tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  padding: 4px;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 3px;
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 6px;
   width: fit-content;
 }
 
 .tab-btn {
   text-transform: none !important;
   font-weight: 500 !important;
+  font-size: 13px !important;
   border-radius: 4px !important;
+  padding: 4px 12px !important;
+  height: 32px !important;
 }
 
 .controls-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
 }
 
 .search-section {
@@ -1025,11 +1038,11 @@ onMounted(() => {
 .filter-section {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .sort-select {
-  width: 200px;
+  width: 180px;
   background: white;
 }
 
@@ -1037,69 +1050,87 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.projects-table-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: white;
+/* Table - Match MagazineView exactly */
+.projects-table {
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
 }
 
 .table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
+  background-color: #f9fafb !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  display: grid !important;
+  grid-template-columns: 2.5fr 1.2fr 1fr 0.8fr 1.2fr 1.2fr 140px !important;
 }
 
-.refresh-btn {
-  opacity: 0.7;
+.header-cell {
+  padding: 12px 16px !important;
+  font-weight: 600 !important;
+  color: #2f2f2f !important;
+  font-size: 14px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
-.refresh-btn:hover {
-  opacity: 1;
+.title-header {
+  text-align: left !important;
 }
 
-.table-container {
-  min-height: 400px;
+.actions-header {
+  text-align: center !important;
 }
 
-.projects-table {
-  width: 100%;
+.table-body {
+  background-color: white !important;
 }
 
-.projects-table thead th {
-  background: #f9fafb;
-  font-weight: 600;
-  color: #374151;
-  padding: 16px;
-  border-bottom: 1px solid #e5e7eb;
+.table-row {
+  border-bottom: 1px solid #e5e7eb !important;
+  transition: background-color 0.2s ease !important;
+  display: grid !important;
+  grid-template-columns: 2.5fr 1.2fr 1fr 0.8fr 1.2fr 1.2fr 140px !important;
+  align-items: center !important;
 }
 
-.project-row {
-  border-bottom: 1px solid #f3f4f6;
-  transition: background-color 0.2s ease;
+.table-row:last-child {
+  border-bottom: none !important;
 }
 
-.project-row:hover {
-  background-color: #f8fafc;
+.table-row:hover {
+  background-color: #f8fafc !important;
 }
 
-.projects-table td {
-  padding: 16px;
-  vertical-align: middle;
+.table-cell {
+  padding: 12px 16px !important;
+  color: #2f2f2f !important;
+  font-size: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  overflow: hidden !important;
+}
+
+.title-cell {
+  gap: 8px !important;
+  min-width: 0 !important;
 }
 
 .project-info {
-  min-width: 250px;
+  flex: 1;
+  min-width: 0 !important;
+  overflow: hidden !important;
 }
 
 .project-title {
-  font-weight: 600;
+  font-weight: 500;
   color: #1f2937;
   margin-bottom: 4px;
   line-height: 1.4;
+  font-size: 14px;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .project-title.clickable {
@@ -1116,80 +1147,108 @@ onMounted(() => {
 .project-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  overflow: hidden !important;
 }
 
 .project-id {
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
   font-family: monospace;
+  white-space: nowrap !important;
+}
+
+:deep(.star-button) {
+  background: none !important;
+  border: none !important;
+  padding: 4px !important;
+  cursor: pointer !important;
+  border-radius: 4px !important;
+  transition: all 0.2s ease !important;
+  color: #d1d5db !important;
+  flex-shrink: 0 !important;
+}
+
+:deep(.star-button:hover) {
+  background-color: #f3f4f6 !important;
+  color: #fbbf24 !important;
+}
+
+:deep(.star-button.starred) {
+  color: #f59e0b !important;
 }
 
 .submitter-info {
-  min-width: 150px;
+  min-width: 100px;
+  overflow: hidden !important;
 }
 
 .submitter-name {
   font-weight: 500;
   color: #1f2937;
+  font-size: 13px;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .submitter-role {
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
   margin-top: 2px;
+  white-space: nowrap !important;
 }
 
 .date-info {
-  font-size: 14px;
+  font-size: 12px;
   color: #6b7280;
-  white-space: nowrap;
+  white-space: nowrap !important;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-start;
-  align-items: center;
+.actions-cell {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 4px !important;
+  flex-shrink: 0 !important;
 }
 
-.action-btn {
-  transition: all 0.2s ease;
+:deep(.action-btn) {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  padding: 6px !important;
+  border-radius: 4px !important;
+  transition: background-color 0.2s ease !important;
+  flex-shrink: 0 !important;
 }
 
-.view-btn {
+:deep(.view-btn) {
   color: #3b82f6 !important;
 }
 
-.view-btn:hover {
+:deep(.view-btn:hover) {
   background-color: #eff6ff !important;
 }
 
-.publish-btn {
-  color: #059669 !important;
+:deep(.edit-btn) {
+  color: #f59e0b !important;
 }
 
-.publish-btn:hover {
-  background-color: #ecfdf5 !important;
+:deep(.edit-btn:hover) {
+  background-color: #fef3c7 !important;
 }
 
-.approve-btn {
-  color: #10b981 !important;
+:deep(.delete-btn) {
+  color: #6b7280 !important;
 }
 
-.approve-btn:hover {
-  background-color: #f0fdf4 !important;
+:deep(.delete-btn:hover) {
+  background-color: #f3f4f6 !important;
+  color: #3b82f6 !important;
 }
 
-.forward-btn {
-  color: #8b5cf6 !important;
-}
-
-.forward-btn:hover {
-  background-color: #faf5ff !important;
-}
-
-.action-btn:disabled {
+:deep(.action-btn:disabled) {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -1199,18 +1258,20 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 20px;
+  padding: 60px 20px;
   text-align: center;
 }
 
 .empty-state h3 {
-  margin: 16px 0 8px 0;
+  margin: 12px 0 6px 0;
   color: #374151;
+  font-size: 16px;
 }
 
 .empty-state p {
   color: #6b7280;
   margin: 0;
+  font-size: 13px;
 }
 
 .detail-item {
@@ -1236,7 +1297,7 @@ onMounted(() => {
 @media (max-width: 1024px) {
   .page-header {
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
     align-items: stretch;
   }
 
@@ -1256,15 +1317,29 @@ onMounted(() => {
   .filter-section {
     justify-content: space-between;
   }
+
+  .table-header,
+  .table-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .header-cell,
+  .table-cell {
+    padding: 8px 12px !important;
+  }
 }
 
 @media (max-width: 768px) {
   .eic-container {
-    padding: 16px !important;
+    padding: 12px !important;
   }
 
   .page-title {
-    font-size: 28px;
+    font-size: 20px;
+  }
+
+  .title-icon {
+    font-size: 24px;
   }
 
   .view-tabs {
@@ -1274,30 +1349,21 @@ onMounted(() => {
 
   .tab-btn {
     flex: 1;
-    min-width: calc(50% - 4px);
+    min-width: calc(50% - 2px);
+    font-size: 12px !important;
   }
 
   .header-stats {
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
   }
 
   .stat-card {
-    padding: 16px;
+    padding: 10px 14px;
   }
 
-  .projects-table {
-    font-size: 14px;
-  }
-
-  .projects-table td,
-  .projects-table th {
-    padding: 12px 8px;
-  }
-
-  .action-buttons {
-    flex-direction: column;
-    gap: 2px;
+  .stat-number {
+    font-size: 20px;
   }
 }
 </style>
