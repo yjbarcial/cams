@@ -11,16 +11,18 @@ const selectedProjects = ref([])
 const searchQuery = ref('')
 const sortOrder = ref('Date Submitted ↓')
 const showOnlyUrgent = ref(false)
-const viewMode = ref('all') // 'all', 'pending', 'approved', 'published'
+const viewMode = ref('all')
 
-// Projects data - will load from localStorage
+// Projects data
 const projects = ref([])
 
 // Dialog states
 const showPublishDialog = ref(false)
 const showApproveDialog = ref(false)
 const showForwardDialog = ref(false)
+const showDetailDialog = ref(false) // ADD THIS
 const currentProject = ref(null)
+const detailProject = ref(null) // ADD THIS
 
 // Dialog form data
 const publishData = ref({
@@ -163,8 +165,10 @@ const projectCounts = computed(() => ({
 
 // Action functions
 const handleViewProject = (project) => {
-  // Open the approval detail view as Editor-in-Chief
-  router.push(`/approval/${project.id}?role=Editor-in-Chief`)
+  // DON'T route - just open dialog
+  detailProject.value = project
+  showDetailDialog.value = true
+  console.log('Opening detail dialog for:', project)
 }
 
 const startPublish = (project) => {
@@ -194,6 +198,11 @@ const startForward = (project) => {
     advisorNotes: '',
   }
   showForwardDialog.value = true
+}
+
+const closeDetailDialog = () => {
+  showDetailDialog.value = false
+  detailProject.value = null
 }
 
 // Confirm actions
@@ -633,6 +642,109 @@ onMounted(() => {
     </v-main>
 
     <Footer />
+
+    <!-- ADD THIS DIALOG BEFORE YOUR OTHER DIALOGS -->
+    <v-dialog v-model="showDetailDialog" fullscreen transition="dialog-bottom-transition">
+      <v-card>
+        <v-toolbar color="primary" dark>
+          <v-btn icon @click="closeDetailDialog">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+          <v-toolbar-title>Editor-in-Chief Review - {{ detailProject?.title }}</v-toolbar-title>
+          <v-spacer />
+          <v-chip v-if="detailProject" :color="getStatusColor(detailProject.status)" dark>
+            {{ detailProject.status }}
+          </v-chip>
+        </v-toolbar>
+
+        <v-container v-if="detailProject" class="pa-6">
+          <v-row>
+            <v-col cols="12" md="8">
+              <v-card class="mb-4">
+                <v-card-title>Project Information</v-card-title>
+                <v-divider />
+                <v-card-text>
+                  <div class="detail-item"><strong>Title:</strong> {{ detailProject.title }}</div>
+                  <div class="detail-item">
+                    <strong>Type:</strong>
+                    <v-chip size="small">{{ detailProject.type }}</v-chip>
+                  </div>
+                  <div class="detail-item"><strong>ID:</strong> #{{ detailProject.id }}</div>
+                  <div class="detail-item">
+                    <strong>Section Head:</strong> {{ detailProject.sectionHead }}
+                  </div>
+                  <div class="detail-item">
+                    <strong>Priority:</strong>
+                    <v-chip size="small" :color="getPriorityColor(detailProject.priority)">
+                      {{ detailProject.priority }}
+                    </v-chip>
+                  </div>
+                  <div v-if="detailProject.description" class="detail-item">
+                    <strong>Description:</strong>
+                    <p class="mt-2">{{ detailProject.description }}</p>
+                  </div>
+                  <div v-if="detailProject.content" class="detail-item">
+                    <strong>Content:</strong>
+                    <div class="mt-2 content-preview" v-html="detailProject.content"></div>
+                  </div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+
+            <v-col cols="12" md="4">
+              <v-card>
+                <v-card-title>Quick Actions</v-card-title>
+                <v-divider />
+                <v-card-text>
+                  <v-btn
+                    @click="
+                      startPublish(detailProject)
+                      closeDetailDialog()
+                    "
+                    color="success"
+                    block
+                    size="large"
+                    prepend-icon="mdi-publish"
+                    class="mb-3"
+                    :disabled="detailProject.status !== 'EIC Approved'"
+                  >
+                    Publish Project
+                  </v-btn>
+
+                  <v-btn
+                    @click="
+                      startForward(detailProject)
+                      closeDetailDialog()
+                    "
+                    color="purple"
+                    block
+                    size="large"
+                    prepend-icon="mdi-arrow-right-circle"
+                    class="mb-3"
+                  >
+                    Forward to Adviser
+                  </v-btn>
+
+                  <v-btn
+                    @click="
+                      startApprove(detailProject)
+                      closeDetailDialog()
+                    "
+                    color="success"
+                    variant="outlined"
+                    block
+                    size="large"
+                    prepend-icon="mdi-check-circle"
+                  >
+                    Approve Project
+                  </v-btn>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+        </v-container>
+      </v-card>
+    </v-dialog>
 
     <!-- Publish Dialog -->
     <v-dialog v-model="showPublishDialog" max-width="600px" persistent>
@@ -1108,6 +1220,25 @@ onMounted(() => {
 .empty-state p {
   color: #6b7280;
   margin: 0;
+}
+
+.detail-item {
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.detail-item strong {
+  color: #374151;
+  margin-right: 8px;
+}
+
+.content-preview {
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 /* Responsive Design */
