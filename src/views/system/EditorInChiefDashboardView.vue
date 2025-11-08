@@ -697,10 +697,7 @@ onMounted(() => {
                 <v-divider />
                 <v-card-text>
                   <v-btn
-                    @click="
-                      startPublish(detailProject)
-                      closeDetailDialog()
-                    "
+                    @click="handlePublishAndClose(detailProject)"
                     color="success"
                     block
                     size="large"
@@ -712,10 +709,7 @@ onMounted(() => {
                   </v-btn>
 
                   <v-btn
-                    @click="
-                      startForward(detailProject)
-                      closeDetailDialog()
-                    "
+                    @click="handleForwardAndClose(detailProject)"
                     color="purple"
                     block
                     size="large"
@@ -726,10 +720,7 @@ onMounted(() => {
                   </v-btn>
 
                   <v-btn
-                    @click="
-                      startApprove(detailProject)
-                      closeDetailDialog()
-                    "
+                    @click="handleApproveAndClose(detailProject)"
                     color="success"
                     variant="outlined"
                     block
