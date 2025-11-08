@@ -720,8 +720,8 @@ const getBackButtonText = computed(() => {
 
             <!-- Project Description -->
             <div v-if="project.description" class="project-description">
-              <h3>Description</h3>
-              <p>{{ project.description }}</p>
+              <div class="description-label">Description</div>
+              <div class="description-text">{{ project.description }}</div>
             </div>
 
             <!-- Project Metadata -->
@@ -734,32 +734,37 @@ const getBackButtonText = computed(() => {
                   </v-chip>
                 </div>
                 <div class="metadata-item">
+                  <span class="label">Section Head:</span>
+                  <span class="value">{{ project.sectionHead }}</span>
+                </div>
+              </div>
+
+              <div class="metadata-row">
+                <div class="metadata-item">
                   <span class="label">Due Date:</span>
                   <span class="value">{{ project.dueDate }}</span>
                 </div>
+                <div class="metadata-item">
+                  <span class="label">Writer:</span>
+                  <span class="value">{{ project.writers || 'Not assigned' }}</span>
+                </div>
               </div>
+
               <div class="metadata-row">
                 <div class="metadata-item">
                   <span class="label">Last Modified:</span>
                   <span class="value">{{ project.lastModified }}</span>
                 </div>
                 <div class="metadata-item">
-                  <span class="label">Media Uploaded:</span>
-                  <span class="value">{{ project.mediaUploaded }}</span>
-                </div>
-              </div>
-              <div class="metadata-row">
-                <div class="metadata-item">
-                  <span class="label">Section Head:</span>
-                  <span class="value">{{ project.sectionHead }}</span>
-                </div>
-                <div class="metadata-item">
-                  <span class="label">Writer:</span>
-                  <span class="value">{{ project.writers || 'Not assigned' }}</span>
-                </div>
-                <div class="metadata-item">
                   <span class="label">Artist:</span>
                   <span class="value">{{ project.artists || 'Not assigned' }}</span>
+                </div>
+              </div>
+
+              <div class="metadata-row metadata-row-last">
+                <div class="metadata-item">
+                  <span class="label">Media Uploaded:</span>
+                  <span class="value">{{ project.mediaUploaded }}</span>
                 </div>
               </div>
             </div>
@@ -1188,21 +1193,22 @@ const getBackButtonText = computed(() => {
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 24px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
 }
 
-.project-description h3 {
-  margin: 0 0 12px 0;
-  color: #374151;
-  font-size: 16px;
+.description-label {
   font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  margin-bottom: 8px;
 }
 
-.project-description p {
-  margin: 0;
+.description-text {
   color: #6b7280;
+  font-size: 13px;
   line-height: 1.6;
+  margin: 0;
 }
 
 .project-history-card {
@@ -1220,36 +1226,57 @@ const getBackButtonText = computed(() => {
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  padding: 20px;
+  padding: 16px 20px;
   margin-bottom: 16px;
 }
 
 .metadata-row {
-  display: flex;
-  gap: 40px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
   margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
 }
 
-.metadata-row:last-child {
+.metadata-row-last {
+  border-bottom: none;
   margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .metadata-item {
-  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .metadata-item .label {
   font-weight: 600;
   color: #374151;
-  margin-right: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+  min-width: fit-content;
 }
 
 .metadata-item .value {
   color: #6b7280;
+  font-size: 13px;
 }
 
 .status-chip {
-  margin-left: 8px;
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .metadata-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .metadata-item-priority {
+    justify-content: flex-start;
+  }
 }
 
 /* Enhanced Auto-save Notice */
@@ -1494,7 +1521,7 @@ const getBackButtonText = computed(() => {
   background: white !important;
 }
 
-.submit-info-box {
+.submit-info_box {
   background: #f5f5f5;
   border: 1px solid #e0e0e0;
   border-left: 4px solid #353535;
