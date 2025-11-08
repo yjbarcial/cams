@@ -13,7 +13,7 @@ import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import SectionHeadView from '@/views/system/SectionHeadView.vue'
-import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
+import EditorInChiefDashboardView from '@/views/system/EditorInChiefDashboardView.vue'
 import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 
 // Admin email list - users with admin privileges
@@ -124,12 +124,12 @@ const router = createRouter({
     {
       path: '/editor-in-chief',
       name: 'editor-in-chief',
-      component: EditorInChiefView,
+      component: EditorInChiefDashboardView,
     },
     {
       path: '/editor-in-chief/:id',
       name: 'editor-in-chief-detail',
-      component: EditorInChiefView,
+      component: EditorInChiefDashboardView,
       props: true,
     },
     {
