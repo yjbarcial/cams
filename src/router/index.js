@@ -14,7 +14,7 @@ import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import SectionHeadView from '@/views/system/SectionHeadView.vue'
 import EditorInChiefDashboardView from '@/views/system/EditorInChiefDashboardView.vue'
-import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
+import ChiefAdviserDashboardView from '@/views/system/ChiefAdviserDashboardView.vue'
 
 // Admin email list - users with admin privileges
 const adminEmails = [
@@ -134,13 +134,18 @@ const router = createRouter({
     },
     {
       path: '/chief-adviser',
-      name: 'chief-adviser',
-      component: ChiefAdviserView,
+      name: 'chief-adviser-dashboard',
+      component: ChiefAdviserDashboardView,
+      meta: {
+        requiresAuth: true,
+        role: 'chief-adviser',
+        title: 'Chief Adviser Dashboard',
+      },
     },
     {
       path: '/chief-adviser/:id',
       name: 'chief-adviser-detail',
-      component: ChiefAdviserView,
+      component: ChiefAdviserDashboardView,
       props: true,
     },
     // Legacy routes for backwards compatibility
