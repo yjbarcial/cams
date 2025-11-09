@@ -55,11 +55,9 @@ const loadProjects = () => {
       const storageKey = `${type}_projects`
       const typeProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
 
-      // Filter projects that are "To Chief Adviser"
+      // Filter projects that are ONLY for Chief Adviser
       const adviserProjects = typeProjects
-        .filter(
-          (project) => project.status === 'To Chief Adviser' || project.status === 'Published',
-        )
+        .filter((project) => project.status === 'To Chief Adviser')
         .map((project) => ({
           ...project,
           type: type,
@@ -96,12 +94,11 @@ const getDepartmentFromType = (type) => {
 const filteredProjects = computed(() => {
   let filtered = projects.value
 
-  // Filter by view mode
+  // Filter by view mode - only 'pending' mode since we removed 'approved'
   if (viewMode.value === 'pending') {
     filtered = filtered.filter((p) => p.status === 'To Chief Adviser')
-  } else if (viewMode.value === 'approved') {
-    filtered = filtered.filter((p) => p.status === 'Published')
   }
+  // Remove the 'approved' filter since those are published and go away
 
   // Filter by search query
   if (searchQuery.value) {
@@ -141,7 +138,6 @@ const filteredProjects = computed(() => {
 const projectCounts = computed(() => ({
   all: projects.value.length,
   pending: projects.value.filter((p) => p.status === 'To Chief Adviser').length,
-  approved: projects.value.filter((p) => p.status === 'Published').length,
 }))
 
 // Action functions
@@ -338,8 +334,8 @@ onMounted(() => {
               <div class="stat-label">Pending Review</div>
             </div>
             <div class="stat-card">
-              <div class="stat-number">{{ projectCounts.approved }}</div>
-              <div class="stat-label">Approved</div>
+              <div class="stat-number">{{ projectCounts.all }}</div>
+              <div class="stat-label">Total Projects</div>
             </div>
           </div>
         </div>
@@ -363,14 +359,6 @@ onMounted(() => {
               class="tab-btn"
             >
               Pending ({{ projectCounts.pending }})
-            </v-btn>
-            <v-btn
-              :variant="viewMode === 'approved' ? 'flat' : 'text'"
-              :color="viewMode === 'approved' ? 'success' : 'default'"
-              @click="viewMode = 'approved'"
-              class="tab-btn"
-            >
-              Approved ({{ projectCounts.approved }})
             </v-btn>
           </div>
 

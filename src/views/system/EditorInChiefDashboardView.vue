@@ -64,14 +64,13 @@ const loadProjects = () => {
       const storageKey = `${type}_projects`
       const typeProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
 
-      // Filter projects that are "To Editor-in-Chief"
+      // Filter projects that are ONLY for Editor-in-Chief
       const eicProjects = typeProjects
         .filter(
           (project) =>
             project.status === 'To Editor-in-Chief' ||
             project.status === 'EIC Review' ||
-            project.status === 'Published' ||
-            project.status === 'To Chief Adviser',
+            project.status === 'EIC Approved',
         )
         .map((project) => ({
           ...project,
@@ -114,10 +113,9 @@ const filteredProjects = computed(() => {
       (p) => p.status === 'To Editor-in-Chief' || p.status === 'EIC Review',
     )
   } else if (viewMode.value === 'approved') {
-    filtered = filtered.filter((p) => p.status === 'To Chief Adviser')
-  } else if (viewMode.value === 'published') {
-    filtered = filtered.filter((p) => p.status === 'Published')
+    filtered = filtered.filter((p) => p.status === 'EIC Approved')
   }
+  // Remove 'published' and 'To Chief Adviser' modes
 
   // Filter by search query
   if (searchQuery.value) {
@@ -159,8 +157,7 @@ const projectCounts = computed(() => ({
   pending: projects.value.filter(
     (p) => p.status === 'To Editor-in-Chief' || p.status === 'EIC Review',
   ).length,
-  approved: projects.value.filter((p) => p.status === 'To Chief Adviser').length,
-  published: projects.value.filter((p) => p.status === 'Published').length,
+  approved: projects.value.filter((p) => p.status === 'EIC Approved').length,
 }))
 
 // Action functions
@@ -422,14 +419,15 @@ onMounted(() => {
             </h1>
             <p class="page-subtitle">Review, approve, and publish projects</p>
           </div>
+          <!-- Header Stats -->
           <div class="header-stats">
             <div class="stat-card">
               <div class="stat-number">{{ projectCounts.pending }}</div>
               <div class="stat-label">Pending Review</div>
             </div>
             <div class="stat-card">
-              <div class="stat-number">{{ projectCounts.published }}</div>
-              <div class="stat-label">Published</div>
+              <div class="stat-number">{{ projectCounts.approved }}</div>
+              <div class="stat-label">Approved</div>
             </div>
           </div>
         </div>
@@ -456,19 +454,11 @@ onMounted(() => {
             </v-btn>
             <v-btn
               :variant="viewMode === 'approved' ? 'flat' : 'text'"
-              :color="viewMode === 'approved' ? 'purple' : 'default'"
+              :color="viewMode === 'approved' ? 'success' : 'default'"
               @click="viewMode = 'approved'"
               class="tab-btn"
             >
-              To Adviser ({{ projectCounts.approved }})
-            </v-btn>
-            <v-btn
-              :variant="viewMode === 'published' ? 'flat' : 'text'"
-              :color="viewMode === 'published' ? 'success' : 'default'"
-              @click="viewMode = 'published'"
-              class="tab-btn"
-            >
-              Published ({{ projectCounts.published }})
+              Approved ({{ projectCounts.approved }})
             </v-btn>
           </div>
 

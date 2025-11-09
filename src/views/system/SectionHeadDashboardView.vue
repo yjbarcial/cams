@@ -41,13 +41,11 @@ const loadProjects = () => {
       const storageKey = `${type}_projects`
       const typeProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
 
-      // Filter projects that are "To Section Head" or related statuses
+      // Filter projects that are ONLY for Section Head
       const sectionHeadProjects = typeProjects
         .filter(
           (project) =>
-            project.status === 'To Section Head' ||
-            project.status === 'Returned by Section Head' ||
-            project.status === 'To Editor-in-Chief',
+            project.status === 'To Section Head' || project.status === 'Returned by Section Head',
         )
         .map((project) => ({
           ...project,
@@ -87,11 +85,10 @@ const filteredProjects = computed(() => {
   // Filter by view mode
   if (viewMode.value === 'pending') {
     filtered = filtered.filter((p) => p.status === 'To Section Head')
-  } else if (viewMode.value === 'approved') {
-    filtered = filtered.filter((p) => p.status === 'To Editor-in-Chief')
   } else if (viewMode.value === 'returned') {
     filtered = filtered.filter((p) => p.status === 'Returned by Section Head')
   }
+  // Remove the 'approved' mode since those projects go to EIC
 
   // Filter by search query
   if (searchQuery.value) {
@@ -131,7 +128,6 @@ const filteredProjects = computed(() => {
 const projectCounts = computed(() => ({
   all: projects.value.length,
   pending: projects.value.filter((p) => p.status === 'To Section Head').length,
-  approved: projects.value.filter((p) => p.status === 'To Editor-in-Chief').length,
   returned: projects.value.filter((p) => p.status === 'Returned by Section Head').length,
 }))
 
@@ -214,8 +210,8 @@ onMounted(() => {
               <div class="stat-label">Pending Review</div>
             </div>
             <div class="stat-card">
-              <div class="stat-number">{{ projectCounts.approved }}</div>
-              <div class="stat-label">Approved</div>
+              <div class="stat-number">{{ projectCounts.returned }}</div>
+              <div class="stat-label">Returned</div>
             </div>
           </div>
         </div>
@@ -239,14 +235,6 @@ onMounted(() => {
               class="tab-btn"
             >
               Pending ({{ projectCounts.pending }})
-            </v-btn>
-            <v-btn
-              :variant="viewMode === 'approved' ? 'flat' : 'text'"
-              :color="viewMode === 'approved' ? 'success' : 'default'"
-              @click="viewMode = 'approved'"
-              class="tab-btn"
-            >
-              Approved ({{ projectCounts.approved }})
             </v-btn>
             <v-btn
               :variant="viewMode === 'returned' ? 'flat' : 'text'"
