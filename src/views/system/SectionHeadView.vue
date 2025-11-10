@@ -150,7 +150,14 @@ const getCommentPlaceholder = () => {
 }
 
 const getBackButtonText = computed(() => {
-  return 'Back to Section Head Dashboard'
+  // Get the project type to return to the correct view
+  const typeNames = {
+    magazine: 'Magazine',
+    newsletter: 'Newsletter',
+    folio: 'Folio',
+    other: 'Other',
+  }
+  return `Back to ${typeNames[projectType.value] || 'Projects'}`
 })
 
 const saveContentChanges = async () => {
@@ -263,7 +270,7 @@ const submitApproval = async () => {
       if (action === 'approve') {
         showNotification('Project approved and sent to Editor-in-Chief!', 'success')
         setTimeout(() => {
-          router.push('/section-head')
+          router.push(`/${projectType.value}`) // Changed from '/section-head'
         }, 600)
         return
       }
@@ -286,7 +293,8 @@ const goBack = () => {
   if (isEditorEditable.value && hasUnsavedChanges.value) {
     saveContentChanges()
   }
-  router.push('/section-head')
+  // Route back to the project type view
+  router.push(`/${projectType.value}`)
 }
 
 const loadProjectComments = () => {

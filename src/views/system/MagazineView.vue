@@ -66,7 +66,7 @@ const handleView = (projectId) => {
 
   console.log('Viewing project:', project.title, 'Status:', project.status)
 
-  // Route based on project status - CLEAN ROUTES WITHOUT QUERY PARAMS
+  // Route based on project status
   if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
     router.push(`/project/${projectId}`)
   } else if (project.status === 'To Section Head') {

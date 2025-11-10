@@ -12,6 +12,7 @@ import DeliverableView from '@/views/system/DeliverableView.vue'
 import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
+import SectionHeadView from '@/views/system/SectionHeadView.vue'
 
 // Admin email list - users with admin privileges
 const adminEmails = [
@@ -156,6 +157,15 @@ const router = createRouter({
       path: '/project/:id',
       name: 'project',
       component: ProjectView,
+      props: true,
+      beforeEnter: requireAuth,
+    },
+
+    // Section Head Approval Route
+    {
+      path: '/section-head/:id',
+      name: 'section-head',
+      component: SectionHeadView,
       props: true,
       beforeEnter: requireAuth,
     },
