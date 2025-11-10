@@ -12,10 +12,6 @@ import DeliverableView from '@/views/system/DeliverableView.vue'
 import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
-import SectionHeadDashboardView from '@/views/system/SectionHeadDashboardView.vue'
-import SectionHeadReviewView from '@/views/system/SectionHeadReviewView.vue'
-import EditorInChiefDashboardView from '@/views/system/EditorInChiefDashboardView.vue'
-import ChiefAdviserDashboardView from '@/views/system/ChiefAdviserDashboardView.vue'
 
 // Admin email list - users with admin privileges
 const adminEmails = [
@@ -44,7 +40,6 @@ const requireAdmin = (to, from, next) => {
 
   const userEmail = localStorage.getItem('userEmail')
   if (!userEmail || !adminEmails.includes(userEmail)) {
-    // Not an admin, redirect to dashboard
     next({ name: 'dashboard' })
   } else {
     next()
@@ -99,7 +94,7 @@ const router = createRouter({
       beforeEnter: requireAdmin,
     },
 
-    // Project Type Routes
+    // Project Type Routes - ALL PROJECTS ARE HERE
     {
       path: '/magazine',
       name: 'magazine',
@@ -163,81 +158,6 @@ const router = createRouter({
       component: ProjectView,
       props: true,
       beforeEnter: requireAuth,
-    },
-
-    // Section Head Routes
-    {
-      path: '/section-head',
-      name: 'section-head-dashboard',
-      component: SectionHeadDashboardView,
-      beforeEnter: requireAuth,
-      meta: {
-        role: 'section-head',
-        title: 'Section Head Dashboard',
-      },
-    },
-    {
-      path: '/section-head/review/:id',
-      name: 'section-head-review',
-      component: SectionHeadReviewView,
-      props: true,
-      beforeEnter: requireAuth,
-      meta: {
-        role: 'section-head',
-        title: 'Review Project',
-      },
-    },
-
-    // Editor-in-Chief Routes
-    {
-      path: '/editor-in-chief',
-      name: 'editor-in-chief-dashboard',
-      component: EditorInChiefDashboardView,
-      beforeEnter: requireAuth,
-      meta: {
-        role: 'editor-in-chief',
-        title: 'Editor-in-Chief Dashboard',
-      },
-    },
-    {
-      path: '/editor-in-chief/:id',
-      name: 'editor-in-chief-detail',
-      component: EditorInChiefDashboardView,
-      props: true,
-      beforeEnter: requireAuth,
-    },
-
-    // Chief Adviser Routes
-    {
-      path: '/chief-adviser',
-      name: 'chief-adviser-dashboard',
-      component: ChiefAdviserDashboardView,
-      beforeEnter: requireAuth,
-      meta: {
-        role: 'chief-adviser',
-        title: 'Chief Adviser Dashboard',
-      },
-    },
-    {
-      path: '/chief-adviser/:id',
-      name: 'chief-adviser-detail',
-      component: ChiefAdviserDashboardView,
-      props: true,
-      beforeEnter: requireAuth,
-    },
-
-    // Legacy routes for backwards compatibility
-    {
-      path: '/approval',
-      redirect: '/section-head',
-    },
-    {
-      path: '/approval/:id',
-      redirect: (to) => `/section-head/review/${to.params.id}`,
-    },
-    {
-      path: '/section-head/:id',
-      redirect: (to) => `/section-head/review/${to.params.id}`,
     },
   ],
 })
