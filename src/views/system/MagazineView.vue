@@ -68,26 +68,21 @@ const handleView = (projectId) => {
 
   // Route based on project status
   if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
-    // Draft or returned - go to regular project view for editing
     router.push(`/project/${projectId}`)
   } else if (project.status === 'To Section Head') {
-    // Needs Section Head approval
     router.push(`/section-head/${projectId}`)
   } else if (
     project.status === 'To Editor-in-Chief' ||
     project.status === 'EIC Review' ||
     project.status === 'Returned by EIC'
   ) {
-    // Needs Editor-in-Chief approval or returned by EIC
     router.push(`/editor-in-chief/${projectId}`)
   } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
-    // Needs Chief Adviser approval
+    // THIS ROUTES TO CHIEF ADVISER VIEW
     router.push(`/chief-adviser/${projectId}`)
   } else if (project.status === 'Published' || project.status === 'EIC Approved') {
-    // Published or approved - view only
     router.push(`/project/${projectId}`)
   } else {
-    // Default fallback
     router.push(`/project/${projectId}`)
   }
 }

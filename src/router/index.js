@@ -14,6 +14,7 @@ import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import SectionHeadView from '@/views/system/SectionHeadView.vue'
 import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
+import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 
 // Admin email list - users with admin privileges
 const adminEmails = [
@@ -174,6 +175,15 @@ const router = createRouter({
       path: '/editor-in-chief/:id',
       name: 'editor-in-chief',
       component: EditorInChiefView,
+      props: true,
+      beforeEnter: requireAuth,
+    },
+
+    // Chief Adviser Approval Route
+    {
+      path: '/chief-adviser/:id',
+      name: 'chief-adviser',
+      component: ChiefAdviserView,
       props: true,
       beforeEnter: requireAuth,
     },
