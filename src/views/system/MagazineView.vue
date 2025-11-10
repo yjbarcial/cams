@@ -55,7 +55,7 @@ const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
 
-// UPDATED: Section Head ONLY routing
+// UPDATED: Routing based on project status
 const handleView = (projectId) => {
   const project = projects.value.find((p) => String(p.id) === String(projectId))
 
@@ -68,16 +68,26 @@ const handleView = (projectId) => {
 
   // Route based on project status
   if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
+    // Draft or returned - go to regular project view for editing
     router.push(`/project/${projectId}`)
   } else if (project.status === 'To Section Head') {
+    // Needs Section Head approval
     router.push(`/section-head/${projectId}`)
-  } else if (project.status === 'To Editor-in-Chief' || project.status === 'EIC Review') {
+  } else if (
+    project.status === 'To Editor-in-Chief' ||
+    project.status === 'EIC Review' ||
+    project.status === 'Returned by EIC'
+  ) {
+    // Needs Editor-in-Chief approval or returned by EIC
     router.push(`/editor-in-chief/${projectId}`)
   } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
+    // Needs Chief Adviser approval
     router.push(`/chief-adviser/${projectId}`)
-  } else if (project.status === 'Published') {
+  } else if (project.status === 'Published' || project.status === 'EIC Approved') {
+    // Published or approved - view only
     router.push(`/project/${projectId}`)
   } else {
+    // Default fallback
     router.push(`/project/${projectId}`)
   }
 }
@@ -1005,7 +1015,7 @@ const deleteFromEdit = () => {
   background: white !important;
 }
 
-.delete-info-box {
+.delete-info_box {
   background: #f5f5f5;
   border: 1px solid #e0e0e0;
   border-left: 4px solid #353535;

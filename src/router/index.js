@@ -13,6 +13,7 @@ import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import SectionHeadView from '@/views/system/SectionHeadView.vue'
+import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
 
 // Admin email list - users with admin privileges
 const adminEmails = [
@@ -161,11 +162,18 @@ const router = createRouter({
       beforeEnter: requireAuth,
     },
 
-    // Section Head Approval Route
+    // Approval Routes - for Section Head and Editor-in-Chief
     {
       path: '/section-head/:id',
       name: 'section-head',
       component: SectionHeadView,
+      props: true,
+      beforeEnter: requireAuth,
+    },
+    {
+      path: '/editor-in-chief/:id',
+      name: 'editor-in-chief',
+      component: EditorInChiefView,
       props: true,
       beforeEnter: requireAuth,
     },
