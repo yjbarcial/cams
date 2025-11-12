@@ -1,17 +1,34 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
+const emit = defineEmits(['close'])
+import { supabase } from '@/utils/supabase.js'
 
 const uploadDialog = ref(false)
 const selectedFiles = ref([])
 const uploading = ref(false)
 const fileInput = ref(null)
 
+const title = ref('')
+const category = ref('Magazine')
+const publishedAt = ref(new Date().toISOString().split('T')[0])
+
 const handleFileSelect = (event) => {
   const files = Array.from(event.target.files)
-  selectedFiles.value = [...selectedFiles.value, ...files]
+  // Accept only PDF for publications
+  const filtered = files.filter((f) => f.name.toLowerCase().endsWith('.pdf'))
+  selectedFiles.value = [...selectedFiles.value, ...filtered]
+}
+
+// Quick connectivity check to make "Failed to fetch" errors easier to diagnose.
+const checkSupabase = async () => {
+  try {
+    // small, safe query to validate connectivity and credentials
+    const { data, error } = await supabase.from('projects').select('id').limit(1)
+    if (error) return { ok: false, error }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err }
+  }
 }
 
 const removeFile = (index) => {
@@ -19,15 +36,79 @@ const removeFile = (index) => {
 }
 
 const uploadFiles = async () => {
+  if (selectedFiles.value.length === 0) return
+  if (!title.value) {
+    alert('Please provide a title for the publication')
+    return
+  }
+
   uploading.value = true
+  // run a quick connectivity check first to fail fast with better diagnostics
+  const connectivity = await checkSupabase()
+  if (!connectivity.ok) {
+    console.error('Supabase connectivity check failed', connectivity.error)
+    uploading.value = false
+    alert(
+      'Supabase connectivity check failed: ' +
+        (connectivity.error?.message || String(connectivity.error)) +
+        '\nPossible causes: network/CORS issue, incorrect VITE_SUPABASE_URL or VITE_SUPABASE_KEY, or storage policies preventing anonymous uploads. Check browser console for details.',
+    )
+    return
+  }
   try {
-    // Simulate upload
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    console.log('Files uploaded:', selectedFiles.value)
+    const bucket = 'publications'
+    const uploadedUrls = []
+
+    for (const file of selectedFiles.value) {
+      const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, file, { cacheControl: '3600', upsert: false })
+
+      if (uploadError) {
+        // Common client-side symptom is a network/CORS failure which often surfaces as a generic fetch failure.
+        // Provide a little more guidance to the developer in this case.
+        if (uploadError.message && uploadError.message.toLowerCase().includes('failed to fetch')) {
+          uploadError.message =
+            uploadError.message +
+            '\nHint: "Failed to fetch" often means a network/CORS problem or that the Supabase URL/Key is incorrect. Check VITE_SUPABASE_URL and VITE_SUPABASE_KEY in your environment and the browser console network tab.'
+        }
+        throw uploadError
+      }
+
+      // get public URL
+      const { data: publicData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(uploadData.path || fileName)
+      const publicUrl = publicData?.publicUrl || publicData?.publicURL || `/${fileName}`
+      uploadedUrls.push(publicUrl)
+
+      // Insert project row in projects table
+      const payload = {
+        title: title.value,
+        project_type: category.value.toLowerCase(),
+        media_uploaded: publicUrl,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error: insertError } = await supabase.from('projects').insert(payload)
+      if (insertError) throw insertError
+    }
+
+    // Clear form and close
     selectedFiles.value = []
+    title.value = ''
+    category.value = 'Magazine'
+    publishedAt.value = new Date().toISOString().split('T')[0]
     uploadDialog.value = false
+    // notify parent to close (AdminView listens to @close)
+    emit('close')
+    // notify success
+    alert('Upload successful')
   } catch (error) {
     console.error('Upload error:', error)
+    alert('Upload failed: ' + (error.message || String(error)))
   } finally {
     uploading.value = false
   }
@@ -53,6 +134,21 @@ const cancelUpload = () => {
       </v-card-title>
 
       <v-card-text class="pa-6">
+        <v-row class="mb-4" align="center">
+          <v-col cols="12" md="6">
+            <v-text-field v-model="title" label="Title" required></v-text-field>
+          </v-col>
+          <v-col cols="12" md="3">
+            <v-select
+              v-model="category"
+              :items="['Folio', 'Magazine', 'Newsletter']"
+              label="Category"
+            ></v-select>
+          </v-col>
+          <v-col cols="12" md="3">
+            <v-text-field v-model="publishedAt" label="Published Date" type="date"></v-text-field>
+          </v-col>
+        </v-row>
         <div class="upload-area mb-4">
           <input
             ref="fileInput"

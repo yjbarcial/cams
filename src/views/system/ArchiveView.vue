@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
 import ArchiveHeader from '@/components/layout/ArchiveHeader.vue'
+import { supabase } from '@/utils/supabase.js'
+import FlipBookViewer from '@/components/FlipBookViewer.vue'
 
-const router = useRouter()
+// router is already initialized above
 
 const searchQuery = ref('')
 const activeCategory = ref('All')
@@ -50,6 +51,32 @@ const filteredArticles = computed(() => {
   })
 })
 
+// Viewer state: open a flipbook-style viewer in-page instead of navigating (prevents login redirect)
+const viewerVisible = ref(false)
+const viewerPages = ref([])
+const viewerTitle = ref('')
+
+function openDeliverable(item, event) {
+  // Prevent navigation to route that may trigger auth checks. Open in-page viewer instead.
+  event && event.preventDefault && event.preventDefault()
+  viewerTitle.value = item.title
+  // If article has explicit pages, use them; otherwise generate simple pages from cover
+  if (Array.isArray(item.pages) && item.pages.length) {
+    viewerPages.value = item.pages
+  } else if (typeof item.pages === 'string' && item.pages.toLowerCase().endsWith('.pdf')) {
+    viewerPages.value = item.pages // FlipBookViewer will detect PDF string
+  } else {
+    viewerPages.value = [item.cover, item.cover]
+  }
+  viewerVisible.value = true
+}
+
+function closeViewer() {
+  viewerVisible.value = false
+  viewerPages.value = []
+  viewerTitle.value = ''
+}
+
 // Prevent back navigation to dashboard
 const preventBackToDashboard = () => {
   // Add a new history entry to prevent going back
@@ -74,6 +101,46 @@ onMounted(() => {
 
   // Replace the current history entry to remove previous page from history
   window.history.replaceState(null, '', window.location.href)
+
+  // Fetch publications from Supabase and merge into articles
+  ;(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) {
+        console.error('Error fetching publications from Supabase', error)
+        return
+      }
+
+      if (data && data.length) {
+        const mapped = data.map((p) => ({
+          id: p.id,
+          title: p.title || 'Untitled',
+          category: p.project_type
+            ? String(p.project_type).charAt(0).toUpperCase() + String(p.project_type).slice(1)
+            : 'Magazine',
+          cover: p.media_uploaded || '/images/lib-hd.jpg',
+          publishedAt: p.created_at || p.due_date || new Date().toISOString(),
+          pages:
+            p.media_uploaded && p.media_uploaded.toLowerCase().endsWith('.pdf')
+              ? p.media_uploaded
+              : null,
+        }))
+
+        // Merge, avoiding duplicates by id
+        mapped.forEach((m) => {
+          const exists = articles.value.find(
+            (a) => String(a.id) === String(m.id) || a.title === m.title,
+          )
+          if (!exists) articles.value.unshift(m)
+        })
+      }
+    } catch (err) {
+      console.error('Error loading publications:', err)
+    }
+  })()
 })
 
 onUnmounted(() => {
@@ -174,10 +241,14 @@ function scrollToPublications() {
               lg="2"
               class="grid-item"
             >
-              <RouterLink
-                :to="`/deliverables/${a.id}`"
-                style="text-decoration: none"
+              <div
+                role="link"
+                tabindex="0"
+                class="card-link"
+                @click.prevent="openDeliverable(a, $event)"
+                @keyup.enter="openDeliverable(a, $event)"
                 :aria-label="`View details for ${a.title}`"
+                style="text-decoration: none; display: block"
               >
                 <v-card class="card" hover>
                   <v-img
@@ -204,7 +275,7 @@ function scrollToPublications() {
                     </v-card-text>
                   </v-card-text>
                 </v-card>
-              </RouterLink>
+              </div>
             </v-col>
           </v-row>
         </v-col>
@@ -288,6 +359,10 @@ function scrollToPublications() {
         </v-row>
       </v-container>
     </v-sheet>
+
+    <!-- Flip overlay used for animated transition to deliverable view -->
+    <!-- FlipBook viewer (in-page modal) -->
+    <FlipBookViewer v-model="viewerVisible" :pages="viewerPages" :title="viewerTitle" />
   </v-app>
 </template>
 
@@ -441,6 +516,47 @@ function scrollToPublications() {
   font-size: 15px !important;
   line-height: 1.2 !important;
   display: block;
+}
+
+/* Flip overlay styles */
+.flip-overlay {
+  pointer-events: none;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+.flip-inner {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  transform-origin: center center;
+  transition: transform 650ms ease-in-out;
+}
+.flip-inner.animating {
+  transform: rotateY(180deg);
+}
+.flip-cover {
+  width: 100%;
+  height: 60%;
+  object-fit: cover;
+}
+.flip-caption {
+  padding: 12px;
+}
+.flip-caption h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.flip-caption .flip-category {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #666;
 }
 
 .date {
