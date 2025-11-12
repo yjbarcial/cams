@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.78.0",
+    "pdfjs-dist": "^3.5.141",
     "esbuild": "^0.25.9",
     "pinia": "^3.0.3",
     "quill": "^2.0.3",
