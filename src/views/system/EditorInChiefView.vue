@@ -119,27 +119,32 @@ const debouncedSave = () => {
   }, 1000)
 }
 
-// EDITOR-IN-CHIEF - Approval actions
+// EDITOR-IN-CHIEF - Approval actions (3 buttons always visible)
 const approvalActions = computed(() => {
+  // Check if project is ready to publish (returned from Chief Adviser with "For Publish" status)
+  const isReadyToPublish = project.value.status === 'For Publish'
+
   return [
     {
       value: 'forward',
       text: 'Forward to Chief Adviser',
       color: 'purple',
-      icon: null, // Removed icon
+      icon: null,
+      disabled: isReadyToPublish, // Disable forward if already approved by Chief Adviser
     },
     {
       value: 'approve',
       text: 'Approve',
       color: 'success',
-      icon: null, // Removed icon
+      icon: null,
+      disabled: isReadyToPublish, // Disable approve if already approved by Chief Adviser
     },
     {
       value: 'publish',
       text: 'Publish',
       color: 'primary',
-      icon: 'mdi-lock',
-      disabled: project.value.status !== 'EIC Approved', // Only enable after Chief Adviser consultation
+      icon: isReadyToPublish ? null : 'mdi-lock', // Show lock icon if not ready
+      disabled: !isReadyToPublish, // Only enable when status is "For Publish"
     },
   ]
 })
@@ -201,7 +206,7 @@ const saveContentChanges = async () => {
 
 const startApproval = (action) => {
   // Check if publish is locked
-  if (action === 'publish' && project.value.status !== 'EIC Approved') {
+  if (action === 'publish' && project.value.status !== 'For Publish') {
     showNotification('Project must be approved by Chief Adviser before publishing', 'warning')
     return
   }
@@ -470,6 +475,7 @@ const getStatusColor = (status) => {
     'Returned by EIC': 'warning',
     'EIC Approved': 'success',
     'To Chief Adviser': 'purple',
+    'For Publish': 'success', // Added new status
     Published: 'success',
   }
   return statusColors[status] || 'default'
@@ -1091,9 +1097,19 @@ onMounted(() => {
 }
 
 .publish-btn {
-  background: transparent !important;
-  border: 1px solid #9ca3af !important;
-  color: #9ca3af !important;
+  background: #9ca3af !important; /* Gray when locked */
+  color: white !important;
+  border: 2px solid #9ca3af !important;
+}
+
+.publish-btn:not(.publish-btn-locked) {
+  background: #fbbf24 !important; /* Yellow when unlocked */
+  color: #353535 !important;
+  border: 2px solid #353535 !important;
+}
+
+.publish-btn:not(.publish-btn-locked):hover {
+  background: #f59e0b !important;
 }
 
 .publish-btn-locked {

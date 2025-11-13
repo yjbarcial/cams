@@ -49,7 +49,7 @@ const handleView = (projectId) => {
     return
   }
 
-  // Route based on project status - FIXED: Use string paths only
+  // Route based on project status - Use string paths with query parameters
   if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
     router.push(`/project/${projectId}?type=newsletter`)
   } else if (
@@ -63,7 +63,8 @@ const handleView = (projectId) => {
     project.status === 'To Editor-in-Chief' ||
     project.status === 'EIC Review' ||
     project.status === 'Returned by EIC' ||
-    project.status === 'Returned by Chief Adviser'
+    project.status === 'Returned by Chief Adviser' ||
+    project.status === 'For Publish' // Added this status to route to EIC
   ) {
     router.push(`/editor-in-chief/${projectId}?type=newsletter`)
   } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {

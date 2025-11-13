@@ -141,7 +141,7 @@ const approvalActions = computed(() => {
 
 // CHIEF ADVISER - Status mapping
 const getNextStatus = (action) => {
-  if (action === 'approve') return 'EIC Approved' // Returns to EIC for publishing
+  if (action === 'approve') return 'For Publish' // Changed from 'EIC Approved' to 'For Publish'
   if (action === 'return') return 'Returned by Chief Adviser'
   if (action === 'reject') return 'Rejected by Chief Adviser'
   return project.value.status
@@ -245,26 +245,27 @@ const submitApproval = async () => {
       localStorage.setItem(storageKey, JSON.stringify(projects))
       project.value.status = newStatus
 
+      // Try to save to Supabase (non-blocking)
       try {
-        await createProjectVersionSupabase(
-          projectType.value,
-          null,
-          {
-            ...projects[projectIndex],
-            status: newStatus,
-            content: editorContent.value || '',
-          },
-          action === 'approve'
-            ? 'Approved by Chief Adviser - Ready for publishing'
-            : action === 'return'
-              ? 'Returned by Chief Adviser for reconsideration'
-              : 'Rejected by Chief Adviser',
-          currentUser.value,
-          action === 'approve' ? 'approved' : action === 'return' ? 'returned' : 'rejected',
-        )
-        console.log('Project saved to Supabase successfully')
+        // Only call Supabase if project has a valid supabaseId
+        if (project.value.supabaseId) {
+          await createProjectVersionSupabase(
+            project.value.supabaseId,
+            editorContent.value || '',
+            action === 'approve'
+              ? 'Approved by Chief Adviser - Ready for Publishing'
+              : action === 'return'
+                ? 'Returned by Chief Adviser for reconsideration'
+                : 'Rejected by Chief Adviser',
+            currentUser.value,
+          )
+          console.log('Project version saved to Supabase successfully')
+        } else {
+          console.log('Project does not have Supabase ID, skipping sync')
+        }
       } catch (err) {
-        console.warn('Failed to save project to Supabase:', err)
+        console.warn('Failed to save project version to Supabase (non-critical):', err)
+        // Don't block the workflow if Supabase fails
       }
 
       const historyKey = `approval_history_${projectId}`
@@ -283,10 +284,7 @@ const submitApproval = async () => {
       approvalComments.value = ''
 
       if (action === 'approve') {
-        showNotification(
-          'Project approved and sent back to Editor-in-Chief for publishing!',
-          'success',
-        )
+        showNotification('Project approved and ready for publishing by Editor-in-Chief!', 'success')
       } else if (action === 'return') {
         showNotification('Project returned for reconsideration', 'warning')
       } else if (action === 'reject') {
@@ -462,6 +460,7 @@ const getStatusColor = (status) => {
   const statusColors = {
     'To Chief Adviser': 'purple',
     'Returned by Chief Adviser': 'warning',
+    'For Publish': 'success', // Added new status color
     'EIC Approved': 'success',
     Published: 'success',
   }

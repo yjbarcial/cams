@@ -65,31 +65,30 @@ const handleView = (projectId) => {
     return
   }
 
-  console.log('Viewing project:', project.title, 'Status:', project.status)
-
-  // Updated routing flow: Project View → Section Head → Technical Editor → EIC → Chief Adviser → EIC
+  // Route based on project status with type query parameter
   if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
-    router.push(`/project/${projectId}`)
+    router.push(`/project/${projectId}?type=magazine`)
   } else if (
     project.status === 'To Section Head' ||
     project.status === 'Returned by Technical Editor'
   ) {
-    router.push(`/section-head/${projectId}`)
+    router.push(`/section-head/${projectId}?type=magazine`)
   } else if (project.status === 'To Technical Editor') {
-    router.push(`/technical-editor/${projectId}`)
+    router.push(`/technical-editor/${projectId}?type=magazine`)
   } else if (
     project.status === 'To Editor-in-Chief' ||
     project.status === 'EIC Review' ||
     project.status === 'Returned by EIC' ||
-    project.status === 'Returned by Chief Adviser'
+    project.status === 'Returned by Chief Adviser' ||
+    project.status === 'For Publish' // Added this status to route to EIC
   ) {
-    router.push(`/editor-in-chief/${projectId}`)
+    router.push(`/editor-in-chief/${projectId}?type=magazine`)
   } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
-    router.push(`/chief-adviser/${projectId}`)
+    router.push(`/chief-adviser/${projectId}?type=magazine`)
   } else if (project.status === 'Published' || project.status === 'EIC Approved') {
-    router.push(`/project/${projectId}`)
+    router.push(`/project/${projectId}?type=magazine`)
   } else {
-    router.push(`/project/${projectId}`)
+    router.push(`/project/${projectId}?type=magazine`)
   }
 }
 // ...existing code...

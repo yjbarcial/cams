@@ -68,7 +68,6 @@ const handleView = (projectId) => {
   }
 
   // Determine the actual storage type for this project
-  // Check both storage keys to find where the project actually exists
   let actualType = 'other'
 
   const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
@@ -94,7 +93,8 @@ const handleView = (projectId) => {
     project.status === 'To Editor-in-Chief' ||
     project.status === 'EIC Review' ||
     project.status === 'Returned by EIC' ||
-    project.status === 'Returned by Chief Adviser'
+    project.status === 'Returned by Chief Adviser' ||
+    project.status === 'For Publish' // Added this status to route to EIC
   ) {
     router.push(`/editor-in-chief/${projectId}?type=${actualType}`)
   } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
