@@ -13,6 +13,7 @@ import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import SectionHeadView from '@/views/system/SectionHeadView.vue'
+import TechnicalEditorView from '@/views/system/TechnicalEditorView.vue'
 import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
 import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 
@@ -163,11 +164,18 @@ const router = createRouter({
       beforeEnter: requireAuth,
     },
 
-    // Approval Routes - for Section Head and Editor-in-Chief
+    // Approval Routes - Updated Flow: Section Head → Technical Editor → EIC → Chief Adviser → EIC
     {
       path: '/section-head/:id',
       name: 'section-head',
       component: SectionHeadView,
+      props: true,
+      beforeEnter: requireAuth,
+    },
+    {
+      path: '/technical-editor/:id',
+      name: 'technical-editor',
+      component: TechnicalEditorView,
       props: true,
       beforeEnter: requireAuth,
     },
@@ -178,8 +186,6 @@ const router = createRouter({
       props: true,
       beforeEnter: requireAuth,
     },
-
-    // Chief Adviser Approval Route
     {
       path: '/chief-adviser/:id',
       name: 'chief-adviser',

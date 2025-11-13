@@ -55,6 +55,7 @@ const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
 
+// ...existing code...
 // UPDATED: Routing based on project status
 const handleView = (projectId) => {
   const project = projects.value.find((p) => String(p.id) === String(projectId))
@@ -66,19 +67,24 @@ const handleView = (projectId) => {
 
   console.log('Viewing project:', project.title, 'Status:', project.status)
 
-  // Route based on project status
+  // Updated routing flow: Project View → Section Head → Technical Editor → EIC → Chief Adviser → EIC
   if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
     router.push(`/project/${projectId}`)
-  } else if (project.status === 'To Section Head') {
+  } else if (
+    project.status === 'To Section Head' ||
+    project.status === 'Returned by Technical Editor'
+  ) {
     router.push(`/section-head/${projectId}`)
+  } else if (project.status === 'To Technical Editor') {
+    router.push(`/technical-editor/${projectId}`)
   } else if (
     project.status === 'To Editor-in-Chief' ||
     project.status === 'EIC Review' ||
-    project.status === 'Returned by EIC'
+    project.status === 'Returned by EIC' ||
+    project.status === 'Returned by Chief Adviser'
   ) {
     router.push(`/editor-in-chief/${projectId}`)
   } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
-    // THIS ROUTES TO CHIEF ADVISER VIEW
     router.push(`/chief-adviser/${projectId}`)
   } else if (project.status === 'Published' || project.status === 'EIC Approved') {
     router.push(`/project/${projectId}`)
@@ -86,6 +92,7 @@ const handleView = (projectId) => {
     router.push(`/project/${projectId}`)
   }
 }
+// ...existing code...
 
 const handleAddProject = () => {
   console.log('Add new magazine project')
