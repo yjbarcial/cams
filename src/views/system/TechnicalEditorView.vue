@@ -203,87 +203,71 @@ const startApproval = (action) => {
 }
 
 const submitApproval = async () => {
-  if (!approvalAction.value) return
-
-  const action = approvalAction.value
-  const newStatus = getNextStatus(action)
+  if (!project.value || !approvalAction.value) return
 
   try {
-    if (isEditorEditable.value) {
-      await saveContentChanges()
+    // First save content changes
+    await saveContentChanges()
+
+    const nextStatus = getNextStatus(approvalAction.value)
+    const now = new Date().toLocaleString()
+
+    const updatedProject = {
+      ...project.value,
+      status: nextStatus,
+      lastModified: now,
+      technicalEditorComments: approvalComments.value || '',
+      priority: approvalPriority.value,
     }
 
+    // Save to localStorage with correct project type
     const storageKey = `${projectType.value}_projects`
     const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    const projectIndex = projects.findIndex((p) => p.id == projectId)
+    const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
 
     if (projectIndex !== -1) {
-      projects[projectIndex].status = newStatus
-      projects[projectIndex].lastModified = new Date().toLocaleString()
-
-      if (action === 'approve') {
-        projects[projectIndex].technicalEditorApprovedBy = currentUser.value
-        projects[projectIndex].technicalEditorApprovedDate = new Date().toISOString()
-        projects[projectIndex].technicalEditorComments = approvalComments.value
-        projects[projectIndex].priority = approvalPriority.value
-      }
-
+      projects[projectIndex] = updatedProject
       localStorage.setItem(storageKey, JSON.stringify(projects))
-      project.value.status = newStatus
 
+      // Update local state
+      project.value = updatedProject
+
+      // Try to save to Supabase (non-blocking)
       try {
-        await createProjectVersionSupabase(
-          projectType.value,
-          null,
-          {
-            ...projects[projectIndex],
-            status: newStatus,
-            content: editorContent.value || '',
-          },
-          action === 'approve'
-            ? 'Approved by Technical Editor'
-            : 'Returned by Technical Editor to Section Head',
-          currentUser.value,
-          action === 'approve' ? 'approved' : 'returned',
-        )
-        console.log('Project saved to Supabase successfully')
-      } catch (err) {
-        console.warn('Failed to save project to Supabase:', err)
+        if (project.value.supabaseId) {
+          await createProjectVersionSupabase(
+            project.value.supabaseId,
+            project.value.content || editorContent.value,
+            `Technical Editor ${approvalAction.value}`,
+            currentUser.value,
+          )
+        }
+      } catch (supabaseError) {
+        console.warn('Supabase sync failed (non-critical):', supabaseError)
+        // Don't block the workflow if Supabase fails
       }
 
-      const historyKey = `approval_history_${projectId}`
-      const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]')
-      existingHistory.push({
-        action,
-        approver: currentUser.value,
-        role: 'Technical Editor',
-        comments: approvalComments.value,
-        timestamp: new Date().toISOString(),
-        priority: approvalPriority.value,
-      })
-      localStorage.setItem(historyKey, JSON.stringify(existingHistory))
+      showNotification(
+        `Project ${approvalAction.value.toLowerCase()} successfully! Status: ${nextStatus}`,
+        'success',
+      )
 
+      // Reset approval state
       showApprovalDialog.value = false
       approvalAction.value = ''
       approvalComments.value = ''
       approvalPriority.value = 'Medium'
 
-      if (action === 'approve') {
-        showNotification('Project approved and sent to Editor-in-Chief!', 'success')
-        setTimeout(() => {
-          router.push(`/${projectType.value}`)
-        }, 600)
-        return
-      }
-
-      showNotification('Project returned to Section Head!', 'success')
+      // Navigate back to list view with project type
       setTimeout(() => {
-        router.push(`/${projectType.value}`)
-      }, 600)
+        goBack()
+      }, 1500)
+    } else {
+      showNotification('Project not found in storage.', 'error')
     }
   } catch (error) {
-    console.error('Error processing approval:', error)
-    showNotification('Error processing approval', 'error')
+    console.error('Error during approval:', error)
+    showNotification('An error occurred during approval. Changes saved locally.', 'warning')
   }
 }
 
@@ -294,10 +278,19 @@ const cancelApproval = () => {
 }
 
 const goBack = () => {
-  if (isEditorEditable.value && hasUnsavedChanges.value) {
-    saveContentChanges()
+  // Save before going back
+  saveContentChanges()
+
+  // Navigate back with project type parameter
+  if (projectType.value === 'newsletter') {
+    router.push({ path: '/newsletter', query: { type: projectType.value } })
+  } else if (projectType.value === 'folio') {
+    router.push({ path: '/folio', query: { type: projectType.value } })
+  } else if (projectType.value === 'other') {
+    router.push({ path: '/other', query: { type: projectType.value } })
+  } else {
+    router.push({ path: '/magazine', query: { type: projectType.value } })
   }
-  router.push(`/${projectType.value}`)
 }
 
 const loadProjectComments = () => {
