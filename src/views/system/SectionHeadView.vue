@@ -132,23 +132,23 @@ const approvalActions = computed(() => {
 })
 
 // SECTION HEAD ONLY - Simple status mapping
+// SECTION HEAD - Updated status mapping
 const getNextStatus = (action) => {
-  if (action === 'approve') return 'To Editor-in-Chief'
+  if (action === 'approve') return 'To Technical Editor' // Changed from 'To Editor-in-Chief'
   if (action === 'return') return 'Returned by Section Head'
   return project.value.status
 }
 
-// SECTION HEAD ONLY - Comment placeholder
+// SECTION HEAD - Updated comment placeholder
 const getCommentPlaceholder = () => {
   if (approvalAction.value === 'approve') {
-    return 'Add any comments or notes for the Editor-in-Chief...'
+    return 'Add any comments or notes for the Technical Editor...' // Updated
   }
   if (approvalAction.value === 'return') {
     return 'Explain what needs to be edited or improved...'
   }
   return 'Add your comments...'
 }
-
 const getBackButtonText = computed(() => {
   // Get the project type to return to the correct view
   const typeNames = {
@@ -750,8 +750,8 @@ onMounted(() => {
           <div class="approval-info-box">
             <p class="approval-message">
               <template v-if="approvalAction === 'approve'">
-                Approve <strong>"{{ project.title }}"</strong> and forward to Editor-in-Chief for
-                final review.
+                Approve <strong>"{{ project.title }}"</strong> and forward to Technical Editor for
+                technical review.
               </template>
               <template v-else-if="approvalAction === 'return'">
                 Request edits for <strong>"{{ project.title }}"</strong>. The project will be
@@ -769,7 +769,7 @@ onMounted(() => {
               density="comfortable"
               prepend-inner-icon="mdi-flag"
               hide-details
-              placeholder="Set priority for Editor-in-Chief"
+              placeholder="Set priority for Technical Editor"
             />
           </div>
 
@@ -797,8 +797,8 @@ onMounted(() => {
               <v-icon size="20">mdi-information-outline</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Next Step:</strong> Project will be forwarded to Editor-in-Chief for final
-              review.
+              <strong>Next Step:</strong> Project will be forwarded to Technical Editor for
+              technical review.
             </div>
           </v-alert>
 
