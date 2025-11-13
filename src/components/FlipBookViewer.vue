@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
   pages: { type: Array, default: () => [] },
@@ -35,6 +35,11 @@ watch(
 async function preparePages(p) {
   // p may be an array of image urls or a single pdf url string
   try {
+    // cleanup previous pdf
+    if (pdfDoc) {
+      pdfDoc.cleanup?.()
+      pdfDoc.destroy?.()
+    }
     pdfDoc = null
     pdfLib = null
     localPages.value = []
@@ -43,10 +48,12 @@ async function preparePages(p) {
     // handle case where p is a string (pdf url)
     if (typeof p === 'string' && p.toLowerCase().endsWith('.pdf')) {
       await loadPdf(p)
-      // initialize placeholders
-      localPages.value = Array.from({ length: pdfDoc.numPages }).map(() => '')
-      // render first page
-      renderPdfPage(0)
+      // initialize placeholders - add null check
+      if (pdfDoc && pdfDoc.numPages) {
+        localPages.value = Array.from({ length: pdfDoc.numPages }).map(() => '')
+        // render first page
+        renderPdfPage(0)
+      }
     } else if (
       Array.isArray(p) &&
       p.length > 0 &&
@@ -54,8 +61,10 @@ async function preparePages(p) {
       p[0].toLowerCase().endsWith('.pdf')
     ) {
       await loadPdf(p[0])
-      localPages.value = Array.from({ length: pdfDoc.numPages }).map(() => '')
-      renderPdfPage(0)
+      if (pdfDoc && pdfDoc.numPages) {
+        localPages.value = Array.from({ length: pdfDoc.numPages }).map(() => '')
+        renderPdfPage(0)
+      }
     } else if (Array.isArray(p)) {
       localPages.value = p.slice()
     }
@@ -68,7 +77,7 @@ async function preparePages(p) {
 async function loadPdf(url) {
   try {
     // dynamic import of pdfjs-dist
-    pdfLib = await import('pdfjs-dist/legacy/build/pdf')
+    pdfLib = await import('pdfjs-dist')
     // configure worker
     if (pdfLib.GlobalWorkerOptions) {
       pdfLib.GlobalWorkerOptions.workerSrc =
@@ -84,7 +93,8 @@ async function loadPdf(url) {
 
 async function renderPdfPage(index) {
   try {
-    if (!pdfDoc) return
+    if (!pdfDoc || !pdfDoc.numPages) return
+    if (index < 0 || index >= pdfDoc.numPages) return
     if (localPages.value[index]) return // already rendered
     const page = await pdfDoc.getPage(index + 1)
     const viewport = page.getViewport({ scale: 1.5 })
@@ -150,6 +160,14 @@ function flipTo(targetIndex) {
 }
 
 onMounted(() => {})
+
+onBeforeUnmount(() => {
+  // cleanup pdf resources
+  if (pdfDoc) {
+    pdfDoc.cleanup?.()
+    pdfDoc.destroy?.()
+  }
+})
 </script>
 
 <template>
@@ -235,18 +253,10 @@ onMounted(() => {})
   opacity: 0.2;
 }
 .flip-in-next .flipbook-page {
-  transform: rotateY(80deg) translateZ(-20px);
-  opacity: 0.2;
-}
-.flip-in-next .flipbook-page {
   animation: flipInNext 450ms forwards;
 }
 .flip-out-prev .flipbook-page {
   transform: rotateY(80deg) translateZ(-20px);
-  opacity: 0.2;
-}
-.flip-in-prev .flipbook-page {
-  transform: rotateY(-80deg) translateZ(-20px);
   opacity: 0.2;
 }
 .flip-in-prev .flipbook-page {
