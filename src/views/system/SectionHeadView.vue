@@ -308,14 +308,50 @@ const loadProjectComments = () => {
 
 const loadProjectData = () => {
   try {
-    const projectTypes = ['magazine', 'newsletter', 'folio', 'other']
+    // First, try to get type from query parameter
+    const queryType = route.query.type
+
+    if (queryType) {
+      console.log('Trying to load project from type:', queryType)
+      const storageKey = `${queryType}_projects`
+      const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      console.log('Found projects in', storageKey, ':', projects)
+      const foundProject = projects.find((p) => String(p.id) === String(projectId))
+
+      if (foundProject) {
+        console.log('✅ Project found:', foundProject)
+        project.value = {
+          ...foundProject,
+          id: String(projectId),
+          title: foundProject.title || 'Untitled Project',
+          status: foundProject.status || 'Draft',
+          lastModified: foundProject.lastModified || new Date().toLocaleString(),
+          content: foundProject.content || '',
+        }
+
+        projectType.value = queryType
+        editorContent.value = foundProject.content || ''
+        updateLastSaveTime()
+        loadProjectComments()
+        console.log('✅ Project loaded successfully')
+        return
+      } else {
+        console.log('❌ Project not found with ID:', projectId, 'in storage:', storageKey)
+      }
+    }
+
+    // If not found with query type, search all project types INCLUDING social-media
+    console.log('🔍 Project not found with query type, searching all types...')
+    const projectTypes = ['magazine', 'newsletter', 'folio', 'other', 'social-media']
 
     for (const type of projectTypes) {
       const storageKey = `${type}_projects`
       const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      console.log(`Searching in ${storageKey}:`, projects)
       const foundProject = projects.find((p) => String(p.id) === String(projectId))
 
       if (foundProject) {
+        console.log('✅ Project found in', type, ':', foundProject)
         project.value = {
           ...foundProject,
           id: String(projectId),
@@ -329,13 +365,24 @@ const loadProjectData = () => {
         editorContent.value = foundProject.content || ''
         updateLastSaveTime()
         loadProjectComments()
+        console.log('✅ Project loaded successfully from', type)
         return
       }
     }
 
-    showNotification('Project not found.', 'error')
+    console.error('❌ Project not found in any storage. Project ID:', projectId)
+    console.error(
+      'Available storage keys:',
+      Object.keys(localStorage).filter((k) => k.includes('_projects')),
+    )
+
+    showNotification('Project not found. Redirecting...', 'error')
+
+    setTimeout(() => {
+      router.push('/other')
+    }, 2000)
   } catch (error) {
-    console.error('Error loading project:', error)
+    console.error('❌ Error loading project:', error)
     showNotification('Error loading project data.', 'error')
   }
 }

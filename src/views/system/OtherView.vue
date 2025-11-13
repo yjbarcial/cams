@@ -34,7 +34,8 @@ const loadProjects = () => {
     savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
   }
 
-  projects.value = savedProjects.filter((p) => p.type === 'social-media' || p.type === 'other')
+  // Remove the filter - all projects in other_projects storage should be shown
+  projects.value = savedProjects
 }
 
 // ADD THIS FUNCTION
@@ -66,29 +67,42 @@ const handleView = (projectId) => {
     return
   }
 
-  // Route based on project status - FIXED: Use string paths only
+  // Determine the actual storage type for this project
+  // Check both storage keys to find where the project actually exists
+  let actualType = 'other'
+
+  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+  const socialMediaProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
+
+  if (otherProjects.find((p) => String(p.id) === String(projectId))) {
+    actualType = 'other'
+  } else if (socialMediaProjects.find((p) => String(p.id) === String(projectId))) {
+    actualType = 'social-media'
+  }
+
+  // Route based on project status with the ACTUAL storage type
   if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
-    router.push(`/project/${projectId}?type=other`)
+    router.push(`/project/${projectId}?type=${actualType}`)
   } else if (
     project.status === 'To Section Head' ||
     project.status === 'Returned by Technical Editor'
   ) {
-    router.push(`/section-head/${projectId}?type=other`)
+    router.push(`/section-head/${projectId}?type=${actualType}`)
   } else if (project.status === 'To Technical Editor') {
-    router.push(`/technical-editor/${projectId}?type=other`)
+    router.push(`/technical-editor/${projectId}?type=${actualType}`)
   } else if (
     project.status === 'To Editor-in-Chief' ||
     project.status === 'EIC Review' ||
     project.status === 'Returned by EIC' ||
     project.status === 'Returned by Chief Adviser'
   ) {
-    router.push(`/editor-in-chief/${projectId}?type=other`)
+    router.push(`/editor-in-chief/${projectId}?type=${actualType}`)
   } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
-    router.push(`/chief-adviser/${projectId}?type=other`)
+    router.push(`/chief-adviser/${projectId}?type=${actualType}`)
   } else if (project.status === 'Published' || project.status === 'EIC Approved') {
-    router.push(`/project/${projectId}?type=other`)
+    router.push(`/project/${projectId}?type=${actualType}`)
   } else {
-    router.push(`/project/${projectId}?type=other`)
+    router.push(`/project/${projectId}?type=${actualType}`)
   }
 }
 
@@ -97,8 +111,8 @@ const toggleStar = (projectId) => {
   if (project) {
     project.isStarred = !project.isStarred
 
-    // Save to the correct storage key based on project type
-    const storageKey = project.type === 'other' ? 'other_projects' : 'social-media_projects'
+    // Always save to other_projects (default storage)
+    const storageKey = 'other_projects'
     const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
     const updatedProjects = savedProjects.map((p) =>
       p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
@@ -181,9 +195,8 @@ const saveEdit = () => {
   if (projectIndex !== -1) {
     projects.value[projectIndex] = { ...editingProject.value }
 
-    // Save to the correct storage key based on project type
-    const storageKey =
-      editingProject.value.type === 'other' ? 'other_projects' : 'social-media_projects'
+    // Always save to other_projects (default storage)
+    const storageKey = 'other_projects'
     const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
     const updatedProjects = savedProjects.map((p) =>
       p.id === editingProject.value.id ? { ...editingProject.value } : p,
@@ -209,9 +222,8 @@ const confirmDelete = () => {
   if (projectToDelete.value) {
     projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
 
-    // Delete from the correct storage key based on project type
-    const storageKey =
-      projectToDelete.value.type === 'other' ? 'other_projects' : 'social-media_projects'
+    // Always save to other_projects (default storage)
+    const storageKey = 'other_projects'
     const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
     const updatedProjects = savedProjects.filter((p) => p.id !== projectToDelete.value.id)
     localStorage.setItem(storageKey, JSON.stringify(updatedProjects))
