@@ -14,9 +14,10 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@mdi/font": "^7.4.47",
     "@supabase/supabase-js": "^2.78.0",
-    "pdfjs-dist": "^3.5.141",
     "esbuild": "^0.25.9",
+    "pdfjs-dist": "^3.5.141",
     "pinia": "^3.0.3",
     "quill": "^2.0.3",
     "rollup": "^4.50.0",
