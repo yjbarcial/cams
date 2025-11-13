@@ -115,19 +115,19 @@ const debouncedSave = () => {
   }, 1000)
 }
 
-// CHIEF ADVISER - Approval actions (3 buttons: Approve, Request to Edit, Reject)
+// CHIEF ADVISER - Approval actions (3 buttons: Request to Edit, Approve, Reject)
 const approvalActions = computed(() => {
   return [
-    {
-      value: 'approve',
-      text: 'Approve',
-      color: 'success',
-      icon: null,
-    },
     {
       value: 'return',
       text: 'Request to Edit',
       color: 'warning',
+      icon: null,
+    },
+    {
+      value: 'approve',
+      text: 'Approve',
+      color: 'success',
       icon: null,
     },
     {
@@ -328,7 +328,8 @@ const loadProjectComments = () => {
 
 const loadProjectData = () => {
   try {
-    const projectTypes = ['magazine', 'newsletter', 'folio', 'other']
+    // Search through all project types including 'social-media'
+    const projectTypes = ['magazine', 'newsletter', 'folio', 'other', 'social-media']
 
     for (const type of projectTypes) {
       const storageKey = `${type}_projects`

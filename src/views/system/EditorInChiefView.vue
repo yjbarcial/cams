@@ -154,7 +154,7 @@ const getNextStatus = (action) => {
 
 // EDITOR-IN-CHIEF - Comment placeholder
 const getCommentPlaceholder = () => {
-  if (action === 'approve') {
+  if (approvalAction.value === 'approve') {
     return 'Add approval notes...'
   }
   if (approvalAction.value === 'forward') {
@@ -250,34 +250,29 @@ const submitApproval = async () => {
       localStorage.setItem(storageKey, JSON.stringify(projects))
       project.value.status = newStatus
 
+      // Try to save to Supabase (non-blocking) - FIXED
       try {
-        await createProjectVersionSupabase(
-          projectType.value,
-          null,
-          {
-            ...projects[projectIndex],
-            status: newStatus,
-            content: editorContent.value || '',
-          },
-          action === 'approve'
-            ? 'Approved by Editor-in-Chief'
-            : action === 'forward'
-              ? 'Forwarded to Chief Adviser'
-              : action === 'publish'
-                ? 'Published'
-                : 'Returned by EIC for edits',
-          currentUser.value,
-          action === 'approve'
-            ? 'approved'
-            : action === 'forward'
-              ? 'forwarded'
-              : action === 'publish'
-                ? 'published'
-                : 'returned',
-        )
-        console.log('Project saved to Supabase successfully')
+        // Only call Supabase if project has a valid supabaseId
+        if (project.value.supabaseId) {
+          await createProjectVersionSupabase(
+            project.value.supabaseId, // Use the actual Supabase ID
+            editorContent.value || '',
+            action === 'approve'
+              ? 'Approved by Editor-in-Chief'
+              : action === 'forward'
+                ? 'Forwarded to Chief Adviser'
+                : action === 'publish'
+                  ? 'Published'
+                  : 'Returned by EIC for edits',
+            currentUser.value,
+          )
+          console.log('Project version saved to Supabase successfully')
+        } else {
+          console.log('Project does not have Supabase ID, skipping sync')
+        }
       } catch (err) {
-        console.warn('Failed to save project to Supabase:', err)
+        console.warn('Failed to save project version to Supabase (non-critical):', err)
+        // Don't block the workflow if Supabase fails
       }
 
       const historyKey = `approval_history_${projectId}`
@@ -312,7 +307,7 @@ const submitApproval = async () => {
     }
   } catch (error) {
     console.error('Error processing approval:', error)
-    showNotification('Error processing approval', 'error')
+    showNotification('Error processing approval. Changes saved locally.', 'warning')
   }
 }
 
@@ -841,24 +836,24 @@ onMounted(() => {
               <v-icon size="20">mdi-information-outline</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Next Step:</strong> Project will be approved and ready for forwarding to Chief
-              Adviser or publishing.
+              <strong>Next Step:</strong> Project will be approved. You can then forward it to Chief
+              Adviser for consultation or publish directly.
             </div>
           </v-alert>
 
           <v-alert
             v-else-if="approvalAction === 'forward'"
-            type="info"
+            type="warning"
             variant="tonal"
             density="comfortable"
             class="next-step-alert"
           >
             <template v-slot:prepend>
-              <v-icon size="20">mdi-information-outline</v-icon>
+              <v-icon size="20">mdi-account-supervisor</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Next Step:</strong> Project will be sent to Chief Adviser for consultation.
-              After consultation, you can publish.
+              <strong>Consultation Step:</strong> Project will be sent to Chief Adviser for review
+              and consultation. After approval, it will return to you for publishing.
             </div>
           </v-alert>
 
@@ -873,7 +868,8 @@ onMounted(() => {
               <v-icon size="20">mdi-check-circle</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Final Step:</strong> Project will be published and made available to readers.
+              <strong>Final Step:</strong> Project has been approved by Chief Adviser and will now
+              be published and made available to readers.
             </div>
           </v-alert>
         </v-card-text>
