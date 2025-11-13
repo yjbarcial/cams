@@ -66,29 +66,29 @@ const handleView = (projectId) => {
     return
   }
 
-  // Route based on project status with type query parameter
+  // Route based on project status - FIXED: Use string paths only
   if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
-    router.push({ path: `/project/${projectId}`, query: { type: 'other' } })
+    router.push(`/project/${projectId}?type=other`)
   } else if (
     project.status === 'To Section Head' ||
     project.status === 'Returned by Technical Editor'
   ) {
-    router.push({ path: `/section-head/${projectId}`, query: { type: 'other' } })
+    router.push(`/section-head/${projectId}?type=other`)
   } else if (project.status === 'To Technical Editor') {
-    router.push({ path: `/technical-editor/${projectId}`, query: { type: 'other' } })
+    router.push(`/technical-editor/${projectId}?type=other`)
   } else if (
     project.status === 'To Editor-in-Chief' ||
     project.status === 'EIC Review' ||
     project.status === 'Returned by EIC' ||
     project.status === 'Returned by Chief Adviser'
   ) {
-    router.push({ path: `/editor-in-chief/${projectId}`, query: { type: 'other' } })
+    router.push(`/editor-in-chief/${projectId}?type=other`)
   } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
-    router.push({ path: `/chief-adviser/${projectId}`, query: { type: 'other' } })
+    router.push(`/chief-adviser/${projectId}?type=other`)
   } else if (project.status === 'Published' || project.status === 'EIC Approved') {
-    router.push({ path: `/project/${projectId}`, query: { type: 'other' } })
+    router.push(`/project/${projectId}?type=other`)
   } else {
-    router.push({ path: `/project/${projectId}`, query: { type: 'other' } })
+    router.push(`/project/${projectId}?type=other`)
   }
 }
 

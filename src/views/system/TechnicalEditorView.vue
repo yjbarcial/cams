@@ -281,15 +281,15 @@ const goBack = () => {
   // Save before going back
   saveContentChanges()
 
-  // Navigate back with project type parameter
+  // Navigate back WITHOUT query parameters (routes don't need them)
   if (projectType.value === 'newsletter') {
-    router.push({ path: '/newsletter', query: { type: projectType.value } })
+    router.push('/newsletter')
   } else if (projectType.value === 'folio') {
-    router.push({ path: '/folio', query: { type: projectType.value } })
+    router.push('/folio')
   } else if (projectType.value === 'other') {
-    router.push({ path: '/other', query: { type: projectType.value } })
+    router.push('/other')
   } else {
-    router.push({ path: '/magazine', query: { type: projectType.value } })
+    router.push('/magazine')
   }
 }
 
