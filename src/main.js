@@ -1,4 +1,4 @@
-import '@mdi/font/css/materialdesignicons.css' // ✅ Add this line
+import '@mdi/font/css/materialdesignicons.css'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
