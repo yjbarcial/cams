@@ -1,9 +1,11 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import { createProjectVersion } from '@/services/localProjectHistory.js'
+import { supabase } from '@/utils/supabase'
+import { getUsersByRole, getCurrentUserId } from '@/services/userService'
 
 // Accept optional prop; also support reading from route param/query
 const props = defineProps({ type: { type: String, default: '' } })
@@ -39,63 +41,64 @@ const sectionHead = ref('')
 const deadline = ref('')
 const description = ref('')
 
-// Options per category (demo data; could be fetched)
-const baseWriterOptions = {
-  magazine: ['Maria Dela Cruz', 'Juan Santos', 'Rey Dela Cruz'],
-  newsletter: ['Sarah Johnson', 'Michael Chen', 'Emily Rodriguez'],
-  folio: ['John Santos', 'James Rivera', 'Jane Rodriguez'],
-  'social-media': ["Ryan O'Connor", 'Maya Patel', 'Jessica Park'],
-}
-const baseArtistOptions = {
-  magazine: ['Maria Dela Cruz', 'Juan Santos', 'Ella Domingo'],
-  newsletter: ['David Kim', 'Lisa Wang', 'Alex Thompson'],
-  folio: ['Maria Garcia', 'Carlos Martinez', 'Ana Lopez'],
-  'social-media': ['Kevin Liu', 'Sophie Anderson', 'Marcus Johnson'],
-}
+// User data
+const users = ref({
+  sectionHeads: [],
+  writers: [],
+  artists: [],
+})
 
-const writerOptions = ref([])
-const artistOptions = ref([])
+// Selected users
+const selectedSectionHead = ref(null)
+const selectedWriters = ref([])
+const selectedArtists = ref([])
 
-// Selected lists
-const writers = ref([])
-const artists = ref([])
+// Loading states
+const loading = ref({
+  sectionHeads: false,
+  writers: false,
+  artists: false,
+})
 
-// Selections from dropdowns before adding
-const selectedWriter = ref('')
-const selectedArtist = ref('')
+// Fetch users by role
+const fetchUsers = async () => {
+  try {
+    loading.value.sectionHeads = true
+    loading.value.writers = true
+    loading.value.artists = true
 
-watch(
-  routeType,
-  (t) => {
-    writerOptions.value = baseWriterOptions[t] || []
-    artistOptions.value = baseArtistOptions[t] || []
-    writers.value = []
-    artists.value = []
-    selectedWriter.value = ''
-    selectedArtist.value = ''
-  },
-  { immediate: true },
-)
+    // Fetch section heads
+    const sectionHeads = await getUsersByRole('section_head')
+    users.value.sectionHeads = sectionHeads
 
-const addSelected = (kind) => {
-  if (kind === 'writer' && selectedWriter.value) {
-    if (!writers.value.includes(selectedWriter.value)) {
-      writers.value.push(selectedWriter.value)
-    }
-    selectedWriter.value = ''
-  }
-  if (kind === 'artist' && selectedArtist.value) {
-    if (!artists.value.includes(selectedArtist.value)) {
-      artists.value.push(selectedArtist.value)
-    }
-    selectedArtist.value = ''
+    // Fetch writers
+    const writers = await getUsersByRole('writer')
+    users.value.writers = writers
+
+    // Fetch artists
+    const artists = await getUsersByRole('artist')
+    users.value.artists = artists
+  } catch (error) {
+    console.error('Error fetching users:', error)
+  } finally {
+    loading.value.sectionHeads = false
+    loading.value.writers = false
+    loading.value.artists = false
   }
 }
 
-const removeItem = (kind, idx) => {
-  if (kind === 'writer') writers.value.splice(idx, 1)
-  if (kind === 'artist') artists.value.splice(idx, 1)
-}
+// Fetch users when component mounts
+onMounted(() => {
+  fetchUsers()
+})
+
+// Watch for route type changes if needed
+watch(routeType, (newType) => {
+  // You can add any type-specific logic here if needed
+  console.log('Project type changed to:', newType)
+})
+
+// Remove any unused helper functions
 
 const cancelPath = computed(() => {
   switch (routeType.value) {
@@ -112,7 +115,7 @@ const cancelPath = computed(() => {
   }
 })
 
-const assignProject = () => {
+const assignProject = async () => {
   if (!title.value.trim()) {
     alert('Please enter a project title')
     return
@@ -133,55 +136,113 @@ const assignProject = () => {
   const writersString = writers.value.length > 0 ? writers.value.join(', ') : 'Not assigned'
   const artistsString = artists.value.length > 0 ? artists.value.join(', ') : 'Not assigned'
 
-  const newProject = {
-    id: Date.now(),
-    title: title.value.trim(),
-    type: routeType.value,
-    sectionHead: sectionHead.value.trim() || 'Not assigned',
-    dueDate: dueDateDisplay,
-    dueDateISO,
-    createdAtISO,
-    createdBy: 'Current User',
-    created_at: createdAtISO,
-    description: description.value.trim() || 'No description provided',
-    writers: writersString,
-    artists: artistsString,
-    isStarred: false,
-    status: 'Draft',
-    content: '',
-    lastModified: new Date().toLocaleString(),
-    mediaUploaded: 'No media',
-    priority: 'Medium',
-    department: getDepartmentFromType(routeType.value),
-  }
-
-  const storageKey = `${routeType.value}_projects`
-  const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-  existingProjects.unshift(newProject)
-  localStorage.setItem(storageKey, JSON.stringify(existingProjects))
-
-  console.log('✅ Project saved:', {
-    type: newProject.type,
-    storageKey,
-    project: newProject,
-    totalProjects: existingProjects.length,
-  })
-
-  // Create initial version for the project
   try {
-    createProjectVersion(
-      routeType.value,
-      newProject.id,
-      newProject,
-      'Initial project creation',
-      'Current User',
-      'draft',
-    )
-  } catch (error) {
-    console.error('Error creating initial version:', error)
-  }
+    // Get current user ID
+    const currentUserId = await getCurrentUserId()
+    if (!currentUserId) {
+      throw new Error('User not authenticated')
+    }
 
-  router.push(cancelPath.value)
+    // Validate required fields
+    if (!selectedSectionHead.value) {
+      throw new Error('Please select a section head')
+    }
+
+    if (selectedWriters.value.length === 0) {
+      throw new Error('Please select at least one writer')
+    }
+
+    // Create project object matching the database schema
+    const newProject = {
+      title: title.value.trim(),
+      project_type: routeType.value,
+      description: description.value.trim() || null,
+      status: 'draft',
+      due_date: deadline.value ? new Date(deadline.value).toISOString().split('T')[0] : null,
+      section_head_id: selectedSectionHead.value,
+      writer_id: selectedWriters.value[0], // Using first writer as primary
+      artist_id: selectedArtists.value.length > 0 ? selectedArtists.value[0] : null, // Artist is optional
+      content: '',
+      media_files: [],
+      is_starred: false,
+      created_by: currentUserId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+
+    // For debugging
+    console.log('Attempting to save project:', JSON.stringify(newProject, null, 2))
+
+    // Save to Supabase with error handling
+    console.log('Sending to Supabase...')
+    const { data, error } = await supabase.from('projects').insert([newProject]).select()
+
+    if (error) {
+      console.error('Supabase error details:', error)
+      throw error
+    }
+
+    console.log('✅ Project saved to Supabase:', data)
+
+    // Get user names for display
+    const sectionHeadName =
+      users.value.sectionHeads.find((sh) => sh.id === selectedSectionHead.value)?.full_name ||
+      'Unknown'
+    const writerNames = selectedWriters.value.map(
+      (id) => users.value.writers.find((w) => w.id === id)?.full_name || 'Unknown',
+    )
+    const artistNames = selectedArtists.value.map(
+      (id) => users.value.artists.find((a) => a.id === id)?.full_name || 'Unknown',
+    )
+
+    // Also save to localStorage for offline access
+    const storageKey = `${routeType.value}_projects`
+    const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+
+    // Create a simplified version for localStorage
+    const localProject = {
+      ...newProject,
+      // Add display fields for UI
+      section_head: sectionHeadName,
+      writers: writerNames,
+      artists: artistNames,
+      due_date_display: dueDateDisplay,
+      // Add arrays of all selected users (not just primary)
+      all_writer_ids: selectedWriters.value,
+      all_artist_ids: selectedArtists.value,
+      // Add creator info
+      created_by_name: 'Current User', // You might want to fetch the actual name
+    }
+
+    existingProjects.unshift(localProject)
+    localStorage.setItem(storageKey, JSON.stringify(existingProjects))
+
+    console.log('✅ Project saved to localStorage:', {
+      type: newProject.type,
+      storageKey,
+      project: newProject,
+      totalProjects: existingProjects.length,
+    })
+
+    // Create initial version for the project
+    try {
+      createProjectVersion(
+        routeType.value,
+        newProject.id,
+        newProject,
+        'Initial project creation',
+        'Current User',
+        'draft',
+      )
+    } catch (error) {
+      console.error('Error creating initial version:', error)
+    }
+
+    router.push(cancelPath.value)
+  } catch (error) {
+    console.error('Error saving project to Supabase:', error)
+    alert('Failed to save project. Please check the console for details.')
+  }
 }
 
 // Helper function to get department based on project type
@@ -278,14 +339,36 @@ const saveAsDraft = () => {
                     </v-col>
 
                     <v-col cols="12" class="form-group">
-                      <v-label class="label">Section Head:</v-label>
-                      <v-text-field
-                        v-model="sectionHead"
-                        class="input"
-                        placeholder="Name of Section Head"
+                      <v-label class="label">Section Head</v-label>
+                      <v-select
+                        v-model="selectedSectionHead"
+                        :items="users.sectionHeads"
+                        item-title="full_name"
+                        item-value="id"
                         variant="outlined"
+                        density="comfortable"
                         hide-details
-                      />
+                        :loading="loading.sectionHeads"
+                        :disabled="loading.sectionHeads"
+                        placeholder="Select section head"
+                        clearable
+                      >
+                        <template v-slot:item="{ item, props: itemProps }">
+                          <v-list-item v-bind="itemProps">
+                            <template v-slot:title>
+                              <div class="d-flex align-center">
+                                <span class="text-body-1">{{ item.raw.full_name }}</span>
+                                <v-chip size="small" class="ml-2" color="primary" variant="tonal">
+                                  {{ item.raw.role }}
+                                </v-chip>
+                              </div>
+                              <div class="text-caption text-medium-emphasis">
+                                {{ item.raw.department }}
+                              </div>
+                            </template>
+                          </v-list-item>
+                        </template>
+                      </v-select>
                     </v-col>
 
                     <v-col cols="12" class="form-group">
@@ -326,125 +409,169 @@ const saveAsDraft = () => {
                         <v-row no-gutters>
                           <v-col cols="12">
                             <v-label class="label">Assign to Writer(s)</v-label>
-                            <v-row class="inline" no-gutters align="center">
-                              <v-col cols="auto" class="select-wrap-col">
-                                <v-container class="select-wrap small pa-0">
-                                  <v-select
-                                    v-model="selectedWriter"
-                                    :items="writerOptions"
-                                    placeholder="List of Writers"
-                                    class="select"
-                                    variant="outlined"
-                                    hide-details
-                                  />
-                                </v-container>
-                              </v-col>
-                              <v-col cols="auto" class="ml-3">
-                                <v-btn
-                                  class="ghost-btn"
-                                  variant="outlined"
-                                  @click="addSelected('writer')"
+                            <v-select
+                              v-model="selectedWriters"
+                              :items="users.writers"
+                              item-title="full_name"
+                              item-value="id"
+                              variant="outlined"
+                              density="comfortable"
+                              hide-details
+                              :loading="loading.writers"
+                              :disabled="loading.writers"
+                              placeholder="Select writers"
+                              multiple
+                              chips
+                              clearable
+                            >
+                              <template v-slot:selection="{ item, index }">
+                                <v-chip
+                                  v-if="index < 3"
+                                  size="small"
+                                  class="mr-2"
+                                  close
+                                  @click:close="
+                                    selectedWriters = selectedWriters.filter(
+                                      (id) => id !== item.raw.id,
+                                    )
+                                  "
                                 >
-                                  +Add Writer
-                                </v-btn>
-                              </v-col>
-                            </v-row>
+                                  {{ item.raw.full_name }}
+                                </v-chip>
+                                <span
+                                  v-else-if="index === 3"
+                                  class="text-caption text-medium-emphasis"
+                                >
+                                  +{{ selectedWriters.length - 3 }} more
+                                </span>
+                              </template>
+                              <template v-slot:item="{ item, props: itemProps }">
+                                <v-list-item v-bind="itemProps">
+                                  <template v-slot:title>
+                                    <div class="d-flex align-center">
+                                      <span class="text-body-1">{{ item.raw.full_name }}</span>
+                                      <v-chip
+                                        size="small"
+                                        class="ml-2"
+                                        color="primary"
+                                        variant="tonal"
+                                      >
+                                        {{ item.raw.role }}
+                                      </v-chip>
+                                    </div>
+                                    <div class="text-caption text-medium-emphasis">
+                                      {{ item.raw.department }}
+                                    </div>
+                                  </template>
+                                </v-list-item>
+                              </template>
+                            </v-select>
+                            <div v-if="selectedWriters.length > 0" class="mt-2">
+                              <v-chip
+                                v-for="writerId in selectedWriters"
+                                :key="writerId"
+                                size="small"
+                                class="mr-1 mb-1"
+                                close
+                                @click:close="
+                                  selectedWriters = selectedWriters.filter((id) => id !== writerId)
+                                "
+                              >
+                                {{
+                                  users.writers.find((w) => w.id === writerId)?.full_name ||
+                                  'Unknown'
+                                }}
+                              </v-chip>
+                            </div>
                           </v-col>
                         </v-row>
                       </v-container>
-                      <v-card class="listbox mt-3" flat>
-                        <v-card-text class="pa-3">
-                          <v-container v-if="writers.length === 0" class="listbox-empty pa-0">
-                            <v-row justify="center">
-                              <v-col cols="12" class="text-center">No writers selected</v-col>
-                            </v-row>
-                          </v-container>
-                          <v-container
-                            v-for="(w, idx) in writers"
-                            :key="w + idx"
-                            class="listbox-item pa-0"
-                          >
-                            <v-row align="center" no-gutters>
-                              <v-col>{{ w }}</v-col>
-                              <v-col cols="auto">
-                                <v-btn
-                                  class="remove"
-                                  size="small"
-                                  variant="text"
-                                  icon
-                                  @click="removeItem('writer', idx)"
-                                  aria-label="Remove writer"
-                                >
-                                  <v-icon>mdi-close</v-icon>
-                                </v-btn>
-                              </v-col>
-                            </v-row>
-                          </v-container>
-                        </v-card-text>
-                      </v-card>
                     </v-col>
 
                     <v-col cols="12" class="assign-block">
                       <v-container class="assign-header pa-0">
                         <v-row no-gutters>
                           <v-col cols="12">
-                            <v-label class="label">Assign to Artist(s)</v-label>
-                            <v-row class="inline" no-gutters align="center">
-                              <v-col cols="auto" class="select-wrap-col">
-                                <v-container class="select-wrap small pa-0">
-                                  <v-select
-                                    v-model="selectedArtist"
-                                    :items="artistOptions"
-                                    placeholder="List of Artists"
-                                    class="select"
-                                    variant="outlined"
-                                    hide-details
-                                  />
-                                </v-container>
-                              </v-col>
-                              <v-col cols="auto" class="ml-3">
-                                <v-btn
-                                  class="ghost-btn"
-                                  variant="outlined"
-                                  @click="addSelected('artist')"
+                            <v-label class="label">Assign to Artist(s) (Optional)</v-label>
+                            <v-select
+                              v-model="selectedArtists"
+                              :items="users.artists"
+                              item-title="full_name"
+                              item-value="id"
+                              variant="outlined"
+                              density="comfortable"
+                              hide-details
+                              :loading="loading.artists"
+                              :disabled="loading.artists"
+                              placeholder="Select artists"
+                              multiple
+                              chips
+                              clearable
+                            >
+                              <template v-slot:selection="{ item, index }">
+                                <v-chip
+                                  v-if="index < 3"
+                                  size="small"
+                                  class="mr-2"
+                                  close
+                                  @click:close="
+                                    selectedArtists = selectedArtists.filter(
+                                      (id) => id !== item.raw.id,
+                                    )
+                                  "
                                 >
-                                  +Add Artist
-                                </v-btn>
-                              </v-col>
-                            </v-row>
+                                  {{ item.raw.full_name }}
+                                </v-chip>
+                                <span
+                                  v-else-if="index === 3"
+                                  class="text-caption text-medium-emphasis"
+                                >
+                                  +{{ selectedArtists.length - 3 }} more
+                                </span>
+                              </template>
+
+                              <template v-slot:item="{ item, props: itemProps }">
+                                <v-list-item v-bind="itemProps">
+                                  <template v-slot:title>
+                                    <div class="d-flex align-center">
+                                      <span class="text-body-1">{{ item.raw.full_name }}</span>
+                                      <v-chip
+                                        size="small"
+                                        class="ml-2"
+                                        color="primary"
+                                        variant="tonal"
+                                      >
+                                        {{ item.raw.role }}
+                                      </v-chip>
+                                    </div>
+                                    <div class="text-caption text-medium-emphasis">
+                                      {{ item.raw.department }}
+                                    </div>
+                                  </template>
+                                </v-list-item>
+                              </template>
+                            </v-select>
+
+                            <div v-if="selectedArtists.length > 0" class="mt-2">
+                              <v-chip
+                                v-for="artistId in selectedArtists"
+                                :key="artistId"
+                                size="small"
+                                class="mr-1 mb-1"
+                                close
+                                @click:close="
+                                  selectedArtists = selectedArtists.filter((id) => id !== artistId)
+                                "
+                              >
+                                {{
+                                  users.artists.find((a) => a.id === artistId)?.full_name ||
+                                  'Unknown'
+                                }}
+                              </v-chip>
+                            </div>
                           </v-col>
                         </v-row>
                       </v-container>
-                      <v-card class="listbox mt-3" flat>
-                        <v-card-text class="pa-3">
-                          <v-container v-if="artists.length === 0" class="listbox-empty pa-0">
-                            <v-row justify="center">
-                              <v-col cols="12" class="text-center">No artists selected</v-col>
-                            </v-row>
-                          </v-container>
-                          <v-container
-                            v-for="(a, idx) in artists"
-                            :key="a + idx"
-                            class="listbox-item pa-0"
-                          >
-                            <v-row align="center" no-gutters>
-                              <v-col>{{ a }}</v-col>
-                              <v-col cols="auto">
-                                <v-btn
-                                  class="remove"
-                                  size="small"
-                                  variant="text"
-                                  icon
-                                  @click="removeItem('artist', idx)"
-                                  aria-label="Remove artist"
-                                >
-                                  <v-icon>mdi-close</v-icon>
-                                </v-btn>
-                              </v-col>
-                            </v-row>
-                          </v-container>
-                        </v-card-text>
-                      </v-card>
                     </v-col>
 
                     <v-col cols="12" class="form-group">
