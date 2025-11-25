@@ -1176,33 +1176,36 @@ onMounted(() => {
 }
 
 .approve-btn {
-  background: #fbbf24 !important;
+  background: #f5c52b !important;
   color: #353535 !important;
-  border: none !important;
+  border: 2px solid #353535 !important;
 }
 
 .approve-btn:hover {
-  background: #f59e0b !important;
+  background: #d4a825 !important;
+  border: 2px solid #353535 !important;
 }
 
 .return-btn {
   background: #353535 !important;
   color: white !important;
-  border: none !important;
+  border: 2px solid #353535 !important;
 }
 
 .return-btn:hover {
   background: #1f1f1f !important;
+  border: 2px solid #1f1f1f !important;
 }
 
 .reject-btn {
   background: #ef4444 !important;
   color: white !important;
-  border: none !important;
+  border: 2px solid #353535 !important;
 }
 
 .reject-btn:hover {
   background: #dc2626 !important;
+  border: 2px solid #353535 !important;
 }
 
 .comments-section {
