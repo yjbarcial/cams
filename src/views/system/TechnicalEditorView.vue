@@ -155,20 +155,60 @@ const getBackButtonText = computed(() => {
     newsletter: 'Newsletter',
     folio: 'Folio',
     other: 'Other',
+    'social-media': 'Other',
   }
   return `Back to ${typeNames[projectType.value] || 'Projects'}`
 })
 
+// Helper function to get the actual storage key where a project exists
+const getActualStorageKey = (projectId) => {
+  // For other/social-media types, check both storage keys
+  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+  const socialMediaProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
+
+  const inOther = otherProjects.some((p) => String(p.id) === String(projectId))
+  const inSocialMedia = socialMediaProjects.some((p) => String(p.id) === String(projectId))
+
+  if (inOther) return { key: 'other_projects', type: 'other' }
+  if (inSocialMedia) return { key: 'social-media_projects', type: 'social-media' }
+
+  // For other types, check their specific storage
+  const projectTypes = ['magazine', 'newsletter', 'folio']
+  for (const type of projectTypes) {
+    const storageKey = `${type}_projects`
+    const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    if (projects.some((p) => String(p.id) === String(projectId))) {
+      return { key: storageKey, type: type }
+    }
+  }
+
+  return null
+}
+
 const saveContentChanges = async () => {
   try {
-    const storageKey = `${projectType.value}_projects`
-    const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    // Get the actual storage key where the project exists
+    const actualStorage = getActualStorageKey(projectId)
+    if (!actualStorage) {
+      console.error('Could not find project storage location')
+      showNotification('Error: Project storage location not found', 'error')
+      return
+    }
+
+    const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
     const projectIndex = projects.findIndex((p) => p.id == projectId)
 
     if (projectIndex !== -1) {
       projects[projectIndex].content = editorContent.value
       projects[projectIndex].lastModified = new Date().toLocaleString()
-      localStorage.setItem(storageKey, JSON.stringify(projects))
+      // Preserve status when saving content
+      if (project.value.status) {
+        projects[projectIndex].status = project.value.status
+      }
+      localStorage.setItem(actualStorage.key, JSON.stringify(projects))
+
+      // Update projectType to match actual storage
+      projectType.value = actualStorage.type
 
       project.value.content = editorContent.value
       project.value.lastModified = new Date().toLocaleString()
@@ -220,14 +260,23 @@ const submitApproval = async () => {
       priority: approvalPriority.value,
     }
 
-    // Save to localStorage with correct project type
-    const storageKey = `${projectType.value}_projects`
-    const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    // Get the actual storage key where the project exists
+    const actualStorage = getActualStorageKey(projectId)
+    if (!actualStorage) {
+      console.error('Could not find project storage location')
+      showNotification('Error: Project storage location not found', 'error')
+      return
+    }
+
+    const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
     const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
 
     if (projectIndex !== -1) {
       projects[projectIndex] = updatedProject
-      localStorage.setItem(storageKey, JSON.stringify(projects))
+      localStorage.setItem(actualStorage.key, JSON.stringify(projects))
+
+      // Update projectType to match actual storage
+      projectType.value = actualStorage.type
 
       // Update local state
       project.value = updatedProject
@@ -281,15 +330,26 @@ const goBack = () => {
   // Save before going back
   saveContentChanges()
 
-  // Navigate back WITHOUT query parameters (routes don't need them)
-  if (projectType.value === 'newsletter') {
-    router.push('/newsletter')
-  } else if (projectType.value === 'folio') {
-    router.push('/folio')
-  } else if (projectType.value === 'other') {
-    router.push('/other')
+  // Get actual storage to determine correct route
+  const actualStorage = getActualStorageKey(projectId)
+  if (actualStorage) {
+    // For other/social-media types, route to /other
+    const routePath =
+      actualStorage.type === 'other' || actualStorage.type === 'social-media'
+        ? '/other'
+        : `/${actualStorage.type}`
+    router.push(routePath)
   } else {
-    router.push('/magazine')
+    // Fallback to projectType.value if we can't find actual storage
+    if (projectType.value === 'newsletter') {
+      router.push('/newsletter')
+    } else if (projectType.value === 'folio') {
+      router.push('/folio')
+    } else if (projectType.value === 'other' || projectType.value === 'social-media') {
+      router.push('/other')
+    } else {
+      router.push('/magazine')
+    }
   }
 }
 
@@ -304,7 +364,70 @@ const loadProjectComments = () => {
 
 const loadProjectData = () => {
   try {
-    const projectTypes = ['magazine', 'newsletter', 'folio', 'other']
+    // First, try to get type from query parameter
+    const queryType = route.query.type
+
+    if (queryType) {
+      console.log('Trying to load project from query type:', queryType)
+
+      // For other/social-media types, check both storage keys to find where project actually exists
+      if (queryType === 'other' || queryType === 'social-media') {
+        const actualStorage = getActualStorageKey(projectId)
+
+        if (actualStorage) {
+          const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
+          const foundProject = projects.find((p) => String(p.id) === String(projectId))
+
+          if (foundProject) {
+            console.log('✅ Project found in', actualStorage.type, ':', foundProject)
+            project.value = {
+              ...foundProject,
+              id: String(projectId),
+              title: foundProject.title || 'Untitled Project',
+              status: foundProject.status || 'Draft',
+              lastModified: foundProject.lastModified || new Date().toLocaleString(),
+              content: foundProject.content || '',
+            }
+
+            projectType.value = actualStorage.type
+            editorContent.value = foundProject.content || ''
+            updateLastSaveTime()
+            loadProjectComments()
+            console.log('✅ Project loaded successfully from', actualStorage.type)
+            return
+          }
+        }
+        console.log('❌ Project not found with ID:', projectId, 'in other or social-media storage')
+      } else {
+        // For other types (magazine, newsletter, folio), use the query type directly
+        const storageKey = `${queryType}_projects`
+        const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+        const foundProject = projects.find((p) => String(p.id) === String(projectId))
+
+        if (foundProject) {
+          console.log('✅ Project found:', foundProject)
+          project.value = {
+            ...foundProject,
+            id: String(projectId),
+            title: foundProject.title || 'Untitled Project',
+            status: foundProject.status || 'Draft',
+            lastModified: foundProject.lastModified || new Date().toLocaleString(),
+            content: foundProject.content || '',
+          }
+
+          projectType.value = queryType
+          editorContent.value = foundProject.content || ''
+          updateLastSaveTime()
+          loadProjectComments()
+          console.log('✅ Project loaded successfully')
+          return
+        }
+      }
+    }
+
+    // If not found with query type, search all project types
+    console.log('Searching all project types...')
+    const projectTypes = ['magazine', 'newsletter', 'folio', 'other', 'social-media']
 
     for (const type of projectTypes) {
       const storageKey = `${type}_projects`
@@ -312,6 +435,7 @@ const loadProjectData = () => {
       const foundProject = projects.find((p) => String(p.id) === String(projectId))
 
       if (foundProject) {
+        console.log('✅ Project found in', type, ':', foundProject)
         project.value = {
           ...foundProject,
           id: String(projectId),
@@ -325,10 +449,12 @@ const loadProjectData = () => {
         editorContent.value = foundProject.content || ''
         updateLastSaveTime()
         loadProjectComments()
+        console.log('✅ Project loaded successfully from', type)
         return
       }
     }
 
+    console.error('❌ Project not found with ID:', projectId)
     showNotification('Project not found.', 'error')
   } catch (error) {
     console.error('Error loading project:', error)

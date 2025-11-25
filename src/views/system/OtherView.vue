@@ -27,15 +27,19 @@ watch(
 )
 
 const loadProjects = () => {
-  // Try both storage keys for backward compatibility
-  let savedProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+  // Load projects from both storage keys and merge them
+  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+  const socialMediaProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
 
-  if (savedProjects.length === 0) {
-    savedProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
-  }
+  // Merge both arrays, avoiding duplicates by ID
+  const allProjects = [...otherProjects]
+  socialMediaProjects.forEach((project) => {
+    if (!allProjects.some((p) => String(p.id) === String(project.id))) {
+      allProjects.push(project)
+    }
+  })
 
-  // Remove the filter - all projects in other_projects storage should be shown
-  projects.value = savedProjects
+  projects.value = allProjects
 }
 
 // ADD THIS FUNCTION
@@ -111,13 +115,23 @@ const toggleStar = (projectId) => {
   if (project) {
     project.isStarred = !project.isStarred
 
-    // Always save to other_projects (default storage)
-    const storageKey = 'other_projects'
-    const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    const updatedProjects = savedProjects.map((p) =>
-      p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
-    )
-    localStorage.setItem(storageKey, JSON.stringify(updatedProjects))
+    // Get the actual storage key where the project exists
+    const actualStorage = getActualStorageKey(projectId)
+    if (actualStorage) {
+      const savedProjects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
+      const updatedProjects = savedProjects.map((p) =>
+        p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
+      )
+      localStorage.setItem(actualStorage.key, JSON.stringify(updatedProjects))
+    } else {
+      // Fallback to other_projects if not found
+      const storageKey = 'other_projects'
+      const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      const updatedProjects = savedProjects.map((p) =>
+        p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
+      )
+      localStorage.setItem(storageKey, JSON.stringify(updatedProjects))
+    }
   }
 }
 
@@ -185,6 +199,20 @@ const startEdit = (project) => {
   showEditDialog.value = true
 }
 
+// Helper function to get the actual storage key where a project exists
+const getActualStorageKey = (projectId) => {
+  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+  const socialMediaProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
+
+  const inOther = otherProjects.some((p) => String(p.id) === String(projectId))
+  const inSocialMedia = socialMediaProjects.some((p) => String(p.id) === String(projectId))
+
+  if (inOther) return { key: 'other_projects', type: 'other' }
+  if (inSocialMedia) return { key: 'social-media_projects', type: 'social-media' }
+
+  return null
+}
+
 const saveEdit = () => {
   if (!editingProject.value.title.trim()) {
     alert('Please enter a project title')
@@ -195,13 +223,25 @@ const saveEdit = () => {
   if (projectIndex !== -1) {
     projects.value[projectIndex] = { ...editingProject.value }
 
-    // Always save to other_projects (default storage)
-    const storageKey = 'other_projects'
-    const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    // Get the actual storage key where the project exists
+    const actualStorage = getActualStorageKey(editingProject.value.id)
+    if (!actualStorage) {
+      console.error('Could not find project storage location')
+      alert('Error: Could not find project storage location')
+      return
+    }
+
+    // Save to the correct storage location
+    const savedProjects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
     const updatedProjects = savedProjects.map((p) =>
       p.id === editingProject.value.id ? { ...editingProject.value } : p,
     )
-    localStorage.setItem(storageKey, JSON.stringify(updatedProjects))
+    localStorage.setItem(actualStorage.key, JSON.stringify(updatedProjects))
+
+    console.log('Project saved to', actualStorage.key, 'with status:', editingProject.value.status)
+
+    // Reload projects to reflect the updated status
+    loadProjects()
   }
 
   editingProject.value = null
