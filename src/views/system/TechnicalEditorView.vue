@@ -13,6 +13,7 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
+import { createStatusChangeNotification } from '@/services/notificationsService.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -280,6 +281,31 @@ const submitApproval = async () => {
 
       // Update local state
       project.value = updatedProject
+
+      // Create notification based on action
+      if (approvalAction.value === 'approve') {
+        createStatusChangeNotification({
+          projectId: projectId,
+          projectType: actualStorage.type,
+          projectTitle: project.value.title,
+          oldStatus: 'To Technical Editor',
+          newStatus: 'To Editor-in-Chief',
+          actionBy: currentUser.value,
+          recipient: 'Editor-in-Chief',
+          comments: approvalComments.value,
+        })
+      } else if (approvalAction.value === 'edit' || approvalAction.value === 'return') {
+        createStatusChangeNotification({
+          projectId: projectId,
+          projectType: actualStorage.type,
+          projectTitle: project.value.title,
+          oldStatus: 'To Technical Editor',
+          newStatus: 'Returned by Technical Editor',
+          actionBy: currentUser.value,
+          recipient: 'Section Head',
+          comments: approvalComments.value,
+        })
+      }
 
       // Try to save to Supabase (non-blocking)
       try {

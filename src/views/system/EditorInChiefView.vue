@@ -13,6 +13,7 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
+import { createStatusChangeNotification } from '@/services/notificationsService.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -304,6 +305,42 @@ const submitApproval = async () => {
 
       // Update projectType to match actual storage
       projectType.value = actualStorage.type
+
+      // Create notification based on action
+      if (action === 'approve') {
+        createStatusChangeNotification({
+          projectId: projectId,
+          projectType: actualStorage.type,
+          projectTitle: project.value.title,
+          oldStatus: 'To Editor-in-Chief',
+          newStatus: 'EIC Approved',
+          actionBy: currentUser.value,
+          recipient: 'All',
+          comments: approvalComments.value,
+        })
+      } else if (action === 'forward') {
+        createStatusChangeNotification({
+          projectId: projectId,
+          projectType: actualStorage.type,
+          projectTitle: project.value.title,
+          oldStatus: 'To Editor-in-Chief',
+          newStatus: 'To Chief Adviser',
+          actionBy: currentUser.value,
+          recipient: 'Chief Adviser',
+          comments: approvalComments.value,
+        })
+      } else if (action === 'publish') {
+        createStatusChangeNotification({
+          projectId: projectId,
+          projectType: actualStorage.type,
+          projectTitle: project.value.title,
+          oldStatus: 'For Publish',
+          newStatus: 'Published',
+          actionBy: currentUser.value,
+          recipient: 'All',
+          comments: approvalComments.value,
+        })
+      }
 
       // Try to save to Supabase (non-blocking) - FIXED
       try {

@@ -1,63 +1,96 @@
 <script setup>
+import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
+import {
+  getNotifications,
+  markAsRead,
+  deleteNotification,
+  markAllAsRead,
+} from '@/services/notificationsService.js'
 
-// Sample notifications data
-const notifications = [
-  {
-    id: 1,
-    type: 'Request',
-    typeColor: '#3b82f6', // blue
-    title: 'Submission: "Creative Writeups"',
-    description: 'Technical Editor has requested to edit your content.',
-    timestamp: '21 Jul 2025 at 9:30 AM',
-    isRead: false,
-    actions: [
-      { label: 'Accept', type: 'accept', color: '#10b981' },
-      { label: 'Reject', type: 'reject', color: '#ef4444' },
-    ],
-  },
-  {
-    id: 2,
-    type: 'Comment',
-    typeColor: '#ec4899', // magenta
-    title: 'Submission: "Creative Writeups"',
-    description: 'Section Head posted a comment.',
-    timestamp: '21 Jul 2025 at 9:30 AM',
-    isRead: true,
-    actions: [{ label: 'View', type: 'view', color: '#3b82f6' }],
-  },
-  {
-    id: 3,
-    type: 'Approved',
-    typeColor: '#10b981', // green
-    title: 'Submission: "Creative Writeups"',
-    description: 'Writer has accepted your request to edit.',
-    timestamp: '21 Jul 2025 at 9:30 AM',
-    isRead: false,
-    actions: [{ label: 'View', type: 'view', color: '#3b82f6' }],
-  },
-  {
-    id: 4,
-    type: 'Approved',
-    typeColor: '#10b981', // green
-    title: 'Submission: "Creative Writeups"',
-    description: 'The Editor-in-Chief has approved the content for publication.',
-    timestamp: '21 Jul 2025 at 9:30 AM',
-    isRead: true,
-    actions: [{ label: 'View', type: 'view', color: '#3b82f6' }],
-  },
-]
+const router = useRouter()
 
-const handleAction = (notificationId, actionType) => {
-  console.log(`Action ${actionType} for notification ${notificationId}`)
+// Load notifications from service
+const notifications = ref([])
+
+const loadNotifications = () => {
+  notifications.value = getNotifications()
+}
+
+const formatTimestamp = (timestamp) => {
+  try {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60))
+
+    if (diffInMinutes < 1) return 'Just now'
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`
+    if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
+
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  } catch (error) {
+    return timestamp
+  }
+}
+
+const handleAction = (notification, actionType) => {
   // Mark notification as read when user interacts with it
-  const notification = notifications.find((n) => n.id === notificationId)
-  if (notification) {
+  if (!notification.isRead) {
+    markAsRead(notification.id)
     notification.isRead = true
   }
-  // Handle the action logic here
+
+  // Handle the action logic
+  switch (actionType) {
+    case 'view':
+      // Navigate to project if projectId exists
+      if (notification.projectId && notification.projectType) {
+        // Determine route based on project status
+        // For now, navigate to project view
+        router.push(`/project/${notification.projectId}?type=${notification.projectType}`)
+      }
+      break
+    case 'accept':
+      // Handle accept action
+      console.log('Accept action for notification:', notification.id)
+      break
+    case 'reject':
+      // Handle reject action
+      console.log('Reject action for notification:', notification.id)
+      break
+    default:
+      console.log('Unknown action type:', actionType)
+  }
 }
+
+const handleDelete = (notificationId) => {
+  if (confirm('Are you sure you want to delete this notification?')) {
+    deleteNotification(notificationId)
+    loadNotifications()
+  }
+}
+
+const handleMarkAllRead = () => {
+  markAllAsRead()
+  loadNotifications()
+}
+
+const unreadCount = computed(() => {
+  return notifications.value.filter((n) => !n.isRead).length
+})
+
+onMounted(() => {
+  loadNotifications()
+})
 </script>
 
 <template>
@@ -65,71 +98,93 @@ const handleAction = (notificationId, actionType) => {
     <MainHeader />
 
     <v-main class="main-content">
-      <v-container class="px-4">
-        <v-card class="main-card" elevation="1">
-          <v-card-title class="notifications-title px-6 pt-4 mb-2">Notifications</v-card-title>
-
-          <v-card-text class="px-6">
-            <v-card class="notifications-list" elevation="0">
-              <v-card
-                v-for="notification in notifications"
-                :key="notification.id"
-                class="notification-item mb-4"
-                :class="{ unread: !notification.isRead }"
-                elevation="1"
+      <v-container class="notifications-container">
+        <div class="notifications-header">
+          <div class="header-content">
+            <h1 class="page-title">Notifications</h1>
+            <div class="header-actions">
+              <v-chip v-if="unreadCount > 0" color="error" size="small" class="unread-chip">
+                <v-icon start size="16">mdi-circle</v-icon>
+                {{ unreadCount }} unread
+              </v-chip>
+              <v-btn
+                v-if="unreadCount > 0"
+                variant="outlined"
+                size="small"
+                @click="handleMarkAllRead"
+                class="mark-read-btn"
+                prepend-icon="mdi-check-all"
               >
-                <v-card-item>
-                  <v-container class="notification-content">
-                    <v-row class="notification-header">
-                      <v-chip class="notification-type" :color="notification.typeColor">
-                        {{ notification.type }}
-                        <v-icon v-if="!notification.isRead" class="notification-dot" size="8"
-                          >mdi-circle</v-icon
-                        >
-                      </v-chip>
-                    </v-row>
+                Mark all as read
+              </v-btn>
+            </div>
+          </div>
+        </div>
 
-                    <v-row class="notification-body">
-                      <v-card-title class="notification-title">{{
-                        notification.title
-                      }}</v-card-title>
-                      <v-card-text class="notification-description">{{
-                        notification.description
-                      }}</v-card-text>
-                    </v-row>
-                  </v-container>
+        <div class="notifications-content">
+          <div v-if="notifications.length === 0" class="no-notifications">
+            <v-icon size="80" color="grey-lighten-1">mdi-bell-off-outline</v-icon>
+            <h3 class="no-notifications-title">No notifications yet</h3>
+            <p class="no-notifications-text">When you receive notifications, they'll appear here</p>
+          </div>
 
-                  <v-container class="notification-meta">
-                    <v-row class="timestamp">
-                      <v-icon>mdi-clock-outline</v-icon>
-                      <v-card-text>{{ notification.timestamp }}</v-card-text>
-                    </v-row>
+          <div v-else class="notifications-list">
+            <div
+              v-for="notification in notifications"
+              :key="notification.id"
+              class="notification-item"
+              :class="{ unread: !notification.isRead }"
+            >
+              <div class="notification-indicator" v-if="!notification.isRead"></div>
 
-                    <v-row class="notification-actions">
-                      <v-btn
-                        v-for="action in notification.actions"
-                        :key="action.label"
-                        class="action-btn"
-                        :class="action.type"
-                        :color="action.color"
-                        variant="outlined"
-                        @click="handleAction(notification.id, action.type)"
-                      >
-                        {{ action.label }}
-                      </v-btn>
-                    </v-row>
-                  </v-container>
-                </v-card-item>
-              </v-card>
+              <div class="notification-main">
+                <div class="notification-header-row">
+                  <div
+                    class="notification-type-badge"
+                    :style="{ backgroundColor: notification.typeColor }"
+                  >
+                    {{ notification.type }}
+                  </div>
+                  <div class="notification-time">
+                    <v-icon size="14" class="time-icon">mdi-clock-outline</v-icon>
+                    {{ formatTimestamp(notification.timestamp) }}
+                  </div>
+                  <v-btn
+                    icon
+                    size="x-small"
+                    variant="text"
+                    @click="handleDelete(notification.id)"
+                    class="delete-btn"
+                  >
+                    <v-icon size="16">mdi-close</v-icon>
+                  </v-btn>
+                </div>
 
-              <v-card class="text-center pa-4" elevation="0">
-                <v-btn variant="text" color="grey-darken-1" block>
-                  See Previous Notifications
-                </v-btn>
-              </v-card>
-            </v-card>
-          </v-card-text>
-        </v-card>
+                <div class="notification-body-content">
+                  <h3 class="notification-title">{{ notification.title }}</h3>
+                  <p class="notification-description">{{ notification.description }}</p>
+                </div>
+
+                <div class="notification-footer">
+                  <div class="notification-actions">
+                    <v-btn
+                      v-for="action in notification.actions"
+                      :key="action.label"
+                      class="action-btn"
+                      :class="action.type"
+                      :style="{ borderColor: action.color, color: action.color }"
+                      variant="outlined"
+                      size="small"
+                      @click="handleAction(notification, action.type)"
+                    >
+                      {{ action.label }}
+                    </v-btn>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </v-container>
     </v-main>
 
@@ -142,126 +197,208 @@ const handleAction = (notificationId, actionType) => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: white;
+  background-color: #f8fafc;
 }
 
 .main-content {
   flex: 1;
-  padding: 20px 20px;
+  padding: 0;
+  background-color: #f8fafc;
 }
 
 .notifications-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 32px 24px;
   width: 100%;
 }
 
-.main-card {
-  max-width: 900px;
-  margin: 0 auto;
+.notifications-header {
+  margin-bottom: 32px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.page-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-icon {
+  color: #353535;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.unread-chip {
+  font-weight: 600;
+}
+
+.mark-read-btn {
+  border-color: #353535;
+  color: #353535;
+  font-weight: 600;
+}
+
+.notifications-content {
   background: white;
-  border-radius: 8px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
-.notifications-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #2f2f2f;
+.no-notifications {
+  text-align: center;
+  padding: 80px 24px;
+  color: #9ca3af;
+}
+
+.no-notifications-title {
+  margin-top: 24px;
+  margin-bottom: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.no-notifications-text {
+  font-size: 14px;
+  color: #6b7280;
   margin: 0;
 }
 
 .notifications-list {
-  background: transparent !important;
+  padding: 8px;
 }
 
 .notification-item {
+  position: relative;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background-color: white;
   margin-bottom: 12px;
+  transition: all 0.2s ease;
+  overflow: hidden;
 }
 
-.notification-item:last-child {
-  border-bottom: none;
+.notification-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
 }
 
 .notification-item.unread {
-  background-color: #f8fafc;
+  background-color: #f0f9ff;
   border-left: 4px solid #3b82f6;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
 }
 
-.notification-content {
-  flex: 1;
-  min-width: 0;
+.notification-item.unread .notification-indicator {
+  display: block;
 }
 
-.notification-header {
-  margin-bottom: 8px;
+.notification-indicator {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: #3b82f6;
 }
 
-.notification-type {
-  display: inline-flex;
+.notification-main {
+  padding: 20px;
+}
+
+.notification-header-row {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.notification-type-badge {
   padding: 4px 12px;
-  border-radius: 20px;
+  border-radius: 16px;
   color: white;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
 }
 
-.notification-dot {
-  width: 8px;
-  height: 8px;
-  background-color: #ef4444;
-  border-radius: 50%;
-  margin-left: 4px;
+.notification-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  margin-left: auto;
 }
 
-.notification-body {
-  margin-bottom: 12px;
+.time-icon {
+  color: #9ca3af;
+}
+
+.delete-btn {
+  opacity: 0.4;
+  transition: all 0.2s ease;
+  color: #6b7280;
+}
+
+.delete-btn:hover {
+  opacity: 1;
+  color: #ef4444 !important;
+  background-color: #fee2e2;
+}
+
+.notification-body-content {
+  margin-bottom: 16px;
 }
 
 .notification-title {
   font-size: 16px;
   font-weight: 600;
-  color: #2f2f2f;
-  margin: 0 0 4px 0;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
 }
 
 .notification-description {
   font-size: 14px;
   color: #6b7280;
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.6;
 }
 
-.notification-meta {
+.notification-footer {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.timestamp {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.timestamp .mdi {
-  font-size: 14px;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
 }
 
 .notification-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .action-btn {
@@ -273,11 +410,15 @@ const handleAction = (notificationId, actionType) => {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .action-btn:hover {
   background-color: currentColor;
   color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .action-btn.accept {
@@ -295,74 +436,63 @@ const handleAction = (notificationId, actionType) => {
   color: #3b82f6;
 }
 
-/* Override Vuetify components to match existing layout */
-:deep(.v-container) {
-  padding: 0 !important;
-  max-width: none !important;
-}
-
-:deep(.v-row) {
-  margin: 0 !important;
-}
-
-:deep(.v-col) {
-  padding: 0 !important;
-}
-
-:deep(.v-chip) {
-  background-color: var(--v-theme-primary) !important;
-}
-
-:deep(.v-btn) {
-  text-transform: none !important;
-  letter-spacing: normal !important;
-}
-
 /* Responsive design */
-@media (max-width: 840px) {
-  .main-content {
-    padding: 20px 12px;
+@media (max-width: 768px) {
+  .notifications-container {
+    padding: 24px 16px;
   }
 
-  .v-card-item {
+  .page-title {
+    font-size: 24px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .notification-main {
     padding: 16px;
   }
 
-  .notification-item {
+  .notification-header-row {
     flex-direction: column;
-    gap: 12px;
+    align-items: flex-start;
+    gap: 8px;
   }
 
-  .notification-meta {
-    align-items: flex-start;
-    width: 100%;
+  .notification-time {
+    margin-left: 0;
+  }
+
+  .notification-footer {
+    justify-content: flex-start;
   }
 
   .notification-actions {
     width: 100%;
-    justify-content: flex-start;
   }
 
-  .notifications-title {
-    font-size: 24px;
-    margin-bottom: 24px;
-  }
-
-  .notification-item {
-    padding: 16px 0;
-  }
-
-  .notification-item.unread {
-    padding-left: 12px;
-    margin-left: -12px;
-  }
-
-  .main-card {
-    border-radius: 0;
+  .action-btn {
+    flex: 1;
+    min-width: 100px;
   }
 }
 
 @media (max-width: 480px) {
+  .notifications-container {
+    padding: 16px 12px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
   .notification-actions {
     flex-direction: column;
   }

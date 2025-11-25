@@ -14,6 +14,10 @@ import {
   deleteProjectComment,
   toggleCommentApproval,
 } from '@/services/commentsService.js'
+import {
+  createStatusChangeNotification,
+  createCommentNotification,
+} from '@/services/notificationsService.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -332,6 +336,18 @@ const confirmSubmitForApproval = async () => {
       project.value.status = 'To Section Head'
       projectType.value = actualStorage.type
       hasUnsavedChanges.value = false
+
+      // Create notification for Section Head
+      createStatusChangeNotification({
+        projectId: projectId,
+        projectType: actualStorage.type,
+        projectTitle: project.value.title,
+        oldStatus: 'Draft',
+        newStatus: 'To Section Head',
+        actionBy: 'Current User',
+        recipient: 'Section Head',
+        comments: submitComments.value,
+      })
 
       showNotification('Project submitted for approval successfully!', 'success')
       showSubmitDialog.value = false
@@ -730,6 +746,17 @@ const addComment = () => {
         'Current User', // This should come from auth system
       )
       comments.value.unshift(comment)
+
+      // Create notification for comment
+      createCommentNotification({
+        projectId: projectId,
+        projectType: projectType.value,
+        projectTitle: project.value.title,
+        commentAuthor: 'Current User',
+        commentText: newComment.value.trim(),
+        recipient: null, // Can be set to specific recipient if needed
+      })
+
       newComment.value = ''
       showNotification('Comment added successfully')
       console.log('Comment added successfully')

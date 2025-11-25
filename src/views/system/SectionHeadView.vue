@@ -13,6 +13,7 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
+import { createStatusChangeNotification } from '@/services/notificationsService.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -278,6 +279,31 @@ const submitApproval = async () => {
 
       // Update projectType to match actual storage
       projectType.value = actualStorage.type
+
+      // Create notification based on action
+      if (action === 'approve') {
+        createStatusChangeNotification({
+          projectId: projectId,
+          projectType: actualStorage.type,
+          projectTitle: project.value.title,
+          oldStatus: 'To Section Head',
+          newStatus: 'To Technical Editor',
+          actionBy: currentUser.value,
+          recipient: 'Technical Editor',
+          comments: approvalComments.value,
+        })
+      } else if (action === 'return') {
+        createStatusChangeNotification({
+          projectId: projectId,
+          projectType: actualStorage.type,
+          projectTitle: project.value.title,
+          oldStatus: 'To Section Head',
+          newStatus: 'Returned by Section Head',
+          actionBy: currentUser.value,
+          recipient: 'Writer',
+          comments: approvalComments.value,
+        })
+      }
 
       try {
         await createProjectVersionSupabase(

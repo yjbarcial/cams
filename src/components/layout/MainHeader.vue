@@ -1,11 +1,54 @@
 <script setup>
-import { computed } from 'vue'
-import { ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { getUnreadCount } from '@/services/notificationsService.js'
 
 const router = useRouter()
 const showAccountMenu = ref(false)
 const logoutLoading = ref(false)
+const unreadCount = ref(0)
+
+// Update unread count
+const updateUnreadCount = () => {
+  unreadCount.value = getUnreadCount()
+}
+
+// Check for notifications periodically and on storage changes
+let notificationCheckInterval = null
+
+// Custom event listener for same-window notification updates
+const handleNotificationUpdate = () => {
+  updateUnreadCount()
+}
+
+onMounted(() => {
+  updateUnreadCount()
+
+  // Check for new notifications every 2 seconds
+  notificationCheckInterval = setInterval(() => {
+    updateUnreadCount()
+  }, 2000)
+
+  // Listen for storage changes (when notifications are added/updated in other tabs)
+  window.addEventListener('storage', handleStorageChange)
+
+  // Listen for custom notification update events (same window)
+  window.addEventListener('notificationUpdated', handleNotificationUpdate)
+})
+
+onUnmounted(() => {
+  if (notificationCheckInterval) {
+    clearInterval(notificationCheckInterval)
+  }
+  window.removeEventListener('storage', handleStorageChange)
+  window.removeEventListener('notificationUpdated', handleNotificationUpdate)
+})
+
+const handleStorageChange = (e) => {
+  if (e.key === 'notifications') {
+    updateUnreadCount()
+  }
+}
 
 // Admin email list - must match router adminEmails
 const adminEmails = [
@@ -69,11 +112,17 @@ const goToDashboard = () => {
       </RouterLink>
       <RouterLink
         to="/notifications"
-        class="icon-button"
+        class="icon-button notification-button"
         aria-label="Notifications"
         title="Notifications"
       >
         <span class="mdi mdi-bell" aria-hidden="true"></span>
+        <span
+          v-if="unreadCount > 0"
+          class="notification-dot"
+          :class="{ pulse: unreadCount > 0 }"
+          aria-label="Unread notifications"
+        ></span>
       </RouterLink>
 
       <!-- Admin icon - only visible for admins -->
@@ -195,9 +244,90 @@ const goToDashboard = () => {
   color: #353535;
 }
 
+.icon-button {
+  position: relative;
+}
+
 .icon-button .mdi {
   font-size: 24px;
   line-height: 1;
+}
+
+.notification-button {
+  position: relative;
+}
+
+.notification-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  border: 2px solid white;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  animation: dotAppear 0.3s ease;
+  /* Ensure no text content can appear */
+  display: block;
+  text-indent: -9999px;
+  overflow: hidden;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Prevent any pseudo-elements from showing content */
+.notification-dot::before,
+.notification-dot::after {
+  display: none !important;
+  content: '' !important;
+  width: 0 !important;
+  height: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+
+/* Prevent any child elements from showing */
+.notification-dot * {
+  display: none !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+
+.notification-dot.pulse {
+  opacity: 1;
+  animation: dotPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dotAppear {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes dotPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.9;
+  }
 }
 
 /* Dropdown styles - fixed position and centered icons */
