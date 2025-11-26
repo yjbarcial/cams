@@ -4,8 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import { createProjectVersion } from '@/services/localProjectHistory.js'
-import { supabase } from '@/utils/supabase'
-import { getUsersByRole, getCurrentUserId } from '@/services/userService'
 
 // Accept optional prop; also support reading from route param/query
 const props = defineProps({ type: { type: String, default: '' } })
@@ -41,11 +39,33 @@ const sectionHead = ref('')
 const deadline = ref('')
 const description = ref('')
 
-// User data
+// Temporary names for assignment (2 each)
+const temporaryUsers = {
+  sectionHeads: ['John Smith', 'Sarah Johnson'],
+  writers: ['Emily Davis', 'Michael Brown'],
+  artists: ['David Wilson', 'Lisa Anderson'],
+}
+
+// User data - using temporary names
 const users = ref({
-  sectionHeads: [],
-  writers: [],
-  artists: [],
+  sectionHeads: temporaryUsers.sectionHeads.map((name, index) => ({
+    id: `sh_${index}`,
+    full_name: name,
+    role: 'Section Head',
+    department: 'Editorial',
+  })),
+  writers: temporaryUsers.writers.map((name, index) => ({
+    id: `writer_${index}`,
+    full_name: name,
+    role: 'Writer',
+    department: 'Editorial',
+  })),
+  artists: temporaryUsers.artists.map((name, index) => ({
+    id: `artist_${index}`,
+    full_name: name,
+    role: 'Artist',
+    department: 'Design',
+  })),
 })
 
 // Selected users
@@ -53,44 +73,29 @@ const selectedSectionHead = ref(null)
 const selectedWriters = ref([])
 const selectedArtists = ref([])
 
-// Loading states
+// Loading states (not needed for temporary users, but keeping for compatibility)
 const loading = ref({
   sectionHeads: false,
   writers: false,
   artists: false,
 })
 
-// Fetch users by role
-const fetchUsers = async () => {
-  try {
-    loading.value.sectionHeads = true
-    loading.value.writers = true
-    loading.value.artists = true
+// Notification card state
+const showNotificationCard = ref(false)
+const notificationMessage = ref('')
+const notificationType = ref('success')
 
-    // Fetch section heads
-    const sectionHeads = await getUsersByRole('section_head')
-    users.value.sectionHeads = sectionHeads
+// Show notification card
+const showNotification = (message, type = 'success') => {
+  notificationMessage.value = message
+  notificationType.value = type
+  showNotificationCard.value = true
 
-    // Fetch writers
-    const writers = await getUsersByRole('writer')
-    users.value.writers = writers
-
-    // Fetch artists
-    const artists = await getUsersByRole('artist')
-    users.value.artists = artists
-  } catch (error) {
-    console.error('Error fetching users:', error)
-  } finally {
-    loading.value.sectionHeads = false
-    loading.value.writers = false
-    loading.value.artists = false
-  }
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    showNotificationCard.value = false
+  }, 3000)
 }
-
-// Fetch users when component mounts
-onMounted(() => {
-  fetchUsers()
-})
 
 // Watch for route type changes if needed
 watch(routeType, (newType) => {
@@ -115,9 +120,20 @@ const cancelPath = computed(() => {
   }
 })
 
-const assignProject = async () => {
+const assignProject = () => {
   if (!title.value.trim()) {
-    alert('Please enter a project title')
+    showNotification('Please enter a project title', 'warning')
+    return
+  }
+
+  // Validate required fields
+  if (!selectedSectionHead.value) {
+    showNotification('Please select a section head', 'warning')
+    return
+  }
+
+  if (selectedWriters.value.length === 0) {
+    showNotification('Please select at least one writer', 'warning')
     return
   }
 
@@ -133,116 +149,82 @@ const assignProject = async () => {
       })
     : 'No deadline set'
 
-  const writersString = writers.value.length > 0 ? writers.value.join(', ') : 'Not assigned'
-  const artistsString = artists.value.length > 0 ? artists.value.join(', ') : 'Not assigned'
+  // Get user names for display
+  const sectionHeadName =
+    users.value.sectionHeads.find((sh) => sh.id === selectedSectionHead.value)?.full_name ||
+    'Not assigned'
+  const writerNames = selectedWriters.value.map(
+    (id) => users.value.writers.find((w) => w.id === id)?.full_name || 'Unknown',
+  )
+  const artistNames =
+    selectedArtists.value.length > 0
+      ? selectedArtists.value.map(
+          (id) => users.value.artists.find((a) => a.id === id)?.full_name || 'Unknown',
+        )
+      : []
 
-  try {
-    // Get current user ID
-    const currentUserId = await getCurrentUserId()
-    if (!currentUserId) {
-      throw new Error('User not authenticated')
-    }
+  const writersString = writerNames.length > 0 ? writerNames.join(', ') : 'Not assigned'
+  const artistString = artistNames.length > 0 ? artistNames.join(', ') : 'Not assigned'
 
-    // Validate required fields
-    if (!selectedSectionHead.value) {
-      throw new Error('Please select a section head')
-    }
-
-    if (selectedWriters.value.length === 0) {
-      throw new Error('Please select at least one writer')
-    }
-
-    // Create project object matching the database schema
-    const newProject = {
-      title: title.value.trim(),
-      project_type: routeType.value,
-      description: description.value.trim() || null,
-      status: 'draft',
-      due_date: deadline.value ? new Date(deadline.value).toISOString().split('T')[0] : null,
-      section_head_id: selectedSectionHead.value,
-      writer_id: selectedWriters.value[0], // Using first writer as primary
-      artist_id: selectedArtists.value.length > 0 ? selectedArtists.value[0] : null, // Artist is optional
-      content: '',
-      media_files: [],
-      is_starred: false,
-      created_by: currentUserId,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }
-
-    // For debugging
-    console.log('Attempting to save project:', JSON.stringify(newProject, null, 2))
-
-    // Save to Supabase with error handling
-    console.log('Sending to Supabase...')
-    const { data, error } = await supabase.from('projects').insert([newProject]).select()
-
-    if (error) {
-      console.error('Supabase error details:', error)
-      throw error
-    }
-
-    console.log('✅ Project saved to Supabase:', data)
-
-    // Get user names for display
-    const sectionHeadName =
-      users.value.sectionHeads.find((sh) => sh.id === selectedSectionHead.value)?.full_name ||
-      'Unknown'
-    const writerNames = selectedWriters.value.map(
-      (id) => users.value.writers.find((w) => w.id === id)?.full_name || 'Unknown',
-    )
-    const artistNames = selectedArtists.value.map(
-      (id) => users.value.artists.find((a) => a.id === id)?.full_name || 'Unknown',
-    )
-
-    // Also save to localStorage for offline access
-    const storageKey = `${routeType.value}_projects`
-    const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-
-    // Create a simplified version for localStorage
-    const localProject = {
-      ...newProject,
-      // Add display fields for UI
-      section_head: sectionHeadName,
-      writers: writerNames,
-      artists: artistNames,
-      due_date_display: dueDateDisplay,
-      // Add arrays of all selected users (not just primary)
-      all_writer_ids: selectedWriters.value,
-      all_artist_ids: selectedArtists.value,
-      // Add creator info
-      created_by_name: 'Current User', // You might want to fetch the actual name
-    }
-
-    existingProjects.unshift(localProject)
-    localStorage.setItem(storageKey, JSON.stringify(existingProjects))
-
-    console.log('✅ Project saved to localStorage:', {
-      type: newProject.type,
-      storageKey,
-      project: newProject,
-      totalProjects: existingProjects.length,
-    })
-
-    // Create initial version for the project
-    try {
-      createProjectVersion(
-        routeType.value,
-        newProject.id,
-        newProject,
-        'Initial project creation',
-        'Current User',
-        'draft',
-      )
-    } catch (error) {
-      console.error('Error creating initial version:', error)
-    }
-
-    router.push(cancelPath.value)
-  } catch (error) {
-    console.error('Error saving project to Supabase:', error)
-    alert('Failed to save project. Please check the console for details.')
+  // Determine storage key (handle other/social-media)
+  let storageKey = `${routeType.value}_projects`
+  if (routeType.value === 'social-media') {
+    storageKey = 'social-media_projects'
   }
+
+  // Create project object for localStorage
+  const newProject = {
+    id: Date.now(),
+    title: title.value.trim(),
+    type: routeType.value,
+    sectionHead: sectionHeadName,
+    writers: writersString,
+    artists: artistString,
+    dueDate: dueDateDisplay,
+    dueDateISO,
+    createdAtISO,
+    createdBy: 'Current User',
+    created_at: createdAtISO,
+    description: description.value.trim() || 'No description provided',
+    status: 'Draft',
+    content: '',
+    lastModified: new Date().toLocaleString(),
+    mediaUploaded: 'No media',
+    isStarred: false,
+    priority: 'Medium',
+    department: getDepartmentFromType(routeType.value),
+  }
+
+  // Save to localStorage
+  const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+  existingProjects.unshift(newProject)
+  localStorage.setItem(storageKey, JSON.stringify(existingProjects))
+
+  console.log('✅ Project assigned and saved to localStorage:', {
+    type: routeType.value,
+    storageKey,
+    project: newProject,
+    totalProjects: existingProjects.length,
+  })
+
+  // Create initial version for the project
+  try {
+    createProjectVersion(
+      routeType.value,
+      newProject.id,
+      newProject,
+      'Initial project creation',
+      'Current User',
+      'draft',
+    )
+  } catch (error) {
+    console.error('Error creating initial version:', error)
+  }
+
+  showNotification('Project assigned successfully!', 'success')
+  setTimeout(() => {
+    router.push(cancelPath.value)
+  }, 1000)
 }
 
 // Helper function to get department based on project type
@@ -256,14 +238,14 @@ const getDepartmentFromType = (type) => {
   return typeMap[type] || 'General'
 }
 
-// Add to script setup section
+// Save as draft function
 const saveAsDraft = () => {
   if (!title.value.trim()) {
-    alert('Please enter a project title before saving as draft')
+    showNotification('Please enter a project title before saving as draft', 'warning')
     return
   }
 
-  // Create draft project with same structure as assignProject
+  // Normalize dates
   const createdAt = new Date()
   const createdAtISO = createdAt.toISOString()
   const dueDateISO = deadline.value ? new Date(deadline.value + 'T00:00:00').toISOString() : ''
@@ -275,14 +257,33 @@ const saveAsDraft = () => {
       })
     : 'No deadline set'
 
-  const writersString = writers.value.length > 0 ? writers.value.join(', ') : 'Not assigned'
-  const artistsString = artists.value.length > 0 ? artists.value.join(', ') : 'Not assigned'
+  // Get selected user names (if any selected)
+  const sectionHeadName = selectedSectionHead.value
+    ? users.value.sectionHeads.find((sh) => sh.id === selectedSectionHead.value)?.full_name ||
+      'Not assigned'
+    : 'Not assigned'
+
+  const writerNames = selectedWriters.value.map(
+    (id) => users.value.writers.find((w) => w.id === id)?.full_name || 'Unknown',
+  )
+  const artistNames = selectedArtists.value.map(
+    (id) => users.value.artists.find((a) => a.id === id)?.full_name || 'Unknown',
+  )
+
+  const writersString = writerNames.length > 0 ? writerNames.join(', ') : 'Not assigned'
+  const artistsString = artistNames.length > 0 ? artistNames.join(', ') : 'Not assigned'
+
+  // Determine storage key (handle other/social-media)
+  let storageKey = `${routeType.value}_projects`
+  if (routeType.value === 'social-media') {
+    storageKey = 'social-media_projects'
+  }
 
   const draftProject = {
     id: Date.now(),
     title: title.value.trim(),
-    type: routeType.value, // Use routeType.value instead of categoryLabel.value
-    sectionHead: sectionHead.value.trim() || 'Not assigned',
+    type: routeType.value,
+    sectionHead: sectionHeadName,
     dueDate: dueDateDisplay,
     dueDateISO,
     createdAtISO,
@@ -300,15 +301,21 @@ const saveAsDraft = () => {
     department: getDepartmentFromType(routeType.value),
   }
 
-  const storageKey = `${routeType.value}_projects`
   const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
   existingProjects.unshift(draftProject)
   localStorage.setItem(storageKey, JSON.stringify(existingProjects))
 
-  console.log('Draft saved:', draftProject)
+  console.log('✅ Draft saved to localStorage:', {
+    type: routeType.value,
+    storageKey,
+    project: draftProject,
+    totalProjects: existingProjects.length,
+  })
 
-  // Navigate back
-  router.push(cancelPath.value)
+  showNotification('Project saved as draft!', 'success')
+  setTimeout(() => {
+    router.push(cancelPath.value)
+  }, 1000)
 }
 </script>
 
@@ -348,8 +355,6 @@ const saveAsDraft = () => {
                         variant="outlined"
                         density="comfortable"
                         hide-details
-                        :loading="loading.sectionHeads"
-                        :disabled="loading.sectionHeads"
                         placeholder="Select section head"
                         clearable
                       >
@@ -417,8 +422,6 @@ const saveAsDraft = () => {
                               variant="outlined"
                               density="comfortable"
                               hide-details
-                              :loading="loading.writers"
-                              :disabled="loading.writers"
                               placeholder="Select writers"
                               multiple
                               chips
@@ -501,8 +504,6 @@ const saveAsDraft = () => {
                               variant="outlined"
                               density="comfortable"
                               hide-details
-                              :loading="loading.artists"
-                              :disabled="loading.artists"
                               placeholder="Select artists"
                               multiple
                               chips
@@ -606,6 +607,48 @@ const saveAsDraft = () => {
     </v-main>
 
     <Footer />
+
+    <!-- Notification Card -->
+    <transition name="slide-down">
+      <v-card
+        v-if="showNotificationCard"
+        class="notification-card"
+        :class="`notification-${notificationType}`"
+        elevation="4"
+      >
+        <div class="notification-content">
+          <v-icon
+            :color="
+              notificationType === 'success'
+                ? 'success'
+                : notificationType === 'error'
+                  ? 'error'
+                  : 'warning'
+            "
+            size="24"
+            class="notification-icon"
+          >
+            {{
+              notificationType === 'success'
+                ? 'mdi-check-circle'
+                : notificationType === 'error'
+                  ? 'mdi-alert-circle'
+                  : 'mdi-alert'
+            }}
+          </v-icon>
+          <span class="notification-message">{{ notificationMessage }}</span>
+          <v-btn
+            icon
+            size="small"
+            variant="text"
+            @click="showNotificationCard = false"
+            class="notification-close"
+          >
+            <v-icon size="20">mdi-close</v-icon>
+          </v-btn>
+        </div>
+      </v-card>
+    </transition>
   </v-app>
 </template>
 
@@ -1028,5 +1071,81 @@ const saveAsDraft = () => {
 
 .listbox::-webkit-scrollbar-thumb:hover {
   background: #b0b0b0;
+}
+
+/* Notification Card Styles */
+.notification-card {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  min-width: 300px;
+  max-width: 400px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 2px solid #353535 !important;
+}
+
+.notification-success {
+  background: #f0fdf4 !important;
+  border-color: #10b981 !important;
+}
+
+.notification-error {
+  background: #fef2f2 !important;
+  border-color: #ef4444 !important;
+}
+
+.notification-warning {
+  background: #fff7ed !important;
+  border-color: #f59e0b !important;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.notification-close {
+  flex-shrink: 0;
+  color: #6b7280 !important;
+}
+
+.notification-close:hover {
+  color: #374151 !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+.slide-down-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.slide-down-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+}
+
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
 }
 </style>
