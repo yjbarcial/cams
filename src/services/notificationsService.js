@@ -1,5 +1,6 @@
 // Notifications Service
 // Storage key: 'notifications'
+import { isPushNotificationsEnabled, isEmailNotificationsEnabled } from './settingsService.js'
 
 /**
  * Get all notifications
@@ -39,6 +40,18 @@ export const getUnreadCount = () => {
  */
 export const createNotification = (notificationData) => {
   try {
+    // Check if push notifications are enabled
+    if (!isPushNotificationsEnabled()) {
+      console.log('Push notifications are disabled, skipping notification creation')
+      // Still return the notification object for email notifications if enabled
+      // but don't add it to the in-app notifications list
+      if (isEmailNotificationsEnabled()) {
+        // In a real app, you would send an email here
+        console.log('Email notification would be sent:', notificationData.title)
+      }
+      return null
+    }
+
     const notification = {
       id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: notificationData.type || 'Info',
@@ -63,6 +76,13 @@ export const createNotification = (notificationData) => {
 
     // Dispatch custom event to notify MainHeader of new notification
     window.dispatchEvent(new CustomEvent('notificationUpdated'))
+
+    // If email notifications are enabled, log that email would be sent
+    // In a real app, you would send an email here
+    if (isEmailNotificationsEnabled()) {
+      console.log('Email notification would be sent:', notification.title)
+      // Example: sendEmailNotification(notification)
+    }
 
     return notification
   } catch (error) {

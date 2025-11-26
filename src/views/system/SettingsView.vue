@@ -1,15 +1,44 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
+import { getSettings, saveSettings, updateSetting } from '@/services/settingsService.js'
 
-// Settings state
+// Settings state - loaded from localStorage
 const pushNotifications = ref(true)
 const emailNotifications = ref(true)
+const showSaveMessage = ref(false)
+const saveMessage = ref('')
 
 // App info
 const appVersion = '1.0.0'
 const appCopyright = '© 2025 GoldQuill'
+
+// Load settings on mount
+onMounted(() => {
+  const settings = getSettings()
+  pushNotifications.value = settings.pushNotifications
+  emailNotifications.value = settings.emailNotifications
+})
+
+// Watch for changes and save automatically
+watch(pushNotifications, (newValue) => {
+  updateSetting('pushNotifications', newValue)
+  showSaveMessage.value = true
+  saveMessage.value = newValue ? 'Push notifications enabled' : 'Push notifications disabled'
+  setTimeout(() => {
+    showSaveMessage.value = false
+  }, 2000)
+})
+
+watch(emailNotifications, (newValue) => {
+  updateSetting('emailNotifications', newValue)
+  showSaveMessage.value = true
+  saveMessage.value = newValue ? 'Email notifications enabled' : 'Email notifications disabled'
+  setTimeout(() => {
+    showSaveMessage.value = false
+  }, 2000)
+})
 </script>
 
 <template>
@@ -36,13 +65,17 @@ const appCopyright = '© 2025 GoldQuill'
                     <v-icon size="24" color="#6b7280">mdi-bell</v-icon>
                   </v-col>
                   <v-col class="setting-label">
-                    <span>Push Notifications</span>
+                    <div class="setting-content">
+                      <div class="setting-main">Push Notifications</div>
+                      <div class="setting-secondary">
+                        Receive in-app notifications for project updates
+                      </div>
+                    </div>
                   </v-col>
                   <v-col cols="auto" class="setting-control">
                     <v-switch
                       v-model="pushNotifications"
-                      color="amber-accent-3
-"
+                      color="amber-accent-3"
                       hide-details
                       density="compact"
                       inset
@@ -55,7 +88,12 @@ const appCopyright = '© 2025 GoldQuill'
                     <v-icon size="24" color="#6b7280">mdi-email</v-icon>
                   </v-col>
                   <v-col class="setting-label">
-                    <span>Email Notifications</span>
+                    <div class="setting-content">
+                      <div class="setting-main">Email Notifications</div>
+                      <div class="setting-secondary">
+                        Receive email notifications for important updates
+                      </div>
+                    </div>
                   </v-col>
                   <v-col cols="auto" class="setting-control">
                     <v-switch
@@ -116,6 +154,14 @@ const appCopyright = '© 2025 GoldQuill'
     </v-main>
 
     <Footer />
+
+    <!-- Save message snackbar -->
+    <v-snackbar v-model="showSaveMessage" :timeout="2000" color="success" location="bottom right">
+      {{ saveMessage }}
+      <template v-slot:actions>
+        <v-btn variant="text" @click="showSaveMessage = false"> Close </v-btn>
+      </template>
+    </v-snackbar>
   </v-app>
 </template>
 
