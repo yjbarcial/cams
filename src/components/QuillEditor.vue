@@ -34,6 +34,7 @@ const emit = defineEmits([
   'selection-change',
   'highlight-comments-updated',
   'show-comment',
+  'notification',
 ])
 
 const editorRef = ref(null)
@@ -46,6 +47,11 @@ const currentSelection = ref(null)
 const highlightComments = ref([])
 const selectedHighlightColor = ref('#ffeb3b') // Default yellow
 const activeCommentId = ref(null) // Track which comment is currently active
+
+// Notification card state
+const showNotificationCard = ref(false)
+const notificationMessage = ref('')
+const notificationType = ref('warning')
 
 // Quill configuration
 const quillOptions = {
@@ -262,7 +268,7 @@ const addHighlightColorPicker = () => {
       selectedText.value = text.trim()
       showHighlightColorPicker.value = true
     } else {
-      alert('Please select some text to highlight.')
+      showNotification('Please select some text to highlight.', 'warning')
     }
   })
 
@@ -311,7 +317,7 @@ const addHighlightCommentHandler = () => {
         showHighlightComment.value = true
       }
     } else {
-      alert('Please select some text to add a comment.')
+      showNotification('Please select some text to add a comment.', 'warning')
     }
   })
 
@@ -732,6 +738,18 @@ watch(
   },
 )
 
+// Show notification card
+const showNotification = (message, type = 'warning') => {
+  notificationMessage.value = message
+  notificationType.value = type
+  showNotificationCard.value = true
+
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    showNotificationCard.value = false
+  }, 3000)
+}
+
 // Local image upload handler
 const selectLocalImage = () => {
   const input = document.createElement('input')
@@ -767,7 +785,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="quill-editor-container">
+  <div class="quill-editor-container" style="position: relative">
     <!-- Quill Editor -->
     <div ref="editorRef" class="quill-editor" :style="{ height: height }"></div>
 
@@ -845,6 +863,36 @@ defineExpose({
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Notification Card -->
+    <transition name="slide-down">
+      <v-card
+        v-if="showNotificationCard"
+        class="notification-card"
+        :class="`notification-${notificationType}`"
+        elevation="4"
+      >
+        <div class="notification-content">
+          <v-icon
+            :color="notificationType === 'warning' ? 'warning' : 'info'"
+            size="24"
+            class="notification-icon"
+          >
+            {{ notificationType === 'warning' ? 'mdi-alert' : 'mdi-information' }}
+          </v-icon>
+          <span class="notification-message">{{ notificationMessage }}</span>
+          <v-btn
+            icon
+            size="small"
+            variant="text"
+            @click="showNotificationCard = false"
+            class="notification-close"
+          >
+            <v-icon size="20">mdi-close</v-icon>
+          </v-btn>
+        </div>
+      </v-card>
+    </transition>
   </div>
 </template>
 
@@ -1102,5 +1150,75 @@ defineExpose({
     padding: 15px;
     min-height: 250px;
   }
+}
+/* Notification Card Styles */
+.notification-card {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  min-width: 300px;
+  max-width: 400px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 2px solid #353535 !important;
+}
+
+.notification-warning {
+  background: #fff7ed !important;
+  border-color: #f59e0b !important;
+}
+
+.notification-info {
+  background: #eff6ff !important;
+  border-color: #3b82f6 !important;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.notification-close {
+  flex-shrink: 0;
+  color: #6b7280 !important;
+}
+
+.notification-close:hover {
+  color: #374151 !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Slide down animation */
+.slide-down-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.slide-down-enter-from {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
 }
 </style>

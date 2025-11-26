@@ -73,10 +73,27 @@ const showSnackbar = ref(false)
 const snackbarMessage = ref('')
 const snackbarColor = ref('success')
 
+// Notification card state (for comment deletions)
+const showCommentNotificationCard = ref(false)
+const commentNotificationMessage = ref('')
+const commentNotificationType = ref('success')
+
 const showNotification = (message, color = 'success') => {
   snackbarMessage.value = message
   snackbarColor.value = color
   showSnackbar.value = true
+}
+
+// Show notification card (for comment deletions)
+const showCommentNotification = (message, type = 'success') => {
+  commentNotificationMessage.value = message
+  commentNotificationType.value = type
+  showCommentNotificationCard.value = true
+
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    showCommentNotificationCard.value = false
+  }, 3000)
 }
 
 const getLastSaveDisplay = computed(() => {
@@ -517,17 +534,18 @@ const filteredComments = computed(() => {
 })
 
 const deleteComment = (commentId) => {
-  if (confirm('Are you sure you want to delete this comment?')) {
-    try {
-      const success = deleteProjectComment(projectType.value, projectId, commentId)
-      if (success) {
-        comments.value = comments.value.filter((c) => c.id !== commentId)
-        showNotification('Comment deleted successfully')
-      }
-    } catch (error) {
-      console.error('Error deleting comment:', error)
-      showNotification('Failed to delete comment', 'error')
+  // Delete immediately - no alerts, just delete and show notification card
+  try {
+    const success = deleteProjectComment(projectType.value, projectId, commentId)
+    if (success) {
+      comments.value = comments.value.filter((c) => c.id !== commentId)
+      showCommentNotification('Comment deleted successfully', 'success')
+    } else {
+      showCommentNotification('Failed to delete comment', 'error')
     }
+  } catch (error) {
+    console.error('Error deleting comment:', error)
+    showCommentNotification('Failed to delete comment', 'error')
   }
 }
 
@@ -867,7 +885,11 @@ onMounted(() => {
                             {{ comment.isApproved ? 'Unapprove' : 'Approve' }}
                           </v-list-item-title>
                         </v-list-item>
-                        <v-list-item @click="deleteComment(comment.id)" class="text-error">
+                        <v-list-item
+                          v-if="isEditorEditable"
+                          @click="deleteComment(comment.id)"
+                          class="text-error"
+                        >
                           <v-list-item-title>Delete</v-list-item-title>
                         </v-list-item>
                       </v-list>
@@ -1012,6 +1034,48 @@ onMounted(() => {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Comment Notification Card -->
+    <transition name="slide-down">
+      <v-card
+        v-if="showCommentNotificationCard"
+        class="comment-notification-card"
+        :class="`notification-${commentNotificationType}`"
+        elevation="4"
+      >
+        <div class="notification-content">
+          <v-icon
+            :color="
+              commentNotificationType === 'success'
+                ? 'success'
+                : commentNotificationType === 'error'
+                  ? 'error'
+                  : 'warning'
+            "
+            size="24"
+            class="notification-icon"
+          >
+            {{
+              commentNotificationType === 'success'
+                ? 'mdi-check-circle'
+                : commentNotificationType === 'error'
+                  ? 'mdi-alert-circle'
+                  : 'mdi-alert'
+            }}
+          </v-icon>
+          <span class="notification-message">{{ commentNotificationMessage }}</span>
+          <v-btn
+            icon
+            size="small"
+            variant="text"
+            @click="showCommentNotificationCard = false"
+            class="notification-close"
+          >
+            <v-icon size="20">mdi-close</v-icon>
+          </v-btn>
+        </div>
+      </v-card>
+    </transition>
 
     <v-snackbar v-model="showSnackbar" :color="snackbarColor" timeout="3000">
       {{ snackbarMessage }}
@@ -1498,5 +1562,81 @@ onMounted(() => {
   .approval-dialog-actions .v-spacer {
     display: none;
   }
+}
+
+/* Comment Notification Card Styles */
+.comment-notification-card {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  min-width: 300px;
+  max-width: 400px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 2px solid #353535 !important;
+}
+
+.notification-success {
+  background: #f0fdf4 !important;
+  border-color: #10b981 !important;
+}
+
+.notification-error {
+  background: #fef2f2 !important;
+  border-color: #ef4444 !important;
+}
+
+.notification-warning {
+  background: #fff7ed !important;
+  border-color: #f59e0b !important;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.notification-close {
+  flex-shrink: 0;
+  color: #6b7280 !important;
+}
+
+.notification-close:hover {
+  color: #374151 !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+.slide-down-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.slide-down-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+}
+
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
 }
 </style>

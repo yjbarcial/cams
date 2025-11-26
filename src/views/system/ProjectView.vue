@@ -63,6 +63,9 @@ const showSubmitDialog = ref(false)
 const submitPriority = ref('Medium')
 const submitComments = ref('')
 
+// Unsaved changes dialog
+const showUnsavedChangesDialog = ref(false)
+
 // History and versioning state
 const showHistory = ref(true) // Always show by default
 const versionDescription = ref('')
@@ -81,11 +84,28 @@ const showSnackbar = ref(false)
 const snackbarMessage = ref('')
 const snackbarColor = ref('success')
 
-// Show notification
+// Notification card state (for comment deletions - like highlight comments)
+const showCommentNotificationCard = ref(false)
+const commentNotificationMessage = ref('')
+const commentNotificationType = ref('success')
+
+// Show notification (snackbar - for other notifications)
 const showNotification = (message, color = 'success') => {
   snackbarMessage.value = message
   snackbarColor.value = color
   showSnackbar.value = true
+}
+
+// Show notification card (for comment deletions - like highlight comments)
+const showCommentNotification = (message, type = 'success') => {
+  commentNotificationMessage.value = message
+  commentNotificationType.value = type
+  showCommentNotificationCard.value = true
+
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    showCommentNotificationCard.value = false
+  }, 3000)
 }
 
 // Title editing functions
@@ -440,18 +460,29 @@ const handleVersionRestored = (restoredProject) => {
 const goBack = () => {
   // Check if there are unsaved changes
   if (hasUnsavedChanges.value) {
-    const confirmLeave = confirm('You have unsaved changes. Do you want to save before leaving?')
-    if (confirmLeave) {
-      saveContent(true)
-      // Small delay to ensure save completes
-      setTimeout(() => {
-        performNavigation()
-      }, 100)
-      return
-    }
+    showUnsavedChangesDialog.value = true
+    return
   }
 
   performNavigation()
+}
+
+const confirmLeaveWithSave = () => {
+  saveContent(true)
+  showUnsavedChangesDialog.value = false
+  // Small delay to ensure save completes
+  setTimeout(() => {
+    performNavigation()
+  }, 100)
+}
+
+const confirmLeaveWithoutSave = () => {
+  showUnsavedChangesDialog.value = false
+  performNavigation()
+}
+
+const cancelLeave = () => {
+  showUnsavedChangesDialog.value = false
 }
 
 const projectTypeMap = {
@@ -778,18 +809,19 @@ const filteredComments = computed(() => {
 
 // Comment action functions
 const deleteComment = (commentId) => {
-  if (confirm('Are you sure you want to delete this comment?')) {
-    try {
-      const success = deleteProjectComment(projectType.value, projectId, commentId)
-      if (success) {
-        comments.value = comments.value.filter((c) => c.id !== commentId)
-        showNotification('Comment deleted successfully')
-        console.log('Comment deleted successfully')
-      }
-    } catch (error) {
-      console.error('Error deleting comment:', error)
-      showNotification('Failed to delete comment', 'error')
+  // Delete immediately - no alerts, just delete and show notification card
+  try {
+    const success = deleteProjectComment(projectType.value, projectId, commentId)
+    if (success) {
+      comments.value = comments.value.filter((c) => c.id !== commentId)
+      showCommentNotification('Comment deleted successfully', 'success')
+      console.log('Comment deleted successfully')
+    } else {
+      showCommentNotification('Failed to delete comment', 'error')
     }
+  } catch (error) {
+    console.error('Error deleting comment:', error)
+    showCommentNotification('Failed to delete comment', 'error')
   }
 }
 
@@ -834,6 +866,10 @@ const handleDeleteHighlightComment = (commentId) => {
 const handleLoadHighlightComments = (comments) => {
   highlightComments.value = comments
   console.log('Loaded highlight comments:', comments)
+}
+
+const handleEditorNotification = (message, color = 'warning') => {
+  showNotification(message, color)
 }
 
 // Format timestamp for display
@@ -1058,6 +1094,7 @@ const getBackButtonText = computed(() => {
                 placeholder="Start writing your content..."
                 @text-change="handleContentChange"
                 @highlight-comments-updated="handleHighlightCommentsUpdated"
+                @notification="handleEditorNotification"
               />
             </div>
 
@@ -1138,7 +1175,7 @@ const getBackButtonText = computed(() => {
               <div class="comment-search">
                 <v-text-field
                   v-model="commentSearch"
-                  placeholder="All comments"
+                  placeholder="Search comments"
                   prepend-inner-icon="mdi-magnify"
                   variant="outlined"
                   density="compact"
@@ -1318,6 +1355,94 @@ const getBackButtonText = computed(() => {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Unsaved Changes Dialog -->
+    <v-dialog v-model="showUnsavedChangesDialog" max-width="500px" persistent>
+      <v-card class="unsaved-dialog-card">
+        <v-card-title class="unsaved-dialog-header">
+          <v-icon class="mr-2" size="24">mdi-content-save-alert</v-icon>
+          <span>Unsaved Changes</span>
+        </v-card-title>
+
+        <v-divider class="dialog-divider" />
+
+        <v-card-text class="unsaved-dialog-content">
+          <div class="unsaved-info-box">
+            <p class="unsaved-message">
+              You have unsaved changes. Do you want to save before leaving?
+            </p>
+          </div>
+        </v-card-text>
+
+        <v-divider class="dialog-divider" />
+
+        <v-card-actions class="unsaved-dialog-actions">
+          <v-btn
+            @click="confirmLeaveWithoutSave"
+            variant="outlined"
+            size="default"
+            class="leave-btn"
+          >
+            Leave Without Saving
+          </v-btn>
+          <v-spacer />
+          <v-btn @click="cancelLeave" variant="outlined" size="default" class="cancel-btn">
+            Cancel
+          </v-btn>
+          <v-btn
+            @click="confirmLeaveWithSave"
+            variant="flat"
+            size="default"
+            prepend-icon="mdi-content-save"
+            class="save-btn"
+          >
+            Save and Leave
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Comment Notification Card (like highlight comments) -->
+    <transition name="slide-down">
+      <v-card
+        v-if="showCommentNotificationCard"
+        class="comment-notification-card"
+        :class="`notification-${commentNotificationType}`"
+        elevation="4"
+      >
+        <div class="notification-content">
+          <v-icon
+            :color="
+              commentNotificationType === 'success'
+                ? 'success'
+                : commentNotificationType === 'error'
+                  ? 'error'
+                  : 'warning'
+            "
+            size="24"
+            class="notification-icon"
+          >
+            {{
+              commentNotificationType === 'success'
+                ? 'mdi-check-circle'
+                : commentNotificationType === 'error'
+                  ? 'mdi-alert-circle'
+                  : 'mdi-alert'
+            }}
+          </v-icon>
+          <span class="notification-message">{{ commentNotificationMessage }}</span>
+          <v-btn
+            icon
+            size="small"
+            variant="text"
+            @click="showCommentNotificationCard = false"
+            class="notification-close"
+          >
+            <v-icon size="20">mdi-close</v-icon>
+          </v-btn>
+        </div>
+      </v-card>
+    </transition>
 
     <!-- Snackbar for notifications -->
     <v-snackbar
@@ -1662,6 +1787,8 @@ const getBackButtonText = computed(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
 }
 
 .comments-header {
@@ -1670,14 +1797,16 @@ const getBackButtonText = computed(() => {
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  background: linear-gradient(to bottom, #ffffff, #f8fafc);
 }
 
 .comments-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   color: #1f2937;
+  display: flex;
+  align-items: center;
 }
 
 .header-actions {
@@ -1685,74 +1814,175 @@ const getBackButtonText = computed(() => {
   gap: 4px;
 }
 
+.header-actions .v-btn {
+  color: #6b7280 !important;
+  transition: all 0.2s ease;
+}
+
+.header-actions .v-btn:hover {
+  color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+}
+
 .comment-search {
   padding: 16px 20px;
   border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+:deep(.comment-search .v-field) {
+  background: #f9fafb !important;
+  border-radius: 6px !important;
+}
+
+:deep(.comment-search .v-field:focus-within) {
+  background: white !important;
+  border-color: #3b82f6 !important;
 }
 
 .add-comment {
   padding: 16px 20px;
   border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+:deep(.add-comment .v-field) {
+  background: #f9fafb !important;
+  border-radius: 6px !important;
+}
+
+:deep(.add-comment .v-field:focus-within) {
+  background: white !important;
+  border-color: #3b82f6 !important;
 }
 
 .comments-list {
   flex: 1;
   overflow-y: auto;
   padding: 16px 20px;
+  background: #fafbfc;
+  max-height: 400px;
 }
 
 .comment-item {
   display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #f8fafc;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 14px;
+  background: white;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  align-items: flex-start;
+}
+
+.comment-item:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
 }
 
 .comment-item:last-child {
   margin-bottom: 0;
 }
 
+.comment-avatar {
+  flex-shrink: 0;
+}
+
 .comment-avatar img {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   object-fit: cover;
+  border: 2px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .comment-content {
   flex: 1;
+  min-width: 0;
 }
 
 .comment-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .comment-author {
   font-weight: 600;
   color: #1f2937;
   font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.comment-author::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  display: inline-block;
 }
 
 .comment-time {
   font-size: 12px;
   color: #6b7280;
+  font-weight: 500;
 }
 
 .comment-text {
   color: #374151;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.6;
+  margin-top: 4px;
+  word-wrap: break-word;
 }
 
 .comment-actions {
   display: flex;
   align-items: flex-start;
   gap: 4px;
+  flex-shrink: 0;
+}
+
+.comment-actions .v-btn {
+  color: #6b7280 !important;
+  transition: all 0.2s ease;
+}
+
+.comment-actions .v-btn:hover {
+  color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+}
+
+.comment-actions .v-icon {
+  transition: all 0.2s ease;
+}
+
+/* Scrollbar styling for comments list */
+.comments-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.comments-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.comments-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.comments-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Submit for Approval Dialog - UPDATED */
@@ -1937,5 +2167,269 @@ const getBackButtonText = computed(() => {
   .submit-dialog-actions .v-spacer {
     display: none;
   }
+}
+
+/* Delete Comment Dialog Styles */
+.delete-dialog-card {
+  border: 2px solid #353535 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+.delete-dialog-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 24px !important;
+  background: #353535 !important;
+  color: white !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.delete-dialog-content {
+  padding: 24px !important;
+  background: white !important;
+}
+
+.delete-info-box {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-left: 4px solid #353535;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.delete-message {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #555;
+  margin: 0;
+}
+
+.warning-alert {
+  border-left: 4px solid #353535 !important;
+  background: #f8f8f8 !important;
+  border-radius: 6px !important;
+  padding: 12px 16px !important;
+}
+
+:deep(.warning-alert .v-alert__prepend) {
+  margin-right: 12px !important;
+  color: #353535 !important;
+}
+
+.alert-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #555;
+}
+
+.alert-text strong {
+  display: inline;
+  font-weight: 600;
+  color: #353535;
+}
+
+.delete-dialog-actions {
+  padding: 16px 24px !important;
+  background: #fafafa !important;
+  border-top: 1px solid #e0e0e0 !important;
+}
+
+.delete-dialog-actions .cancel-btn {
+  border: 2px solid #353535 !important;
+  color: #353535 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+}
+
+.delete-dialog-actions .cancel-btn:hover {
+  background: #f5f5f5 !important;
+}
+
+.confirm-delete-btn {
+  background: #353535 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 28px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.confirm-delete-btn:hover {
+  background: #1f1f1f !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Unsaved Changes Dialog Styles */
+.unsaved-dialog-card {
+  border: 2px solid #353535 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+.unsaved-dialog-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 24px !important;
+  background: #353535 !important;
+  color: white !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.unsaved-dialog-content {
+  padding: 24px !important;
+  background: white !important;
+}
+
+.unsaved-info-box {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-left: 4px solid #353535;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.unsaved-message {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #555;
+  margin: 0;
+}
+
+.unsaved-dialog-actions {
+  padding: 16px 24px !important;
+  background: #fafafa !important;
+  border-top: 1px solid #e0e0e0 !important;
+}
+
+.unsaved-dialog-actions .leave-btn {
+  border: 2px solid #ef4444 !important;
+  color: #ef4444 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+}
+
+.unsaved-dialog-actions .leave-btn:hover {
+  background: #fef2f2 !important;
+}
+
+.unsaved-dialog-actions .cancel-btn {
+  border: 2px solid #353535 !important;
+  color: #353535 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+}
+
+.unsaved-dialog-actions .cancel-btn:hover {
+  background: #f5f5f5 !important;
+}
+
+.unsaved-dialog-actions .save-btn {
+  background: #353535 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 28px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.unsaved-dialog-actions .save-btn:hover {
+  background: #1f1f1f !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Comment Notification Card Styles (like highlight comments) */
+.comment-notification-card {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  min-width: 300px;
+  max-width: 400px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 2px solid #353535 !important;
+}
+
+.notification-success {
+  background: #f0fdf4 !important;
+  border-color: #10b981 !important;
+}
+
+.notification-error {
+  background: #fef2f2 !important;
+  border-color: #ef4444 !important;
+}
+
+.notification-warning {
+  background: #fff7ed !important;
+  border-color: #f59e0b !important;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.notification-close {
+  flex-shrink: 0;
+  color: #6b7280 !important;
+}
+
+.notification-close:hover {
+  color: #374151 !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Slide down animation for notification card */
+.slide-down-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.slide-down-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+}
+
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
 }
 </style>

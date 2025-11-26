@@ -1,5 +1,5 @@
 <template>
-  <div class="highlight-comments-panel">
+  <div class="highlight-comments-panel" style="position: relative">
     <div class="panel-header">
       <h3>
         <v-icon class="mr-2">mdi-comment-text</v-icon>
@@ -74,6 +74,48 @@
         </div>
       </div>
     </v-expand-transition>
+
+    <!-- Notification Card -->
+    <transition name="slide-down">
+      <v-card
+        v-if="showNotificationCard"
+        class="notification-card"
+        :class="`notification-${notificationType}`"
+        elevation="4"
+      >
+        <div class="notification-content">
+          <v-icon
+            :color="
+              notificationType === 'success'
+                ? 'success'
+                : notificationType === 'error'
+                  ? 'error'
+                  : 'warning'
+            "
+            size="24"
+            class="notification-icon"
+          >
+            {{
+              notificationType === 'success'
+                ? 'mdi-check-circle'
+                : notificationType === 'error'
+                  ? 'mdi-alert-circle'
+                  : 'mdi-alert'
+            }}
+          </v-icon>
+          <span class="notification-message">{{ notificationMessage }}</span>
+          <v-btn
+            icon
+            size="small"
+            variant="text"
+            @click="showNotificationCard = false"
+            class="notification-close"
+          >
+            <v-icon size="20">mdi-close</v-icon>
+          </v-btn>
+        </div>
+      </v-card>
+    </transition>
   </div>
 </template>
 
@@ -94,6 +136,9 @@ const props = defineProps({
 const emit = defineEmits(['delete-comment', 'highlight-text', 'load-comments', 'resolve-comment'])
 
 const isExpanded = ref(false)
+const showNotificationCard = ref(false)
+const notificationMessage = ref('')
+const notificationType = ref('success')
 
 // Filter out resolved comments (they are "done" and should be hidden)
 const unresolvedComments = computed(() => {
@@ -137,9 +182,20 @@ const highlightText = (comment) => {
 }
 
 const deleteComment = (commentId) => {
-  if (confirm('Are you sure you want to delete this highlight comment?')) {
-    emit('delete-comment', commentId)
-  }
+  // Delete immediately and show notification card
+  emit('delete-comment', commentId)
+  showNotification('Highlight comment deleted', 'success')
+}
+
+const showNotification = (message, type = 'success') => {
+  notificationMessage.value = message
+  notificationType.value = type
+  showNotificationCard.value = true
+
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    showNotificationCard.value = false
+  }, 3000)
 }
 
 const toggleResolve = (commentId) => {
@@ -382,5 +438,82 @@ const formatTime = (timestamp) => {
 
 .comments-list::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* Notification Card Styles */
+.notification-card {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  min-width: 300px;
+  max-width: 400px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 2px solid #353535 !important;
+}
+
+.notification-success {
+  background: #f0fdf4 !important;
+  border-color: #10b981 !important;
+}
+
+.notification-error {
+  background: #fef2f2 !important;
+  border-color: #ef4444 !important;
+}
+
+.notification-warning {
+  background: #fff7ed !important;
+  border-color: #f59e0b !important;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.notification-close {
+  flex-shrink: 0;
+  color: #6b7280 !important;
+}
+
+.notification-close:hover {
+  color: #374151 !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Slide down animation */
+.slide-down-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.slide-down-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+}
+
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
 }
 </style>
