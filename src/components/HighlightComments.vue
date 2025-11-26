@@ -12,29 +12,53 @@
 
     <v-expand-transition>
       <div v-show="isExpanded" class="panel-content">
-        <div v-if="comments.length === 0" class="no-comments">
+        <div v-if="unresolvedComments.length === 0" class="no-comments">
           <v-icon size="48" color="grey-lighten-1">mdi-comment-outline</v-icon>
-          <p>No highlight comments yet</p>
+          <p>{{ comments.length === 0 ? 'No highlight comments yet' : 'All comments resolved' }}</p>
           <p class="text-caption">
-            Select text in the editor and click the 💬 button to add comments
+            {{
+              comments.length === 0
+                ? 'Select text in the editor and click the 💬 button to add comments'
+                : 'All comments have been marked as done'
+            }}
           </p>
         </div>
 
         <div v-else class="comments-list">
           <div
-            v-for="comment in comments"
+            v-for="comment in unresolvedComments"
             :key="comment.id"
             class="comment-item"
             @click="highlightText(comment)"
           >
-            <div class="comment-header">
-              <span class="comment-author">{{ comment.author }}</span>
-              <span class="comment-time">{{ formatTime(comment.timestamp) }}</span>
+            <!-- Resolve checkbox (Google Docs style) -->
+            <div class="comment-resolve-section">
+              <v-btn
+                icon
+                size="small"
+                variant="text"
+                @click.stop="toggleResolve(comment.id)"
+                class="resolve-btn"
+                :class="{ resolved: comment.resolved }"
+                :title="comment.resolved ? 'Mark as unresolved' : 'Mark as resolved'"
+              >
+                <v-icon :color="comment.resolved ? 'success' : 'grey'" size="20">
+                  {{ comment.resolved ? 'mdi-check-circle' : 'mdi-check-circle-outline' }}
+                </v-icon>
+              </v-btn>
             </div>
-            <div class="highlighted-text">"{{ comment.text }}"</div>
-            <div class="comment-content">
-              {{ comment.comment }}
+
+            <div class="comment-body">
+              <div class="comment-header">
+                <span class="comment-author">{{ comment.author }}</span>
+                <span class="comment-time">{{ formatTime(comment.timestamp) }}</span>
+              </div>
+              <div class="highlighted-text">"{{ comment.text }}"</div>
+              <div class="comment-content" :class="{ 'resolved-text': comment.resolved }">
+                {{ comment.comment }}
+              </div>
             </div>
+
             <div class="comment-actions">
               <v-btn
                 icon
@@ -67,9 +91,14 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['delete-comment', 'highlight-text', 'load-comments'])
+const emit = defineEmits(['delete-comment', 'highlight-text', 'load-comments', 'resolve-comment'])
 
 const isExpanded = ref(false)
+
+// Filter out resolved comments (they are "done" and should be hidden)
+const unresolvedComments = computed(() => {
+  return props.comments.filter((comment) => !comment.resolved)
+})
 
 // Load highlight comments from localStorage on mount
 onMounted(() => {
@@ -113,6 +142,10 @@ const deleteComment = (commentId) => {
   }
 }
 
+const toggleResolve = (commentId) => {
+  emit('resolve-comment', commentId)
+}
+
 const formatTime = (timestamp) => {
   try {
     const date = new Date(timestamp)
@@ -138,6 +171,7 @@ const formatTime = (timestamp) => {
   border-radius: 8px;
   margin-bottom: 24px;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .panel-header {
@@ -145,15 +179,15 @@ const formatTime = (timestamp) => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: #f8fafc;
+  background: linear-gradient(to bottom, #ffffff, #f8fafc);
   border-bottom: 1px solid #e5e7eb;
 }
 
 .panel-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
-  color: #374151;
+  color: #1f2937;
   display: flex;
   align-items: center;
 }
@@ -183,65 +217,137 @@ const formatTime = (timestamp) => {
 }
 
 .comment-item {
-  padding: 12px;
+  padding: 14px;
   border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  margin-bottom: 8px;
+  border-radius: 8px;
+  margin-bottom: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .comment-item:hover {
-  background: #f8fafc;
+  background: #f9fafb;
   border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.comment-item.comment-resolved {
+  opacity: 0.75;
+  background: #f0fdf4;
+  border-color: #86efac;
+  border-left: 3px solid #10b981;
 }
 
 .comment-item:last-child {
   margin-bottom: 0;
 }
 
+.comment-resolve-section {
+  flex-shrink: 0;
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
+.resolve-btn {
+  color: #6b7280 !important;
+  transition: all 0.2s ease;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+}
+
+.resolve-btn:hover {
+  background: #f3f4f6 !important;
+  transform: scale(1.1);
+}
+
+.resolve-btn.resolved {
+  color: #10b981 !important;
+}
+
+.resolve-btn.resolved:hover {
+  background: #d1fae5 !important;
+  color: #059669 !important;
+}
+
+.comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .comment-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .comment-author {
   font-weight: 600;
-  color: #374151;
+  color: #1f2937;
   font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.comment-author::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  display: inline-block;
 }
 
 .comment-time {
   color: #6b7280;
   font-size: 12px;
+  font-weight: 500;
 }
 
 .highlighted-text {
-  background: #fef3c7;
-  padding: 6px 8px;
-  border-radius: 4px;
+  background: linear-gradient(to right, #fef3c7, #fde68a);
+  padding: 8px 10px;
+  border-radius: 6px;
   font-style: italic;
-  color: #92400e;
+  color: #78350f;
   font-size: 13px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   border-left: 3px solid #f59e0b;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-weight: 500;
 }
 
 .comment-content {
   color: #374151;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
+  padding: 8px 0;
+  word-wrap: break-word;
+}
+
+.comment-content.resolved-text {
+  text-decoration: line-through;
+  color: #9ca3af;
+  opacity: 0.7;
 }
 
 .comment-actions {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  right: 10px;
   opacity: 0;
   transition: opacity 0.2s ease;
+  display: flex;
+  gap: 4px;
 }
 
 .comment-item:hover .comment-actions {
@@ -250,10 +356,13 @@ const formatTime = (timestamp) => {
 
 .delete-btn {
   color: #ef4444 !important;
+  width: 28px;
+  height: 28px;
 }
 
 .delete-btn:hover {
   background: #fef2f2 !important;
+  transform: scale(1.1);
 }
 
 /* Scrollbar styling */

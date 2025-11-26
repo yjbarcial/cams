@@ -33,15 +33,19 @@ const emit = defineEmits([
   'text-change',
   'selection-change',
   'highlight-comments-updated',
+  'show-comment',
 ])
 
 const editorRef = ref(null)
 const quill = ref(null)
 const showHighlightComment = ref(false)
+const showHighlightColorPicker = ref(false)
 const highlightComment = ref('')
 const selectedText = ref('')
 const currentSelection = ref(null)
 const highlightComments = ref([])
+const selectedHighlightColor = ref('#ffeb3b') // Default yellow
+const activeCommentId = ref(null) // Track which comment is currently active
 
 // Quill configuration
 const quillOptions = {
@@ -143,6 +147,18 @@ onMounted(async () => {
 
       // Add custom highlight comment functionality
       addHighlightCommentHandler()
+      addHighlightColorPicker()
+
+      // Restore highlights after content is loaded
+      setTimeout(() => {
+        restoreHighlights()
+      }, 500)
+
+      // Add click handler for highlighted text
+      quill.value.root.addEventListener('click', handleEditorClick)
+
+      // Add right-click context menu
+      quill.value.root.addEventListener('contextmenu', handleRightClick)
 
       // Add custom toolbar handlers (image upload)
       const toolbar = quill.value.getModule('toolbar')
@@ -173,6 +189,10 @@ watch(
   (newValue) => {
     if (quill.value && quill.value.root.innerHTML !== newValue) {
       quill.value.root.innerHTML = newValue
+      // Restore highlights after content update
+      setTimeout(() => {
+        restoreHighlights()
+      }, 100)
     }
   },
 )
@@ -182,22 +202,94 @@ onMounted(() => {
   loadHighlightCommentsFromStorage()
 })
 
-// Add highlight comment handler
-const addHighlightCommentHandler = () => {
+// Highlight colors (like Google Docs)
+const highlightColors = [
+  { name: 'Yellow', value: '#ffeb3b', class: 'highlight-yellow' },
+  { name: 'Green', value: '#c8e6c9', class: 'highlight-green' },
+  { name: 'Blue', value: '#bbdefb', class: 'highlight-blue' },
+  { name: 'Pink', value: '#f8bbd0', class: 'highlight-pink' },
+  { name: 'Orange', value: '#ffe0b2', class: 'highlight-orange' },
+  { name: 'Purple', value: '#e1bee7', class: 'highlight-purple' },
+  { name: 'Remove', value: null, class: 'highlight-remove' },
+]
+
+// Convert full highlight color to semi-highlight (for commented text - like Google Docs)
+const getSemiHighlightColor = (color) => {
+  if (!color) return null
+
+  // Convert hex to rgba with 0.4 opacity (semi-transparent like Google Docs)
+  const hex = color.replace('#', '')
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+
+  return `rgba(${r}, ${g}, ${b}, 0.4)`
+}
+
+// Add highlight color picker to toolbar
+const addHighlightColorPicker = () => {
   if (!quill.value) return
 
-  // Add custom button to toolbar
   const toolbar = quill.value.getModule('toolbar')
   if (!toolbar || !toolbar.container) return
 
   const container = toolbar.container
 
-  // Create highlight comment button
+  // Create highlight button (using marker/highlighter icon)
   const highlightButton = document.createElement('button')
-  highlightButton.innerHTML = '💬'
-  highlightButton.title = 'Add comment to selected text'
-  highlightButton.className = 'ql-comment'
+  highlightButton.innerHTML =
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>'
+  highlightButton.title = 'Highlight text'
+  highlightButton.className = 'ql-highlight'
   highlightButton.style.cssText = `
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    margin: 0 2px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `
+
+  highlightButton.addEventListener('click', (e) => {
+    e.preventDefault()
+    const range = quill.value.getSelection()
+    if (range && range.length > 0) {
+      currentSelection.value = range
+      const text = quill.value.getText(range.index, range.length)
+      selectedText.value = text.trim()
+      showHighlightColorPicker.value = true
+    } else {
+      alert('Please select some text to highlight.')
+    }
+  })
+
+  // Insert after background color
+  const bgGroup = container.querySelector('.ql-background')
+  if (bgGroup && bgGroup.parentNode) {
+    bgGroup.parentNode.insertBefore(highlightButton, bgGroup.nextSibling)
+  } else {
+    container.appendChild(highlightButton)
+  }
+}
+
+// Add highlight comment handler
+const addHighlightCommentHandler = () => {
+  if (!quill.value) return
+
+  const toolbar = quill.value.getModule('toolbar')
+  if (!toolbar || !toolbar.container) return
+
+  const container = toolbar.container
+
+  // Create comment button
+  const commentButton = document.createElement('button')
+  commentButton.innerHTML = '💬'
+  commentButton.title = 'Add comment to selected text'
+  commentButton.className = 'ql-comment'
+  commentButton.style.cssText = `
     background: none;
     border: none;
     cursor: pointer;
@@ -208,7 +300,7 @@ const addHighlightCommentHandler = () => {
     line-height: 1;
   `
 
-  highlightButton.addEventListener('click', (e) => {
+  commentButton.addEventListener('click', (e) => {
     e.preventDefault()
     const range = quill.value.getSelection()
     if (range && range.length > 0) {
@@ -219,19 +311,211 @@ const addHighlightCommentHandler = () => {
         showHighlightComment.value = true
       }
     } else {
-      // Show message if no text is selected
       alert('Please select some text to add a comment.')
     }
   })
 
-  // Insert button after color controls
-  const colorGroup = container.querySelector('.ql-color')
-  if (colorGroup && colorGroup.parentNode) {
-    colorGroup.parentNode.insertBefore(highlightButton, colorGroup.nextSibling)
+  // Insert after highlight button
+  const highlightBtn = container.querySelector('.ql-highlight')
+  if (highlightBtn && highlightBtn.parentNode) {
+    highlightBtn.parentNode.insertBefore(commentButton, highlightBtn.nextSibling)
   } else {
-    // Fallback: add to the end of toolbar
-    container.appendChild(highlightButton)
+    container.appendChild(commentButton)
   }
+}
+
+// Apply highlight with selected color
+const applyHighlight = (color) => {
+  if (!quill.value || !currentSelection.value) return
+
+  const range = quill.value.getSelection() || currentSelection.value
+  if (!range || range.length === 0) return
+
+  if (color === null) {
+    // Remove highlight
+    quill.value.formatText(range.index, range.length, 'background', false)
+  } else {
+    // Apply highlight color
+    quill.value.formatText(range.index, range.length, 'background', color)
+  }
+
+  showHighlightColorPicker.value = false
+}
+
+// Handle editor click to show comments
+const handleEditorClick = (e) => {
+  if (!quill.value) return
+
+  const target = e.target
+  if (target.hasAttribute('data-comment-id')) {
+    const commentId = parseInt(target.getAttribute('data-comment-id'))
+    const comment = highlightComments.value.find((c) => c.id === commentId)
+    if (comment) {
+      activeCommentId.value = commentId
+      // Show comment in sidebar or popup
+      emit('show-comment', comment)
+    }
+  }
+}
+
+// Handle right-click for context menu
+const handleRightClick = (e) => {
+  if (props.readOnly) return
+
+  const range = quill.value.getSelection()
+  if (range && range.length > 0) {
+    e.preventDefault()
+    // Could add context menu here in the future
+  }
+}
+
+// Restore highlights when content loads
+const restoreHighlights = () => {
+  if (!quill.value || highlightComments.value.length === 0) return
+
+  highlightComments.value.forEach((comment) => {
+    if (comment.range) {
+      try {
+        // Use semi-highlight color for commented text (like Google Docs)
+        // If semiColor exists, use it; otherwise convert the color to semi-highlight
+        const highlightColor =
+          comment.semiColor || getSemiHighlightColor(comment.color) || 'rgba(255, 235, 59, 0.4)'
+
+        // Apply semi-highlight color (commented text is always semi-highlighted)
+        quill.value.formatText(
+          comment.range.index,
+          comment.range.length,
+          'background',
+          highlightColor,
+        )
+
+        // Add comment indicator (only for unresolved comments)
+        if (!comment.resolved) {
+          setTimeout(() => {
+            addCommentIndicator(comment)
+          }, 50)
+        }
+      } catch (error) {
+        console.error('Error restoring highlight:', error)
+      }
+    }
+  })
+}
+
+// Add comment indicator to highlighted text
+const addCommentIndicator = (comment) => {
+  if (!quill.value) return
+
+  try {
+    const [leaf, offset] = quill.value.getLeaf(comment.range.index)
+    if (leaf && leaf.domNode) {
+      const node = leaf.domNode
+
+      // Check if indicator already exists
+      if (node.querySelector(`[data-comment-indicator="${comment.id}"]`)) {
+        return
+      }
+
+      // Create comment indicator bubble
+      const indicator = document.createElement('span')
+      indicator.setAttribute('data-comment-indicator', comment.id)
+      indicator.setAttribute('data-comment-id', comment.id)
+      indicator.className = 'comment-indicator'
+      indicator.innerHTML = '💬'
+      indicator.title = `Comment: ${comment.comment}`
+      indicator.style.cssText = `
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 18px;
+        height: 18px;
+        background: #3b82f6;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        cursor: pointer;
+        z-index: 10;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        transition: transform 0.2s ease;
+      `
+
+      indicator.addEventListener('click', (e) => {
+        e.stopPropagation()
+        activeCommentId.value = comment.id
+        emit('show-comment', comment)
+      })
+
+      indicator.addEventListener('mouseenter', () => {
+        indicator.style.transform = 'scale(1.2)'
+      })
+
+      indicator.addEventListener('mouseleave', () => {
+        indicator.style.transform = 'scale(1)'
+      })
+
+      // Make parent position relative
+      if (node.parentElement) {
+        node.parentElement.style.position = 'relative'
+        node.parentElement.appendChild(indicator)
+      }
+    }
+  } catch (error) {
+    console.error('Error adding comment indicator:', error)
+  }
+}
+
+// Apply highlight with color
+const applyHighlightWithColor = (color) => {
+  const range = quill.value.getSelection() || currentSelection.value
+  if (!range || range.length === 0) return
+
+  if (color === null) {
+    // Remove highlight
+    quill.value.formatText(range.index, range.length, 'background', false)
+    // Also remove any comments on this range
+    const commentsToRemove = highlightComments.value.filter(
+      (c) => c.range.index === range.index && c.range.length === range.length,
+    )
+    commentsToRemove.forEach((c) => {
+      const index = highlightComments.value.findIndex((comment) => comment.id === c.id)
+      if (index !== -1) {
+        // Remove comment indicator
+        try {
+          const indicators = quill.value.root.querySelectorAll(`[data-comment-indicator="${c.id}"]`)
+          indicators.forEach((indicator) => indicator.remove())
+        } catch (error) {
+          console.error('Error removing comment indicator:', error)
+        }
+        highlightComments.value.splice(index, 1)
+      }
+    })
+    saveHighlightCommentsToStorage()
+    emit('highlight-comments-updated', highlightComments.value)
+  } else {
+    // Check if there's already a comment on this range
+    const existingComment = highlightComments.value.find(
+      (c) => c.range.index === range.index && c.range.length === range.length && !c.resolved,
+    )
+
+    if (existingComment) {
+      // If comment exists, use semi-highlight color (like Google Docs)
+      const semiColor = getSemiHighlightColor(color)
+      quill.value.formatText(range.index, range.length, 'background', semiColor)
+      // Update comment color
+      existingComment.color = color
+      existingComment.semiColor = semiColor
+      saveHighlightCommentsToStorage()
+    } else {
+      // Apply full highlight color (no comment yet - regular highlight)
+      quill.value.formatText(range.index, range.length, 'background', color)
+    }
+  }
+
+  showHighlightColorPicker.value = false
+  selectedHighlightColor.value = color
 }
 
 // Add highlight comment
@@ -239,16 +523,26 @@ const addHighlightComment = () => {
   if (highlightComment.value.trim() && currentSelection.value && quill.value) {
     const range = currentSelection.value
 
-    // Apply highlight formatting
-    quill.value.formatText(range.index, range.length, 'background', '#ffeb3b')
+    // Check if text is already highlighted, if not, apply default yellow
+    const format = quill.value.getFormat(range.index, range.length)
+    let highlightColor = format.background || selectedHighlightColor.value || '#ffeb3b'
 
-    // Store comment
+    // Convert to semi-highlight color (like Google Docs - commented text is always semi-highlighted)
+    const semiHighlightColor = getSemiHighlightColor(highlightColor)
+
+    // Apply semi-highlight color when comment is added (like Google Docs)
+    quill.value.formatText(range.index, range.length, 'background', semiHighlightColor)
+
+    // Store comment with original color and semi-highlight color
     const comment = {
-      id: highlightComments.value.length + 1,
+      id: `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       text: selectedText.value,
       comment: highlightComment.value,
       author: 'Current User',
-      timestamp: new Date().toLocaleString(),
+      timestamp: new Date().toISOString(),
+      color: highlightColor, // Store original color
+      semiColor: semiHighlightColor, // Store semi-highlight color
+      resolved: false, // Track if comment is resolved/done
       range: {
         index: range.index,
         length: range.length,
@@ -263,52 +557,16 @@ const addHighlightComment = () => {
     // Emit the updated comments
     emit('highlight-comments-updated', highlightComments.value)
 
+    // Add comment indicator
+    setTimeout(() => {
+      addCommentIndicator(comment)
+    }, 100)
+
     // Clear form
     highlightComment.value = ''
     showHighlightComment.value = false
     selectedText.value = ''
     currentSelection.value = null
-
-    // Add visual indicator and tooltip
-    const span = document.createElement('span')
-    span.style.backgroundColor = '#ffeb3b'
-    span.style.position = 'relative'
-    span.title = `Comment: ${comment.comment}`
-    span.setAttribute('data-comment-id', comment.id)
-
-    // Apply the highlight with comment data
-    quill.value.formatText(range.index, range.length, 'background', '#ffeb3b')
-
-    // Add a small comment indicator
-    const commentIndicator = document.createElement('span')
-    commentIndicator.innerHTML = '💬'
-    commentIndicator.style.cssText = `
-      position: absolute;
-      top: -2px;
-      right: -2px;
-      font-size: 10px;
-      background: #3b82f6;
-      color: white;
-      border-radius: 50%;
-      width: 16px;
-      height: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-    `
-    commentIndicator.title = `Comment: ${comment.comment}`
-
-    // Try to add the indicator to the highlighted text
-    try {
-      const highlightedElement = quill.value.getLeaf(range.index)[0]
-      if (highlightedElement && highlightedElement.domNode) {
-        highlightedElement.domNode.style.position = 'relative'
-        highlightedElement.domNode.appendChild(commentIndicator)
-      }
-    } catch (e) {
-      console.log('Could not add comment indicator:', e)
-    }
   }
 }
 
@@ -329,12 +587,71 @@ const getHighlightComments = () => {
 const deleteHighlightComment = (commentId) => {
   const index = highlightComments.value.findIndex((c) => c.id === commentId)
   if (index !== -1) {
+    const comment = highlightComments.value[index]
+
+    // Remove comment indicator
+    if (quill.value) {
+      try {
+        const indicators = quill.value.root.querySelectorAll(
+          `[data-comment-indicator="${commentId}"]`,
+        )
+        indicators.forEach((indicator) => indicator.remove())
+      } catch (error) {
+        console.error('Error removing comment indicator:', error)
+      }
+    }
+
     highlightComments.value.splice(index, 1)
     saveHighlightCommentsToStorage()
     emit('highlight-comments-updated', highlightComments.value)
     return true
   }
   return false
+}
+
+// Toggle comment resolved status (like Google Docs)
+// When resolved, the comment is "done" and should be hidden/removed from view
+const toggleCommentResolved = (commentId) => {
+  const index = highlightComments.value.findIndex((c) => c.id === commentId)
+  if (index !== -1) {
+    const comment = highlightComments.value[index]
+    comment.resolved = !comment.resolved
+
+    // Remove the visual indicator from the editor when resolved (comment is done)
+    if (quill.value && comment.resolved) {
+      try {
+        const indicators = quill.value.root.querySelectorAll(
+          `[data-comment-indicator="${commentId}"]`,
+        )
+        indicators.forEach((indicator) => indicator.remove())
+
+        // Also remove the highlight when resolved (like Google Docs - resolved comments don't show highlights)
+        quill.value.formatText(comment.range.index, comment.range.length, 'background', false)
+      } catch (error) {
+        console.error('Error removing comment indicator:', error)
+      }
+    } else if (quill.value && !comment.resolved) {
+      // If unresolving, restore the semi-highlight and indicator
+      const semiColor =
+        comment.semiColor || getSemiHighlightColor(comment.color) || 'rgba(255, 235, 59, 0.4)'
+      quill.value.formatText(comment.range.index, comment.range.length, 'background', semiColor)
+      setTimeout(() => {
+        addCommentIndicator(comment)
+      }, 50)
+    }
+
+    saveHighlightCommentsToStorage()
+    emit('highlight-comments-updated', highlightComments.value)
+    return true
+  }
+  return false
+}
+
+// Set read-only mode
+const setReadOnly = (readOnly) => {
+  if (quill.value) {
+    quill.value.enable(!readOnly)
+  }
 }
 
 // Clear all highlight comments
@@ -357,7 +674,18 @@ const loadHighlightCommentsFromStorage = () => {
 
     const stored = localStorage.getItem(key)
     if (stored) {
-      highlightComments.value = JSON.parse(stored)
+      const comments = JSON.parse(stored)
+      // Ensure all comments have resolved property and semiColor (backward compatibility)
+      highlightComments.value = comments.map((comment) => {
+        const originalColor = comment.color || '#ffeb3b'
+        return {
+          ...comment,
+          resolved: comment.resolved !== undefined ? comment.resolved : false,
+          color: originalColor,
+          semiColor:
+            comment.semiColor || getSemiHighlightColor(originalColor) || 'rgba(255, 235, 59, 0.4)',
+        }
+      })
       console.log('Loaded highlight comments from storage:', highlightComments.value)
     }
   } catch (error) {
@@ -431,7 +759,10 @@ defineExpose({
   quill,
   getHighlightComments,
   deleteHighlightComment,
+  toggleCommentResolved,
   clearHighlightComments,
+  setReadOnly,
+  applyHighlight,
 })
 </script>
 
@@ -440,23 +771,77 @@ defineExpose({
     <!-- Quill Editor -->
     <div ref="editorRef" class="quill-editor" :style="{ height: height }"></div>
 
-    <!-- Highlight Comment Dialog -->
-    <v-dialog v-model="showHighlightComment" max-width="500px">
-      <v-card>
-        <v-card-title>Add Comment to Highlighted Text</v-card-title>
-        <v-card-text>
-          <p><strong>Selected text:</strong> "{{ selectedText }}"</p>
+    <!-- Highlight Color Picker Dialog -->
+    <v-dialog v-model="showHighlightColorPicker" max-width="400px" persistent>
+      <v-card class="highlight-color-picker-card">
+        <v-card-title class="picker-header">
+          <v-icon class="mr-2">mdi-format-color-highlight</v-icon>
+          <span>Choose Highlight Color</span>
+        </v-card-title>
+        <v-card-text class="picker-content">
+          <div class="color-grid">
+            <div
+              v-for="color in highlightColors"
+              :key="color.name"
+              class="color-item"
+              :class="color.class"
+              @click="applyHighlightWithColor(color.value)"
+            >
+              <div
+                v-if="color.value"
+                class="color-swatch"
+                :style="{ backgroundColor: color.value }"
+              ></div>
+              <div v-else class="color-swatch remove-highlight">
+                <v-icon size="20" color="grey">mdi-close</v-icon>
+              </div>
+              <span class="color-name">{{ color.name }}</span>
+            </div>
+          </div>
+        </v-card-text>
+        <v-card-actions class="picker-actions">
+          <v-btn @click="showHighlightColorPicker = false" variant="text" block> Cancel </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Highlight Comment Dialog (Google Docs style) -->
+    <v-dialog v-model="showHighlightComment" max-width="600px" persistent>
+      <v-card class="comment-dialog-card">
+        <v-card-title class="comment-dialog-header">
+          <v-icon class="mr-2" color="white">mdi-comment-text</v-icon>
+          <span>Add Comment</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="comment-dialog-content">
+          <div class="selected-text-preview">
+            <div class="preview-label">Selected text:</div>
+            <div class="preview-text">"{{ selectedText }}"</div>
+          </div>
           <v-textarea
             v-model="highlightComment"
-            placeholder="Add your comment about this highlighted text..."
-            rows="3"
+            placeholder="Add a comment..."
+            rows="4"
             variant="outlined"
             hide-details
+            class="comment-input"
+            autofocus
           />
         </v-card-text>
-        <v-card-actions>
-          <v-btn @click="cancelHighlightComment" variant="outlined">Cancel</v-btn>
-          <v-btn @click="addHighlightComment" color="primary">Add Comment</v-btn>
+        <v-divider />
+        <v-card-actions class="comment-dialog-actions">
+          <v-btn @click="cancelHighlightComment" variant="outlined" size="default"> Cancel </v-btn>
+          <v-spacer />
+          <v-btn
+            @click="addHighlightComment"
+            color="primary"
+            variant="flat"
+            size="default"
+            :disabled="!highlightComment.trim()"
+            prepend-icon="mdi-comment-plus"
+          >
+            Comment
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -537,14 +922,157 @@ defineExpose({
 }
 
 /* Highlighted text with comments */
-:deep(.ql-editor span[data-comment-id]) {
+:deep(.ql-editor span[data-comment-id]),
+:deep(.ql-editor [style*='background-color']) {
   position: relative;
-  background-color: #ffeb3b !important;
   cursor: pointer;
+  padding: 2px 0;
+  border-radius: 2px;
 }
 
-:deep(.ql-editor span[data-comment-id]:hover) {
-  background-color: #ffd54f !important;
+:deep(.ql-editor span[data-comment-id]:hover),
+:deep(.ql-editor [style*='background-color']:hover) {
+  opacity: 0.9;
+}
+
+/* Comment indicator bubble */
+:deep(.comment-indicator) {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+:deep(.comment-indicator:hover) {
+  transform: scale(1.2);
+  background: #2563eb;
+}
+
+/* Highlight color picker styles */
+.highlight-color-picker-card {
+  border: 2px solid #353535 !important;
+  border-radius: 8px !important;
+}
+
+.picker-header {
+  background: #353535 !important;
+  color: white !important;
+  padding: 16px 20px !important;
+  display: flex;
+  align-items: center;
+}
+
+.picker-content {
+  padding: 20px !important;
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.color-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.color-item:hover {
+  border-color: #3b82f6;
+  background: #f0f9ff;
+  transform: translateY(-2px);
+}
+
+.color-swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 2px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-highlight {
+  background: #f3f4f6;
+}
+
+.color-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.picker-actions {
+  padding: 12px 20px !important;
+  background: #fafafa;
+}
+
+/* Comment dialog styles */
+.comment-dialog-card {
+  border: 2px solid #353535 !important;
+  border-radius: 8px !important;
+}
+
+.comment-dialog-header {
+  background: #353535 !important;
+  color: white !important;
+  padding: 16px 20px !important;
+  display: flex;
+  align-items: center;
+}
+
+.comment-dialog-content {
+  padding: 20px !important;
+}
+
+.selected-text-preview {
+  background: #fef3c7;
+  border-left: 4px solid #f59e0b;
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 4px;
+}
+
+.preview-text {
+  font-size: 14px;
+  color: #78350f;
+  font-style: italic;
+}
+
+.comment-input {
+  margin-top: 8px;
+}
+
+.comment-dialog-actions {
+  padding: 12px 20px !important;
+  background: #fafafa;
 }
 
 /* Color picker styles */
