@@ -868,6 +868,20 @@ const handleLoadHighlightComments = (comments) => {
   console.log('Loaded highlight comments:', comments)
 }
 
+const handleResolveHighlightComment = (commentId) => {
+  if (quillEditorRef.value) {
+    const success = quillEditorRef.value.toggleCommentResolved(commentId)
+    if (success) {
+      // Update the local comments array
+      const comment = highlightComments.value.find((c) => c.id === commentId)
+      if (comment) {
+        comment.resolved = !comment.resolved
+      }
+      showNotification('Comment resolved', 'success')
+    }
+  }
+}
+
 const handleEditorNotification = (message, color = 'warning') => {
   showNotification(message, color)
 }
@@ -1154,6 +1168,7 @@ const getBackButtonText = computed(() => {
               @delete-comment="handleDeleteHighlightComment"
               @highlight-text="handleHighlightText"
               @load-comments="handleLoadHighlightComments"
+              @resolve-comment="handleResolveHighlightComment"
             />
 
             <!-- Comments Section -->

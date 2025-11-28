@@ -47,6 +47,8 @@ const currentSelection = ref(null)
 const highlightComments = ref([])
 const selectedHighlightColor = ref('#ffeb3b') // Default yellow
 const activeCommentId = ref(null) // Track which comment is currently active
+const isUserTyping = ref(false) // Track if user is actively typing (don't restore highlights during typing)
+const shouldRestoreHighlights = ref(true) // Flag to control when to restore highlights
 
 // Notification card state
 const showNotificationCard = ref(false)
@@ -132,9 +134,118 @@ onMounted(async () => {
       // Listen for text changes
       quill.value.on('text-change', (delta, oldDelta, source) => {
         if (source === 'user') {
+          // Mark that user is typing - don't restore highlights during this
+          isUserTyping.value = true
+          shouldRestoreHighlights.value = false
+
+          // Clear background formatting from newly inserted text
+          // This prevents new text from inheriting highlight colors
+          if (delta && delta.ops) {
+            // Process after Quill has updated
+            setTimeout(() => {
+              const selection = quill.value.getSelection(true)
+              if (selection && selection.length === 0) {
+                // User is typing (cursor position, not selection)
+                const cursorIndex = selection.index
+
+                // Check all newly inserted characters
+                delta.ops.forEach((op) => {
+                  if (op.insert && typeof op.insert === 'string') {
+                    const insertLength = op.insert.length
+                    // Check characters that were just inserted (before cursor)
+                    for (let i = 0; i < insertLength; i++) {
+                      const charIndex = cursorIndex - insertLength + i
+                      if (charIndex >= 0) {
+                        const format = quill.value.getFormat(charIndex, 1)
+
+                        // If this character has background color, check if it should keep it
+                        if (format && format.background) {
+                          // Check if this position is part of an existing highlight comment
+                          const isPartOfComment = highlightComments.value.some((comment) => {
+                            if (comment.resolved) return false
+                            const commentStart = comment.range.index
+                            const commentEnd = commentStart + comment.range.length
+                            // Check if the character is within the comment range
+                            return charIndex >= commentStart && charIndex < commentEnd
+                          })
+
+                          // Only clear background if it's NOT part of an existing comment
+                          // This means the user typed new text that inherited the highlight
+                          if (!isPartOfComment) {
+                            // Clear background from the newly typed character
+                            quill.value.formatText(charIndex, 1, 'background', false)
+                          }
+                        }
+                      }
+                    }
+                  }
+                })
+              }
+            }, 10) // Small delay to ensure Quill has processed
+          }
+
           const html = quill.value.root.innerHTML
           emit('update:modelValue', html)
           emit('text-change', delta, oldDelta, source)
+
+          // Reset typing flag after a short delay
+          setTimeout(() => {
+            isUserTyping.value = false
+            // Re-enable restoration after user stops typing (for future loads)
+            setTimeout(() => {
+              shouldRestoreHighlights.value = true
+            }, 1000)
+          }, 500)
+        }
+      })
+
+      // Clear format when cursor is placed after a highlighted comment to ensure proper spacing
+      quill.value.on('selection-change', (range, oldRange, source) => {
+        if (source === 'user' && range && range.length === 0) {
+          // User moved cursor - clear format at cursor if it's not part of a comment
+          // This ensures proper spacing when typing after highlighted text
+          const format = quill.value.getFormat(range.index, 1)
+          if (format && format.background) {
+            // Check if cursor is within a comment range
+            const isInComment = highlightComments.value.some((comment) => {
+              if (comment.resolved || !comment.range) return false
+              const commentStart = comment.range.index
+              const commentEnd = commentStart + comment.range.length
+              return range.index >= commentStart && range.index < commentEnd
+            })
+
+            // If NOT in a comment, clear format so next typed character won't inherit it
+            // This ensures proper spacing when typing after highlighted text
+            if (!isInComment) {
+              // Clear format at cursor position (length 0 means "next character")
+              quill.value.formatText(range.index, 0, 'background', false)
+            }
+          }
+        }
+      })
+
+      // Intercept keyboard input to prevent format inheritance BEFORE typing
+      quill.value.root.addEventListener('keydown', (e) => {
+        // Only handle regular typing keys (not special keys like Enter, Backspace, etc.)
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const selection = quill.value.getSelection(true)
+          if (selection && selection.length === 0) {
+            const format = quill.value.getFormat(selection.index, 1)
+            if (format && format.background) {
+              // Check if cursor is within a comment range
+              const isInComment = highlightComments.value.some((comment) => {
+                if (comment.resolved || !comment.range) return false
+                const commentStart = comment.range.index
+                const commentEnd = commentStart + comment.range.length
+                return selection.index >= commentStart && selection.index < commentEnd
+              })
+
+              // If NOT in a comment, clear format BEFORE typing to ensure proper spacing
+              if (!isInComment) {
+                quill.value.formatText(selection.index, 0, 'background', false)
+              }
+            }
+          }
         }
       })
 
@@ -155,9 +266,13 @@ onMounted(async () => {
       addHighlightCommentHandler()
       addHighlightColorPicker()
 
-      // Restore highlights after content is loaded
+      // Restore highlights after content is loaded (initial load only)
+      // Set flag to allow restoration on initial load
+      shouldRestoreHighlights.value = true
       setTimeout(() => {
-        restoreHighlights()
+        if (!isUserTyping.value) {
+          restoreHighlights()
+        }
       }, 500)
 
       // Add click handler for highlighted text
@@ -189,16 +304,30 @@ onMounted(async () => {
   }
 })
 
-// Watch for external content changes
+// Watch for external content changes (when content is loaded from storage)
 watch(
   () => props.modelValue,
   (newValue) => {
     if (quill.value && quill.value.root.innerHTML !== newValue) {
-      quill.value.root.innerHTML = newValue
-      // Restore highlights after content update
-      setTimeout(() => {
-        restoreHighlights()
-      }, 100)
+      // Only update if content actually changed (not just a re-render)
+      const currentContent = quill.value.root.innerHTML
+      if (currentContent !== newValue) {
+        // Only restore highlights if user is NOT actively typing
+        // This prevents highlights from being applied to new text the user is typing
+        const wasUserTyping = isUserTyping.value
+
+        quill.value.root.innerHTML = newValue
+
+        // Only restore highlights when content is loaded from storage (not during user typing)
+        if (!wasUserTyping && shouldRestoreHighlights.value) {
+          // Restore highlights after content update (only when loading from storage)
+          // This happens when navigating back to the project
+          // We use a longer delay to ensure Quill has fully processed the content
+          setTimeout(() => {
+            restoreHighlights()
+          }, 300)
+        }
+      }
     }
   },
 )
@@ -375,25 +504,116 @@ const handleRightClick = (e) => {
   }
 }
 
+// Find text in Quill content and return its range
+// Only matches exact text to prevent highlighting new text that happens to match
+const findTextInQuill = (searchText) => {
+  if (!quill.value || !searchText) return null
+
+  try {
+    const fullText = quill.value.getText()
+    const normalizedSearch = searchText.trim()
+
+    // Only try exact match first (with trimmed search text)
+    // This prevents matching partial text or similar text
+    let searchIndex = fullText.indexOf(normalizedSearch)
+
+    // If not found with trimmed, try with original (in case whitespace is preserved)
+    if (searchIndex === -1 && searchText !== normalizedSearch) {
+      searchIndex = fullText.indexOf(searchText)
+    }
+
+    // If still not found, try to find it with normalized whitespace
+    // But only if the search text is meaningful (more than 3 characters)
+    // This prevents matching single words that might appear in new text
+    if (searchIndex === -1 && normalizedSearch.length > 3) {
+      // Normalize both texts (replace multiple spaces with single space)
+      const normalizedFullText = fullText.replace(/\s+/g, ' ').trim()
+      const normalizedSearchText = normalizedSearch.replace(/\s+/g, ' ').trim()
+
+      const normalizedIndex = normalizedFullText.indexOf(normalizedSearchText)
+
+      if (normalizedIndex !== -1) {
+        // Found in normalized text - now find the actual position in original
+        // This is more complex but we'll try to find a reasonable match
+        // Only proceed if we can find a unique match
+        const matches = []
+        let pos = 0
+        while ((pos = fullText.indexOf(normalizedSearchText, pos)) !== -1) {
+          matches.push(pos)
+          pos += 1
+        }
+
+        // If there's only one match, use it
+        if (matches.length === 1) {
+          searchIndex = matches[0]
+        } else if (matches.length > 1) {
+          // Multiple matches - this is ambiguous, don't match
+          // This prevents highlighting the wrong instance
+          return null
+        }
+      }
+    }
+
+    if (searchIndex === -1) {
+      // Text not found - might have been edited or deleted
+      return null
+    }
+
+    // Verify the match is reasonable - check surrounding context if possible
+    // Return the range with the normalized search text length
+    return {
+      index: searchIndex,
+      length: normalizedSearch.length || searchText.length,
+    }
+  } catch (error) {
+    console.error('Error finding text in Quill:', error)
+    return null
+  }
+}
+
 // Restore highlights when content loads
+// Only restores highlights for the original highlighted text, not new text
 const restoreHighlights = () => {
+  // Don't restore if user is actively typing
+  if (isUserTyping.value || !shouldRestoreHighlights.value) {
+    return
+  }
+
   if (!quill.value || highlightComments.value.length === 0) return
 
   highlightComments.value.forEach((comment) => {
-    if (comment.range) {
+    // Skip resolved comments
+    if (comment.resolved) return
+
+    if (comment.range && comment.text) {
       try {
+        // Find the actual text in the current content (text might have moved)
+        // This will only match the exact original text, not new similar text
+        const foundRange = findTextInQuill(comment.text)
+
+        if (!foundRange) {
+          // Text not found - comment might be on deleted/changed text
+          // Don't warn for this as it's normal if text was edited
+          return
+        }
+
+        // Verify the found text matches what we expect
+        const foundText = quill.value.getText(foundRange.index, foundRange.length).trim()
+        if (foundText !== comment.text.trim() && foundText.length < 3) {
+          // Text doesn't match or is too short - might be matching wrong text
+          return
+        }
+
+        // Update the comment's range to match current content position
+        comment.range = foundRange
+
         // Use semi-highlight color for commented text (like Google Docs)
         // If semiColor exists, use it; otherwise convert the color to semi-highlight
         const highlightColor =
           comment.semiColor || getSemiHighlightColor(comment.color) || 'rgba(255, 235, 59, 0.4)'
 
         // Apply semi-highlight color (commented text is always semi-highlighted)
-        quill.value.formatText(
-          comment.range.index,
-          comment.range.length,
-          'background',
-          highlightColor,
-        )
+        quill.value.formatText(foundRange.index, foundRange.length, 'background', highlightColor)
 
         // Add comment indicator (only for unresolved comments)
         if (!comment.resolved) {
@@ -406,6 +626,9 @@ const restoreHighlights = () => {
       }
     }
   })
+
+  // Save updated ranges back to storage
+  saveHighlightCommentsToStorage()
 }
 
 // Add comment indicator to highlighted text
@@ -529,6 +752,14 @@ const addHighlightComment = () => {
   if (highlightComment.value.trim() && currentSelection.value && quill.value) {
     const range = currentSelection.value
 
+    // Get the actual text at this range from Quill (not trimmed, to preserve exact match)
+    const actualText = quill.value.getText(range.index, range.length)
+
+    if (!actualText || !actualText.trim()) {
+      console.warn('No text selected for comment')
+      return
+    }
+
     // Check if text is already highlighted, if not, apply default yellow
     const format = quill.value.getFormat(range.index, range.length)
     let highlightColor = format.background || selectedHighlightColor.value || '#ffeb3b'
@@ -540,9 +771,11 @@ const addHighlightComment = () => {
     quill.value.formatText(range.index, range.length, 'background', semiHighlightColor)
 
     // Store comment with original color and semi-highlight color
+    // IMPORTANT: Store the actual text content (trimmed for display, but we'll search for the trimmed version)
+    // This allows us to find the text even if whitespace changes
     const comment = {
       id: `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      text: selectedText.value,
+      text: actualText.trim(), // Store trimmed text for finding it later (handles whitespace changes)
       comment: highlightComment.value,
       author: 'Current User',
       timestamp: new Date().toISOString(),
@@ -595,18 +828,42 @@ const deleteHighlightComment = (commentId) => {
   if (index !== -1) {
     const comment = highlightComments.value[index]
 
-    // Remove comment indicator
-    if (quill.value) {
+    // Remove comment indicator and highlight, but keep the text
+    if (quill.value && comment.range) {
       try {
+        // Remove comment indicators
         const indicators = quill.value.root.querySelectorAll(
           `[data-comment-indicator="${commentId}"]`,
         )
         indicators.forEach((indicator) => indicator.remove())
+
+        // Remove the highlight but keep the text
+        if (comment.range.index !== undefined && comment.range.length > 0) {
+          try {
+            // Verify the text still exists at this range
+            const text = quill.value.getText(comment.range.index, comment.range.length)
+            if (text) {
+              // Clear background format - this removes the highlight but keeps the text
+              quill.value.formatText(comment.range.index, comment.range.length, 'background', false)
+            }
+          } catch (error) {
+            // If range is invalid, try to find the text and clear it
+            const allText = quill.value.getText()
+            const commentText = comment.text || comment.actualText
+            if (commentText && allText.includes(commentText)) {
+              const textIndex = allText.indexOf(commentText)
+              if (textIndex !== -1) {
+                quill.value.formatText(textIndex, commentText.length, 'background', false)
+              }
+            }
+          }
+        }
       } catch (error) {
         console.error('Error removing comment indicator:', error)
       }
     }
 
+    // Remove comment from array
     highlightComments.value.splice(index, 1)
     saveHighlightCommentsToStorage()
     emit('highlight-comments-updated', highlightComments.value)
