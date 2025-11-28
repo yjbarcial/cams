@@ -6,7 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
-import { createProjectVersion } from '@/services/localProjectHistory.js'
+import { autoCreateVersionOnEdit } from '@/services/localProjectHistory.js'
 import {
   getProjectComments,
   addProjectComment,
@@ -66,10 +66,8 @@ const submitComments = ref('')
 // Unsaved changes dialog
 const showUnsavedChangesDialog = ref(false)
 
-// History and versioning state
+// History state
 const showHistory = ref(true) // Always show by default
-const versionDescription = ref('')
-const showVersionDialog = ref(false)
 
 // Comments state - start empty for new projects
 const comments = ref([])
@@ -178,6 +176,9 @@ const handleTitleKeydown = (event) => {
   }
 }
 
+// Track previous content for version history
+const previousContent = ref('')
+
 // Enhanced auto-save content function
 const saveContent = (showNotif = false) => {
   if (quillEditorRef.value) {
@@ -188,6 +189,7 @@ const saveContent = (showNotif = false) => {
       return false // No changes to save
     }
 
+    const oldContent = previousContent.value || project.value.content
     editorContent.value = content
     project.value.content = content
 
@@ -217,6 +219,24 @@ const saveContent = (showNotif = false) => {
 
         // Update projectType - use displayType for UI
         projectType.value = actualStorage.displayType || actualStorage.type
+
+        // Auto-create version history (like Google Docs)
+        const projectData = {
+          ...project.value,
+          content: content,
+        }
+        const version = autoCreateVersionOnEdit(
+          projectType.value,
+          projectId,
+          projectData,
+          oldContent,
+        )
+        if (version) {
+          console.log('Auto-created version:', version.versionNumber)
+        }
+
+        // Update previous content for next comparison
+        previousContent.value = content
 
         updateLastSaveTime()
         hasUnsavedChanges.value = false
@@ -409,45 +429,12 @@ const getDepartmentFromProject = () => {
   return typeMap[projectType.value] || 'General'
 }
 
-// Version control functions
-const createVersion = () => {
-  if (!versionDescription.value.trim()) {
-    showNotification('Please provide a description for this version', 'warning')
-    return
-  }
-
-  try {
-    // Save current content first
-    saveContent()
-
-    const projectData = {
-      ...project.value,
-      content: editorContent.value,
-    }
-
-    createProjectVersion(
-      projectType.value,
-      projectId,
-      projectData,
-      versionDescription.value,
-      'Current User', // This should come from auth system
-      'draft',
-    )
-
-    versionDescription.value = ''
-    showVersionDialog.value = false
-    showNotification('Version created successfully')
-    console.log('Version created successfully')
-  } catch (error) {
-    console.error('Error creating version:', error)
-    showNotification('Failed to create version', 'error')
-  }
-}
-
+// Version restoration handler (versions are auto-created on edits)
 const handleVersionRestored = (restoredProject) => {
   // Update the current project with restored data
   project.value = { ...project.value, ...restoredProject }
   editorContent.value = restoredProject.content || ''
+  previousContent.value = restoredProject.content || '' // Initialize for version history
 
   // Update last modified
   project.value.lastModified = new Date().toLocaleString()
@@ -595,6 +582,7 @@ const loadProjectData = () => {
 
             // Set editor content
             editorContent.value = foundProject.content || ''
+            previousContent.value = foundProject.content || '' // Initialize for version history
 
             // Update temp title for editing
             tempTitle.value = foundProject.title
@@ -660,6 +648,7 @@ const loadProjectData = () => {
 
           // Set editor content
           editorContent.value = foundProject.content || ''
+          previousContent.value = foundProject.content || '' // Initialize for version history
 
           // Update temp title for editing
           tempTitle.value = foundProject.title
@@ -736,6 +725,7 @@ const loadProjectData = () => {
 
         // Set editor content
         editorContent.value = foundProject.content || ''
+        previousContent.value = foundProject.content || '' // Initialize for version history
 
         // Update temp title for editing
         tempTitle.value = foundProject.title
@@ -1125,9 +1115,6 @@ const getBackButtonText = computed(() => {
               <v-btn @click="saveAsDraft" variant="outlined" class="draft-btn">
                 Save as Draft
               </v-btn>
-              <v-btn @click="showVersionDialog = true" variant="outlined" class="version-btn">
-                Create Version
-              </v-btn>
               <v-btn variant="outlined" class="remove-btn"> Remove Submission </v-btn>
             </div>
           </v-col>
@@ -1136,27 +1123,11 @@ const getBackButtonText = computed(() => {
           <v-col cols="12" lg="4" class="right-panel">
             <!-- Project History -->
             <div class="history-section mb-4">
-              <v-card class="project-history-card">
-                <v-card-title class="d-flex justify-space-between align-center">
-                  <span>
-                    <v-icon class="mr-2">mdi-history</v-icon>
-                    Project History
-                  </span>
-                  <v-btn icon variant="text" size="small" @click="showHistory = !showHistory">
-                    <v-icon>{{ showHistory ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
-                  </v-btn>
-                </v-card-title>
-
-                <v-expand-transition>
-                  <v-card-text v-if="showHistory" class="history-content">
-                    <ProjectHistory
-                      :project-id="projectId"
-                      :project-type="projectType"
-                      @version-restored="handleVersionRestored"
-                    />
-                  </v-card-text>
-                </v-expand-transition>
-              </v-card>
+              <ProjectHistory
+                :project-id="projectId"
+                :project-type="projectType"
+                @version-restored="handleVersionRestored"
+              />
             </div>
 
             <!-- Highlight Comments -->
@@ -1324,48 +1295,6 @@ const getBackButtonText = computed(() => {
             prepend-icon="mdi-send"
           >
             Submit for Approval
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- Version Creation Dialog -->
-    <v-dialog v-model="showVersionDialog" max-width="500px">
-      <v-card>
-        <v-card-title>
-          <v-icon class="mr-2">mdi-plus-circle</v-icon>
-          Create New Version
-        </v-card-title>
-
-        <v-card-text>
-          <p class="mb-4">Create a snapshot of the current project state for version control.</p>
-
-          <v-textarea
-            v-model="versionDescription"
-            label="Version Description"
-            placeholder="Describe the changes made in this version..."
-            rows="3"
-            variant="outlined"
-            required
-            :rules="[(v) => !!v || 'Description is required']"
-          />
-
-          <v-select
-            :items="['draft', 'published', 'major', 'minor']"
-            label="Version Type"
-            variant="outlined"
-            value="draft"
-            readonly
-            hint="Version type will be automatically determined"
-            persistent-hint
-          />
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer />
-          <v-btn @click="showVersionDialog = false" color="grey"> Cancel </v-btn>
-          <v-btn @click="createVersion" color="primary" :disabled="!versionDescription.trim()">
-            Create Version
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -1769,17 +1698,6 @@ const getBackButtonText = computed(() => {
 
 .remove-btn:hover {
   background: #f3f4f6 !important; /* Light gray on hover */
-}
-
-.version-btn {
-  background: #8b5cf6 !important; /* Purple background */
-  color: white !important;
-  border: 1px solid #8b5cf6 !important;
-  font-weight: bold !important; /* Make text bold */
-}
-
-.version-btn:hover {
-  background: #7c3aed !important; /* Darker purple on hover */
 }
 
 .history-btn {

@@ -384,3 +384,113 @@ const countWords = (content) => {
     .trim()
   return textContent.split(' ').filter((word) => word.length > 0).length
 }
+
+/**
+ * Get current user name from localStorage or default
+ * @returns {string} Current user name
+ */
+const getCurrentUser = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('currentUser') || '{}')
+    return user.name || user.email || 'Current User'
+  } catch {
+    return 'Current User'
+  }
+}
+
+/**
+ * Calculate content diff between old and new content
+ * @param {string} oldContent - Old HTML content
+ * @param {string} newContent - New HTML content
+ * @returns {string} Description of changes
+ */
+const calculateContentDiff = (oldContent, newContent) => {
+  if (!oldContent) return 'Initial version'
+
+  const oldText = oldContent
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const newText = newContent
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const oldWords = oldText.split(' ').filter((w) => w.length > 0)
+  const newWords = newText.split(' ').filter((w) => w.length > 0)
+
+  const wordDiff = newWords.length - oldWords.length
+
+  if (wordDiff > 0) {
+    return `Added ${wordDiff} word${wordDiff !== 1 ? 's' : ''}`
+  } else if (wordDiff < 0) {
+    return `Removed ${Math.abs(wordDiff)} word${Math.abs(wordDiff) !== 1 ? 's' : ''}`
+  } else if (oldText !== newText) {
+    return 'Content modified'
+  }
+
+  return 'No content changes'
+}
+
+/**
+ * Auto-create version on content edit (like Google Docs)
+ * @param {string} projectType - Type of project
+ * @param {string} projectId - Project identifier
+ * @param {Object} projectData - Current project data
+ * @param {string} oldContent - Previous content for comparison
+ * @returns {Object|null} Created version or null if no significant changes
+ */
+export const autoCreateVersionOnEdit = (projectType, projectId, projectData, oldContent) => {
+  try {
+    const newContent = projectData.content || ''
+    const changeDescription = calculateContentDiff(oldContent, newContent)
+
+    // Only create version if there are meaningful changes
+    if (changeDescription === 'No content changes' || changeDescription === 'Initial version') {
+      return null
+    }
+
+    // Get last version to avoid creating too many versions
+    const history = getProjectHistory(projectType, projectId)
+    const lastVersion = history[0]
+
+    // Don't create version if last version was created less than 30 seconds ago
+    // and has similar content (to prevent spam)
+    if (lastVersion) {
+      const lastVersionTime = new Date(lastVersion.timestamp).getTime()
+      const now = Date.now()
+      const timeDiff = now - lastVersionTime
+
+      if (timeDiff < 30000) {
+        // 30 seconds
+        const lastContent = lastVersion.data?.content || ''
+        const lastText = lastContent
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        const newText = newContent
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+
+        // If content is very similar, skip version creation
+        if (lastText === newText) {
+          return null
+        }
+      }
+    }
+
+    const author = getCurrentUser()
+    return createProjectVersion(
+      projectType,
+      projectId,
+      projectData,
+      changeDescription,
+      author,
+      'draft',
+    )
+  } catch (error) {
+    console.error('Error auto-creating version:', error)
+    return null
+  }
+}
