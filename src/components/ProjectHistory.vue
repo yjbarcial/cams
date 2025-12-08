@@ -651,7 +651,7 @@ watch([() => props.projectId, () => props.projectType], () => {
 }
 
 .history-list {
-  max-height: 600px;
+  max-height: 500px; /* Adjust this value as needed */
   overflow-y: auto;
   padding: 16px;
   background: #fafbfc;

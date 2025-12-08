@@ -1,3 +1,104 @@
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+
+const props = defineProps({
+  comments: {
+    type: Array,
+    default: () => [],
+  },
+  quillEditor: {
+    type: Object,
+    default: null,
+  },
+})
+
+const emit = defineEmits(['delete-comment', 'highlight-text', 'load-comments', 'resolve-comment'])
+
+const isExpanded = ref(false)
+const showNotificationCard = ref(false)
+const notificationMessage = ref('')
+const notificationType = ref('success')
+
+// Filter out resolved comments (they are "done" and should be hidden)
+const unresolvedComments = computed(() => {
+  return props.comments.filter((comment) => !comment.resolved)
+})
+
+// Load highlight comments from localStorage on mount
+onMounted(() => {
+  if (props.projectId && props.projectType) {
+    loadHighlightCommentsFromStorage()
+  }
+})
+
+// Load highlight comments from localStorage
+const loadHighlightCommentsFromStorage = () => {
+  try {
+    const key = `${props.projectType}_highlight_comments_${props.projectId}`
+    const stored = localStorage.getItem(key)
+    if (stored) {
+      const storedComments = JSON.parse(stored)
+      // Update the parent component's comments
+      emit('load-comments', storedComments)
+    }
+  } catch (error) {
+    console.error('Error loading highlight comments from storage:', error)
+  }
+}
+
+const togglePanel = () => {
+  isExpanded.value = !isExpanded.value
+}
+
+const highlightText = (comment) => {
+  if (props.quillEditor && comment.range) {
+    // Set selection to the highlighted text
+    props.quillEditor.setSelection(comment.range.index, comment.range.length)
+    // Scroll to the text
+    props.quillEditor.scrollIntoView()
+    emit('highlight-text', comment)
+  }
+}
+
+const deleteComment = (commentId) => {
+  // Delete immediately and show notification card
+  emit('delete-comment', commentId)
+  showNotification('Highlight comment deleted', 'success')
+}
+
+const showNotification = (message, type = 'success') => {
+  notificationMessage.value = message
+  notificationType.value = type
+  showNotificationCard.value = true
+
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    showNotificationCard.value = false
+  }, 3000)
+}
+
+const toggleResolve = (commentId) => {
+  emit('resolve-comment', commentId)
+}
+
+const formatTime = (timestamp) => {
+  try {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60))
+
+    if (diffInMinutes < 1) return 'Just now'
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`
+    if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
+
+    return date.toLocaleDateString()
+  } catch (error) {
+    return timestamp
+  }
+}
+</script>
+
 <template>
   <div class="highlight-comments-panel" style="position: relative">
     <div class="panel-header">
@@ -118,107 +219,6 @@
     </transition>
   </div>
 </template>
-
-<script setup>
-import { ref, computed, onMounted } from 'vue'
-
-const props = defineProps({
-  comments: {
-    type: Array,
-    default: () => [],
-  },
-  quillEditor: {
-    type: Object,
-    default: null,
-  },
-})
-
-const emit = defineEmits(['delete-comment', 'highlight-text', 'load-comments', 'resolve-comment'])
-
-const isExpanded = ref(false)
-const showNotificationCard = ref(false)
-const notificationMessage = ref('')
-const notificationType = ref('success')
-
-// Filter out resolved comments (they are "done" and should be hidden)
-const unresolvedComments = computed(() => {
-  return props.comments.filter((comment) => !comment.resolved)
-})
-
-// Load highlight comments from localStorage on mount
-onMounted(() => {
-  if (props.projectId && props.projectType) {
-    loadHighlightCommentsFromStorage()
-  }
-})
-
-// Load highlight comments from localStorage
-const loadHighlightCommentsFromStorage = () => {
-  try {
-    const key = `${props.projectType}_highlight_comments_${props.projectId}`
-    const stored = localStorage.getItem(key)
-    if (stored) {
-      const storedComments = JSON.parse(stored)
-      // Update the parent component's comments
-      emit('load-comments', storedComments)
-    }
-  } catch (error) {
-    console.error('Error loading highlight comments from storage:', error)
-  }
-}
-
-const togglePanel = () => {
-  isExpanded.value = !isExpanded.value
-}
-
-const highlightText = (comment) => {
-  if (props.quillEditor && comment.range) {
-    // Set selection to the highlighted text
-    props.quillEditor.setSelection(comment.range.index, comment.range.length)
-    // Scroll to the text
-    props.quillEditor.scrollIntoView()
-    emit('highlight-text', comment)
-  }
-}
-
-const deleteComment = (commentId) => {
-  // Delete immediately and show notification card
-  emit('delete-comment', commentId)
-  showNotification('Highlight comment deleted', 'success')
-}
-
-const showNotification = (message, type = 'success') => {
-  notificationMessage.value = message
-  notificationType.value = type
-  showNotificationCard.value = true
-
-  // Auto-hide after 3 seconds
-  setTimeout(() => {
-    showNotificationCard.value = false
-  }, 3000)
-}
-
-const toggleResolve = (commentId) => {
-  emit('resolve-comment', commentId)
-}
-
-const formatTime = (timestamp) => {
-  try {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffInMinutes = Math.floor((now - date) / (1000 * 60))
-
-    if (diffInMinutes < 1) return 'Just now'
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`
-    if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
-
-    return date.toLocaleDateString()
-  } catch (error) {
-    return timestamp
-  }
-}
-</script>
 
 <style scoped>
 .highlight-comments-panel {
