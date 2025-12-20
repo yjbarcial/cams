@@ -152,8 +152,8 @@ const approvalActions = computed(() => {
 // SECTION HEAD ONLY - Simple status mapping
 // SECTION HEAD - Updated status mapping
 const getNextStatus = (action) => {
-  if (action === 'approve') return 'To Technical Editor' // Changed from 'To Editor-in-Chief'
-  if (action === 'return') return 'Returned by Section Head'
+  if (action === 'approve') return 'to_technical_editor' // Changed from 'To Editor-in-Chief'
+  if (action === 'return') return 'returned_by_section_head'
   return project.value.status
 }
 
@@ -303,8 +303,8 @@ const submitApproval = async () => {
           projectId: projectId,
           projectType: actualStorage.type,
           projectTitle: project.value.title,
-          oldStatus: 'To Section Head',
-          newStatus: 'To Technical Editor',
+          oldStatus: 'to_section_head',
+          newStatus: 'to_technical_editor',
           actionBy: currentUser.value,
           recipient: 'Technical Editor',
           comments: approvalComments.value,
@@ -314,8 +314,8 @@ const submitApproval = async () => {
           projectId: projectId,
           projectType: actualStorage.type,
           projectTitle: project.value.title,
-          oldStatus: 'To Section Head',
-          newStatus: 'Returned by Section Head',
+          oldStatus: 'to_section_head',
+          newStatus: 'returned_by_section_head',
           actionBy: currentUser.value,
           recipient: 'Writer',
           comments: approvalComments.value,
@@ -630,9 +630,9 @@ const formatCommentTime = (timestamp) => {
 
 const getStatusColor = (status) => {
   const statusColors = {
-    'To Section Head': 'warning',
-    'Returned by Section Head': 'warning',
-    'To Editor-in-Chief': 'primary',
+    to_section_head: 'warning',
+    returned_by_section_head: 'warning',
+    to_editor_in_chief: 'primary',
   }
   return statusColors[status] || 'default'
 }

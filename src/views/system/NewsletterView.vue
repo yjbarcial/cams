@@ -50,17 +50,17 @@ const handleView = (projectId) => {
   }
 
   // Route based on project status - Use string paths with query parameters
-  if (project.status === 'Draft' || project.status === 'Returned by Section Head') {
+  if (project.status === 'draft' || project.status === 'returned_by_section_head') {
     router.push(`/project/${projectId}?type=newsletter`)
   } else if (
-    project.status === 'To Section Head' ||
-    project.status === 'Returned by Technical Editor'
+    project.status === 'to_section_head' ||
+    project.status === 'returned_by_technical_editor'
   ) {
     router.push(`/section-head/${projectId}?type=newsletter`)
-  } else if (project.status === 'To Technical Editor') {
+  } else if (project.status === 'to_technical_editor') {
     router.push(`/technical-editor/${projectId}?type=newsletter`)
   } else if (
-    project.status === 'To Editor-in-Chief' ||
+    project.status === 'to_editor_in_chief' ||
     project.status === 'EIC Review' ||
     project.status === 'Returned by EIC' ||
     project.status === 'Returned by Chief Adviser' ||
@@ -434,12 +434,12 @@ const updateDueDate = (newDate) => {
               <v-select
                 v-model="editingProject.status"
                 :items="[
-                  'Draft',
-                  'To Section Head',
-                  'To Technical Editor',
-                  'To Editor-in-Chief',
-                  'To Publish',
-                  'Published',
+                  'draft',
+                  'to_section_head',
+                  'to_technical_editor',
+                  'to_editor_in_chief',
+                  'to_publish',
+                  'published',
                 ]"
                 variant="outlined"
                 density="comfortable"

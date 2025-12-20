@@ -93,7 +93,7 @@ const showCommentNotification = (message, type = 'success') => {
   commentNotificationMessage.value = message
   commentNotificationType.value = type
   showCommentNotificationCard.value = true
-  
+
   // Auto-hide after 3 seconds
   setTimeout(() => {
     showCommentNotificationCard.value = false
@@ -329,7 +329,7 @@ const submitApproval = async () => {
           projectId: projectId,
           projectType: actualStorage.type,
           projectTitle: project.value.title,
-          oldStatus: 'To Editor-in-Chief',
+          oldStatus: 'to_editor_in_chief',
           newStatus: 'EIC Approved',
           actionBy: currentUser.value,
           recipient: 'All',
@@ -340,7 +340,7 @@ const submitApproval = async () => {
           projectId: projectId,
           projectType: actualStorage.type,
           projectTitle: project.value.title,
-          oldStatus: 'To Editor-in-Chief',
+          oldStatus: 'to_editor_in_chief',
           newStatus: 'To Chief Adviser',
           actionBy: currentUser.value,
           recipient: 'Chief Adviser',
@@ -670,12 +670,12 @@ const formatCommentTime = (timestamp) => {
 
 const getStatusColor = (status) => {
   const statusColors = {
-    'To Editor-in-Chief': 'primary',
+    to_editor_in_chief: 'primary',
     'Returned by EIC': 'warning',
     'EIC Approved': 'success',
     'To Chief Adviser': 'purple',
     'For Publish': 'success', // Added new status
-    Published: 'success',
+    published: 'success',
   }
   return statusColors[status] || 'default'
 }

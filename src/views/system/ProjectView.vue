@@ -309,9 +309,9 @@ const toggleEdit = () => {
 const saveAsDraft = () => {
   saveContent(true) // Show notification for manual save
 
-  // Update status to Draft if not already
-  if (project.value.status !== 'Draft') {
-    project.value.status = 'Draft'
+  // Update status to draft if not already
+  if (project.value.status !== 'draft') {
+    project.value.status = 'draft'
 
     try {
       // Get the actual storage key where the project exists
@@ -325,7 +325,7 @@ const saveAsDraft = () => {
       const projectIndex = projects.findIndex((p) => p.id == projectId)
 
       if (projectIndex !== -1) {
-        projects[projectIndex].status = 'Draft'
+        projects[projectIndex].status = 'draft'
         projects[projectIndex].lastModified = new Date().toLocaleString()
         localStorage.setItem(actualStorage.key, JSON.stringify(projects))
 
@@ -364,7 +364,7 @@ const confirmSubmitForApproval = async () => {
     const projectIndex = projects.findIndex((p) => p.id == projectId)
 
     if (projectIndex !== -1) {
-      projects[projectIndex].status = 'To Section Head'
+      projects[projectIndex].status = 'to_section_head'
       projects[projectIndex].priority = submitPriority.value
       projects[projectIndex].submittedBy = 'Current User'
       projects[projectIndex].submittedDate = new Date().toISOString()
@@ -373,7 +373,7 @@ const confirmSubmitForApproval = async () => {
 
       localStorage.setItem(actualStorage.key, JSON.stringify(projects))
 
-      project.value.status = 'To Section Head'
+      project.value.status = 'to_section_head'
       projectType.value = actualStorage.type
       hasUnsavedChanges.value = false
 
@@ -382,8 +382,8 @@ const confirmSubmitForApproval = async () => {
         projectId: projectId,
         projectType: actualStorage.type,
         projectTitle: project.value.title,
-        oldStatus: 'Draft',
-        newStatus: 'To Section Head',
+        oldStatus: 'draft',
+        newStatus: 'to_section_head',
         actionBy: 'Current User',
         recipient: 'Section Head',
         comments: submitComments.value,
@@ -548,17 +548,17 @@ const loadProjectData = () => {
 
             // Update project data - PRESERVE STATUS
             // Normalize status: if it's "To Technical Editor", fix it to Draft (ProjectView is for draft projects)
-            let normalizedStatus = foundProject.status || 'Draft'
+            let normalizedStatus = foundProject.status || 'draft'
             // If status is "To Technical Editor", it should be Draft in ProjectView
-            if (normalizedStatus === 'To Technical Editor') {
-              normalizedStatus = 'Draft'
+            if (normalizedStatus === 'to_technical_editor') {
+              normalizedStatus = 'draft'
               // Also update it in the storage to fix the corrupted status
               const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
               const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
               if (projectIndex !== -1) {
-                projects[projectIndex].status = 'Draft'
+                projects[projectIndex].status = 'draft'
                 localStorage.setItem(actualStorage.key, JSON.stringify(projects))
-                console.log('Fixed corrupted status from "To Technical Editor" to "Draft"')
+                console.log('Fixed corrupted status from "to_technical_editor" to "draft"')
               }
             }
 
@@ -614,18 +614,18 @@ const loadProjectData = () => {
           console.log('Found project:', foundProject)
 
           // Update project data - PRESERVE STATUS
-          // Normalize status: if it's "To Technical Editor", fix it to Draft (ProjectView is for draft projects)
-          let normalizedStatus = foundProject.status || 'Draft'
-          // If status is "To Technical Editor", it should be Draft in ProjectView
-          if (normalizedStatus === 'To Technical Editor') {
-            normalizedStatus = 'Draft'
+          // Normalize status: if it's "to_technical_editor", fix it to draft (ProjectView is for draft projects)
+          let normalizedStatus = foundProject.status || 'draft'
+          // If status is "to_technical_editor", it should be draft in ProjectView
+          if (normalizedStatus === 'to_technical_editor') {
+            normalizedStatus = 'draft'
             // Also update it in the storage to fix the corrupted status
             const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
             const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
             if (projectIndex !== -1) {
-              projects[projectIndex].status = 'Draft'
+              projects[projectIndex].status = 'draft'
               localStorage.setItem(storageKey, JSON.stringify(projects))
-              console.log('Fixed corrupted status from "To Technical Editor" to "Draft"')
+              console.log('Fixed corrupted status from "to_technical_editor" to "draft"')
             }
           }
 
@@ -692,17 +692,17 @@ const loadProjectData = () => {
 
         // Update project data - PRESERVE STATUS
         // Normalize status: if it's "To Technical Editor", fix it to Draft (ProjectView is for draft projects)
-        let normalizedStatus = foundProject.status || 'Draft'
+        let normalizedStatus = foundProject.status || 'draft'
         // If status is "To Technical Editor", it should be Draft in ProjectView
-        if (normalizedStatus === 'To Technical Editor') {
-          normalizedStatus = 'Draft'
+        if (normalizedStatus === 'to_technical_editor') {
+          normalizedStatus = 'draft'
           // Also update it in the storage to fix the corrupted status
           const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
           const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
           if (projectIndex !== -1) {
-            projects[projectIndex].status = 'Draft'
+            projects[projectIndex].status = 'draft'
             localStorage.setItem(storageKey, JSON.stringify(projects))
-            console.log('Fixed corrupted status from "To Technical Editor" to "Draft"')
+            console.log('Fixed corrupted status from "to_technical_editor" to "draft"')
           }
         }
 
@@ -902,13 +902,13 @@ const canSubmitProject = computed(() => {
 // Get status color for display
 const getStatusColor = (status) => {
   const statusColors = {
-    Draft: 'grey',
-    'To Section Head': 'warning',
-    'To Technical Editor': 'info',
-    'To Editor-in-Chief': 'primary',
+    draft: 'grey',
+    to_section_head: 'warning',
+    to_technical_editor: 'info',
+    to_editor_in_chief: 'primary',
     'To Chief Adviser': 'purple',
-    Published: 'success',
-    Rejected: 'error',
+    published: 'success',
+    rejected: 'error',
   }
   return statusColors[status] || 'default'
 }
