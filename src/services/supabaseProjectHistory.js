@@ -24,11 +24,18 @@ export const createProjectVersion = async (
   versionType = 'draft',
 ) => {
   try {
+    let actualProjectId = projectId
+
+    // If projectId is null, this is a new project - generate a UUID
+    if (!projectId) {
+      actualProjectId = crypto.randomUUID()
+    }
+
     // First, ensure the project exists in Supabase
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('id')
-      .eq('id', projectId)
+      .eq('id', actualProjectId)
       .single()
 
     if (projectError && projectError.code !== 'PGRST116') {
@@ -37,12 +44,8 @@ export const createProjectVersion = async (
 
     // If project doesn't exist, create it
     if (!project) {
-      // Only set the explicit id when projectId is a valid positive integer.
-      // The projects.id column is BIGSERIAL; inserting a non-numeric id will cause errors.
-      const parsedId = Number(projectId)
-      const shouldIncludeId = Number.isInteger(parsedId) && parsedId > 0
-
       const insertPayload = {
+        id: actualProjectId,
         title: projectData.title,
         description: projectData.description,
         content: projectData.content || '',
@@ -61,11 +64,7 @@ export const createProjectVersion = async (
         updated_at: new Date().toISOString(),
       }
 
-      if (shouldIncludeId) {
-        insertPayload.id = parsedId
-      }
-
-      const { data: newProject, error: createError } = await supabase
+      const { error: createError } = await supabase
         .from('projects')
         .insert(insertPayload)
         .select()
@@ -78,18 +77,21 @@ export const createProjectVersion = async (
     const { data: versions } = await supabase
       .from('project_history')
       .select('version_number')
-      .eq('project_id', projectId)
+      .eq('project_id', actualProjectId)
       .order('version_number', { ascending: false })
       .limit(1)
 
     const nextVersionNumber = versions?.length > 0 ? versions[0].version_number + 1 : 1
 
     // Mark all previous versions as inactive
-    await supabase.from('project_history').update({ is_active: false }).eq('project_id', projectId)
+    await supabase
+      .from('project_history')
+      .update({ is_active: false })
+      .eq('project_id', actualProjectId)
 
     // Create new version
     const versionData = {
-      project_id: projectId,
+      project_id: actualProjectId,
       version_number: nextVersionNumber,
       version_type: versionType,
       change_description: changeDescription || 'No description provided',

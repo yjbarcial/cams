@@ -913,6 +913,20 @@ const getStatusColor = (status) => {
   return statusColors[status] || 'default'
 }
 
+// Get status text for display
+const getStatusDisplay = (status) => {
+  const statusLabels = {
+    draft: 'Draft',
+    to_section_head: 'To Section Head',
+    to_technical_editor: 'To Technical Editor',
+    to_editor_in_chief: 'To Editor-in-Chief',
+    'To Chief Adviser': 'To Chief Adviser',
+    published: 'Published',
+    rejected: 'Rejected',
+  }
+  return statusLabels[status] || status
+}
+
 // Watch for editor content changes to keep QuillEditor in sync
 watch(editorContent, (newContent) => {
   if (quillEditorRef.value && quillEditorRef.value.getContent() !== newContent) {
@@ -1032,7 +1046,7 @@ const getBackButtonText = computed(() => {
                 <div class="metadata-item">
                   <span class="label">Submission Status:</span>
                   <v-chip :color="getStatusColor(project.status)" size="small" class="status-chip">
-                    {{ project.status }}
+                    {{ getStatusDisplay(project.status) }}
                   </v-chip>
                 </div>
                 <div class="metadata-item">
