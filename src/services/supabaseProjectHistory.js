@@ -6,6 +6,77 @@
 import { supabase } from '@/utils/supabase.js'
 
 /**
+ * Get current user UUID from profiles table
+ * @returns {Promise<string|null>} - Current user's UUID or null if not found
+ */
+const getCurrentUserId = async () => {
+  try {
+    const userEmail = localStorage.getItem('userEmail')
+    if (!userEmail) {
+      console.warn('No user email found in localStorage')
+      return null
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', userEmail)
+      .single()
+
+    if (error) {
+      console.error('Error getting current user ID:', error)
+      return null
+    }
+
+    return data?.id || null
+  } catch (error) {
+    console.error('Error in getCurrentUserId:', error)
+    return null
+  }
+}
+
+/**
+ * Transform database version to local format
+ * @param {Object} dbVersion - Version from database
+ * @returns {Object} Version in local format
+ */
+const transformVersionFromDB = (dbVersion) => {
+  return {
+    id: dbVersion.id,
+    projectId: dbVersion.project_id,
+    projectType: dbVersion.project_type || 'magazine',
+    versionNumber: dbVersion.version_number,
+    timestamp: dbVersion.created_at,
+    author: dbVersion.author,
+    changeDescription: dbVersion.change_description,
+    versionType: dbVersion.version_type,
+    data: {
+      title: dbVersion.project_data?.title || '',
+      description: dbVersion.project_data?.description || '',
+      content: dbVersion.project_data?.content || '',
+      status: dbVersion.project_data?.status || '',
+      sectionHead: dbVersion.project_data?.sectionHead || '',
+      writers: dbVersion.project_data?.writers || '',
+      artists: dbVersion.project_data?.artists || '',
+      dueDate: dbVersion.project_data?.dueDate || '',
+      dueDateISO: dbVersion.project_data?.dueDateISO || '',
+      mediaUploaded: dbVersion.project_data?.mediaUploaded || '',
+      metadata: dbVersion.metadata || {},
+    },
+    comments: (dbVersion.project_history_comments || []).map((comment) => ({
+      id: comment.id,
+      author: comment.author,
+      content: comment.content,
+      timestamp: comment.created_at,
+      isApproved: comment.is_approved,
+    })),
+    tags: [],
+    isActive: dbVersion.is_active,
+    isDeleted: dbVersion.is_deleted,
+  }
+}
+
+/**
  * Create a new project version snapshot
  * @param {string} projectType - Type of project (magazine, newsletter, folio, other)
  * @param {string} projectId - Unique project identifier
@@ -23,54 +94,85 @@ export const createProjectVersion = async (
   author,
   versionType = 'draft',
 ) => {
+  console.log('=== SUPABASE createProjectVersion called ===')
+  console.log('Input params:', { projectType, projectId, changeDescription, author, versionType })
+  console.log('Project data:', JSON.stringify(projectData, null, 2))
+
   try {
     let actualProjectId = projectId
 
-    // If projectId is null, this is a new project - generate a UUID
-    if (!projectId) {
-      actualProjectId = crypto.randomUUID()
-    }
+    // For new projects (projectId is null), we'll create the project first and get the auto-generated UUID
+    // For existing projects, use the provided projectId
 
-    // First, ensure the project exists in Supabase
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('id', actualProjectId)
-      .single()
+    // For new projects (projectId is null), skip the existence check and create the project
+    // For existing projects, check if they exist first
+    let project = null
+    if (actualProjectId) {
+      console.log('Checking if existing project exists:', actualProjectId)
+      const { data: existingProject, error: projectError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', actualProjectId)
+        .single()
 
-    if (projectError && projectError.code !== 'PGRST116') {
-      throw projectError
+      if (projectError && projectError.code !== 'PGRST116') {
+        throw projectError
+      }
+      project = existingProject
+      console.log('Existing project found:', project)
+    } else {
+      console.log('New project - will create it')
     }
 
     // If project doesn't exist, create it
     if (!project) {
+      console.log('Project does not exist, creating new project...')
+
+      // Map project type to match ENUM values
+      const mappedProjectType = projectType === 'other' ? 'social_media' : projectType
+
+      // Map priority to lowercase to match ENUM
+      const mappedPriority = (projectData.priority || 'medium').toLowerCase()
+
+      // Get current user ID
+      const currentUserId = await getCurrentUserId()
+
       const insertPayload = {
-        id: actualProjectId,
         title: projectData.title,
         description: projectData.description,
-        content: projectData.content || '',
-        status: projectData.status,
-        section_head: projectData.sectionHead,
-        writers: projectData.writers,
-        artists: projectData.artists,
+        project_type: mappedProjectType,
+        status: projectData.status || 'draft',
+        priority: mappedPriority,
+        start_date: projectData.startDate
+          ? new Date(projectData.startDate).toISOString().split('T')[0]
+          : null,
         due_date: projectData.dueDateISO
           ? new Date(projectData.dueDateISO).toISOString().split('T')[0]
           : null,
-        due_date_iso: projectData.dueDateISO,
-        media_uploaded: projectData.mediaUploaded,
-        project_type: projectType,
-        is_starred: projectData.isStarred || false,
+        completed_at: null, // New projects aren't completed
+        section_head_id: null, // TODO: Map from sectionHead name to UUID
+        created_by: currentUserId, // Use actual user UUID
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
 
-      const { error: createError } = await supabase
+      console.log('Insert payload:', JSON.stringify(insertPayload, null, 2))
+
+      const { data: newProject, error: createError } = await supabase
         .from('projects')
         .insert(insertPayload)
         .select()
         .single()
 
-      if (createError) throw createError
+      if (createError) {
+        console.error('Error creating project in Supabase:', createError)
+        throw createError
+      } else {
+        console.log('Project created successfully in Supabase:', newProject)
+        actualProjectId = newProject.id
+      }
+    } else {
+      console.log('Project already exists:', project.id)
     }
 
     // Get next version number
@@ -128,12 +230,18 @@ export const createProjectVersion = async (
       )
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Error creating version in Supabase:', error)
+      throw error
+    }
+
+    console.log('Version created successfully in Supabase for project:', actualProjectId)
 
     // Transform to match the expected format
     return transformVersionFromDB(version)
   } catch (error) {
     console.error('Error creating project version:', error)
+    console.error('Error details:', error.message, error.details, error.hint)
     throw error
   }
 }
@@ -422,47 +530,6 @@ export const compareVersions = (version1, version2) => {
       timestamp: version2.timestamp,
       author: version2.author,
     },
-  }
-}
-
-/**
- * Transform database version to expected format
- * @param {Object} dbVersion - Version from database
- * @returns {Object} Transformed version
- */
-const transformVersionFromDB = (dbVersion) => {
-  return {
-    id: dbVersion.id,
-    projectId: dbVersion.project_id,
-    projectType: dbVersion.project_type || 'magazine',
-    versionNumber: dbVersion.version_number,
-    timestamp: dbVersion.created_at,
-    author: dbVersion.author,
-    changeDescription: dbVersion.change_description,
-    versionType: dbVersion.version_type,
-    data: {
-      title: dbVersion.project_data?.title || '',
-      description: dbVersion.project_data?.description || '',
-      content: dbVersion.project_data?.content || '',
-      status: dbVersion.project_data?.status || '',
-      sectionHead: dbVersion.project_data?.sectionHead || '',
-      writers: dbVersion.project_data?.writers || '',
-      artists: dbVersion.project_data?.artists || '',
-      dueDate: dbVersion.project_data?.dueDate || '',
-      dueDateISO: dbVersion.project_data?.dueDateISO || '',
-      mediaUploaded: dbVersion.project_data?.mediaUploaded || '',
-      metadata: dbVersion.metadata || {},
-    },
-    comments: (dbVersion.project_history_comments || []).map((comment) => ({
-      id: comment.id,
-      author: comment.author,
-      content: comment.content,
-      timestamp: comment.created_at,
-      isApproved: comment.is_approved,
-    })),
-    tags: [],
-    isActive: dbVersion.is_active,
-    isDeleted: dbVersion.is_deleted,
   }
 }
 

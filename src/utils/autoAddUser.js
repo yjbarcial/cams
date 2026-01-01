@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js'
 
 /**
- * Auto-add user to USERS table when they login
+ * Auto-add user to PROFILES table when they login
  * Automatically assigns Admin role to authorized CARSU emails
  */
 
@@ -28,9 +28,9 @@ export async function addUserToProfiles(user) {
 
     console.log('🔄 Checking if user exists:', user.email)
 
-    // Check if user already exists in USERS table
+    // Check if user already exists in PROFILES table
     const { data: existingUser, error: checkError } = await supabase
-      .from('users')
+      .from('profiles')
       .select('*')
       .eq('email', user.email)
       .maybeSingle()
@@ -43,18 +43,19 @@ export async function addUserToProfiles(user) {
     }
 
     // ⭐ Determine user role
-    const userRole = isAdminEmail(user.email) ? 'Admin' : 'User'
+    const userRole = isAdminEmail(user.email) ? 'admin' : 'user'
     console.log(`👤 Role assigned: ${userRole}`)
 
     if (existingUser) {
       console.log('✅ User exists, updating last_login and role')
 
       const { error: updateError } = await supabase
-        .from('users')
+        .from('profiles')
         .update({
           last_login: new Date().toISOString(),
           status: 'active',
-          role: userRole, // ⭐ Update role in case it changed
+          user_role: userRole, // ⭐ Update role in case it changed
+          updated_at: new Date().toISOString(),
         })
         .eq('email', user.email)
 
@@ -70,21 +71,16 @@ export async function addUserToProfiles(user) {
 
     const newUser = {
       email: user.email,
-      full_name:
-        user.user_metadata?.full_name ||
-        user.email
-          .split('@')[0]
-          .replace(/\./g, ' ')
-          .replace(/\b\w/g, (l) => l.toUpperCase()),
-      department: user.user_metadata?.department || 'N/A',
-      role: userRole, // ⭐ Assign Admin or User role
+      user_role: userRole, // ⭐ Assign Admin or User role
       status: 'active',
       last_login: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }
 
     console.log('📝 User to insert:', newUser)
 
-    const { data, error } = await supabase.from('users').insert([newUser]).select()
+    const { data, error } = await supabase.from('profiles').insert([newUser]).select()
 
     console.log('📤 Insert result:', { data, error })
 

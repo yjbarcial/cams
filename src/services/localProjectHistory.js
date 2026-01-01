@@ -78,9 +78,11 @@ export const createProjectVersion = (
     // Fire-and-forget sync to Supabase project history so UI-created projects also persist server-side.
     // Don't block the local save; log any sync errors.
     ;(async () => {
+      console.log('Starting Supabase sync for project:', projectId, 'type:', projectType)
+      console.log('Project data being sent:', JSON.stringify(projectData, null, 2))
       try {
         // Pass null as projectId so Supabase assigns its own serial id (avoid collisions with local timestamps)
-        await createProjectVersionRemote(
+        const result = await createProjectVersionRemote(
           projectType,
           null,
           projectData,
@@ -88,9 +90,15 @@ export const createProjectVersion = (
           author,
           versionType,
         )
-        console.log('Supabase sync: project version saved to Supabase for project', projectId)
+        console.log(
+          'Supabase sync: project version saved to Supabase for project',
+          projectId,
+          'Result:',
+          result,
+        )
       } catch (err) {
-        console.warn('Supabase sync failed for project', projectId, err)
+        console.error('Supabase sync failed for project', projectId, 'Error:', err)
+        console.error('Error details:', err.message, err.details, err.hint)
       }
     })()
 

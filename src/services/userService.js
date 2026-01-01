@@ -8,10 +8,10 @@ import { supabase } from '@/utils/supabase'
 export const getUsersByRole = async (role) => {
   try {
     const { data, error } = await supabase
-      .from('users')
-      .select('id, full_name, email, role, department')
-      .eq('role', role)
-      .order('full_name', { ascending: true })
+      .from('profiles')
+      .select('id, email, user_role, department_id')
+      .eq('user_role', role)
+      .order('email', { ascending: true })
 
     if (error) throw error
     return data || []
@@ -28,9 +28,9 @@ export const getUsersByRole = async (role) => {
 export const getAllUsers = async () => {
   try {
     const { data, error } = await supabase
-      .from('users')
-      .select('id, full_name, email, role, department')
-      .order('full_name', { ascending: true })
+      .from('profiles')
+      .select('id, email, user_role, department_id')
+      .order('email', { ascending: true })
 
     if (error) throw error
     return data || []
