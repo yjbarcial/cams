@@ -294,23 +294,26 @@ function scrollToPublications() {
         </v-row>
 
         <!-- Content Row -->
-        <v-row justify="space-between" align="start" no-gutters>
-          <v-col cols="12" sm="4" class="d-flex flex-column align-start">
-            <v-img src="/images/csu-logo.png" alt="CSU Logo" class="csu-logo mb-4" />
-            <v-card-title class="px-0">Old Administration Bldg.</v-card-title>
-            <v-card-text class="px-0">Caraga State University - Main Campus, 8600</v-card-text>
+        <v-row justify="center" align="start" no-gutters>
+          <v-col cols="12" sm="4" class="d-flex flex-column align-center">
+            <div class="address-block">
+              <v-img src="/images/csu-logo.png" alt="CSU Logo" class="csu-logo mb-4" />
+              <v-card-text class="px-0 font-weight-bold"
+                >Caraga State University - Main Campus, 8600</v-card-text
+              >
+            </div>
           </v-col>
 
-          <v-col cols="12" sm="4" class="d-flex flex-column align-start">
+          <v-col cols="12" sm="4" class="d-flex flex-column align-center">
             <v-list class="social-links">
               <v-list-item
                 href="mailto:thegoldpanicles@carsu.edu.ph"
                 target="_blank"
                 rel="noopener"
-                class="justify-start px-0"
+                class="justify-center px-0"
               >
                 <template v-slot:prepend>
-                  <v-icon>mdi-gmail</v-icon>
+                  <v-icon class="brand-icon gmail-icon">mdi-gmail</v-icon>
                 </template>
                 <span>thegoldpanicles@carsu.edu.ph</span>
               </v-list-item>
@@ -319,26 +322,26 @@ function scrollToPublications() {
                 href="https://facebook.com/thegoldpanicles"
                 target="_blank"
                 rel="noopener"
-                class="justify-start px-0"
+                class="justify-center px-0"
               >
                 <template v-slot:prepend>
-                  <v-icon>mdi-facebook</v-icon>
+                  <v-icon class="brand-icon facebook-icon">mdi-facebook</v-icon>
                 </template>
                 <span>facebook.com/thegoldpanicles</span>
               </v-list-item>
             </v-list>
           </v-col>
 
-          <v-col cols="12" sm="4" class="d-flex flex-column align-start">
+          <v-col cols="12" sm="4" class="d-flex flex-column align-center">
             <v-list class="social-links">
               <v-list-item
                 href="https://instagram.com/thegoldpanicles"
                 target="_blank"
                 rel="noopener"
-                class="justify-start px-0"
+                class="justify-center px-0"
               >
                 <template v-slot:prepend>
-                  <v-icon>mdi-instagram</v-icon>
+                  <v-icon class="brand-icon instagram-icon">mdi-instagram</v-icon>
                 </template>
                 <span>@thegoldpanicles</span>
               </v-list-item>
@@ -347,10 +350,10 @@ function scrollToPublications() {
                 href="https://x.com/tgpCSU"
                 target="_blank"
                 rel="noopener"
-                class="justify-start px-0"
+                class="justify-center px-0"
               >
                 <template v-slot:prepend>
-                  <v-icon>mdi-twitter</v-icon>
+                  <v-icon class="brand-icon twitter-icon">mdi-twitter</v-icon>
                 </template>
                 <span>x.com/tgpCSU</span>
               </v-list-item>
@@ -645,6 +648,13 @@ function scrollToPublications() {
   object-fit: contain;
 }
 
+.address-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
 :deep(.text-h5) {
   font-size: 1.5rem;
   font-weight: 600;
@@ -673,23 +683,32 @@ function scrollToPublications() {
 }
 
 :deep(.social-links .v-list-item-content) {
-  justify-content: flex-start;
+  justify-content: center;
 }
 
-/* Add colored icons */
-:deep(.mdi-facebook) {
-  color: #1877f2;
+/* Colored brand icons - clean and simple */
+.brand-icon {
+  font-size: 22px !important;
+  transition: all 0.2s ease;
 }
 
-:deep(.mdi-instagram) {
-  color: #e4405f;
+:deep(.facebook-icon) {
+  color: #1877f2 !important;
 }
 
-:deep(.mdi-newspaper) {
-  color: #ff5c62;
+:deep(.instagram-icon) {
+  color: #e4405f !important;
 }
 
-:deep(.mdi-gmail) {
-  color: #ea4335;
+:deep(.twitter-icon) {
+  color: #000000 !important;
+}
+
+:deep(.gmail-icon) {
+  color: #ea4335 !important;
+}
+
+.brand-icon:hover {
+  transform: scale(1.15);
 }
 </style>
