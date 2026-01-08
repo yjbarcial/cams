@@ -55,11 +55,13 @@ const filteredArticles = computed(() => {
 const viewerVisible = ref(false)
 const viewerPages = ref([])
 const viewerTitle = ref('')
+const viewerCategory = ref('Magazine')
 
 function openDeliverable(item, event) {
   // Prevent navigation to route that may trigger auth checks. Open in-page viewer instead.
   event && event.preventDefault && event.preventDefault()
   viewerTitle.value = item.title
+  viewerCategory.value = item.category || 'Magazine'
   // If article has explicit pages, use them; otherwise generate simple pages from cover
   if (Array.isArray(item.pages) && item.pages.length) {
     viewerPages.value = item.pages
@@ -75,6 +77,7 @@ function closeViewer() {
   viewerVisible.value = false
   viewerPages.value = []
   viewerTitle.value = ''
+  viewerCategory.value = 'Magazine'
 }
 
 // Prevent back navigation to dashboard
@@ -365,7 +368,12 @@ function scrollToPublications() {
 
     <!-- Flip overlay used for animated transition to deliverable view -->
     <!-- FlipBook viewer (in-page modal) -->
-    <FlipBookViewer v-model="viewerVisible" :pages="viewerPages" :title="viewerTitle" />
+    <FlipBookViewer
+      v-model="viewerVisible"
+      :pages="viewerPages"
+      :title="viewerTitle"
+      :category="viewerCategory"
+    />
   </v-app>
 </template>
 
