@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ArchiveView from '@/views/system/ArchiveView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
-import DashboardView from '@/views/system/DashboardView.vue'
+import ContributorDashboard from '@/views/system/ContributorDashboard.vue'
 import NotificationsView from '@/views/system/NotificationsView.vue'
 import AddProjectView from '@/views/system/AddProjectView.vue'
 import MagazineView from '@/views/system/MagazineView.vue'
@@ -74,7 +74,7 @@ const router = createRouter({
     {
       path: '/dashboard',
       name: 'dashboard',
-      component: DashboardView,
+      component: ContributorDashboard,
       beforeEnter: requireAuth,
     },
     {
