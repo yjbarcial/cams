@@ -42,6 +42,28 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString('en-US', options)
 }
 
+// Status formatter function
+const formatStatus = (status) => {
+  if (!status) return 'Draft'
+
+  // Replace underscores with spaces and capitalize each word
+  let formatted = status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+
+  // Special case: "To Editor In Chief" should be "To Editor-in-Chief"
+  formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
+
+  // Ensure proper capitalization for Chief Adviser
+  formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
+
+  // Ensure proper capitalization for For Publish
+  formatted = formatted.replace(/For Publish/gi, 'For Publish')
+
+  return formatted
+}
+
 const searchQuery = ref('')
 const sortOrder = ref('Date Added ↓')
 const showOnlyStarred = ref(false)
@@ -318,7 +340,7 @@ const deleteFromEdit = () => {
               </v-col>
               <v-col class="table-cell">{{ project.sectionHead }}</v-col>
               <v-col class="table-cell">{{ formatDate(project.dueDate) }}</v-col>
-              <v-col class="table-cell">{{ project.status }}</v-col>
+              <v-col class="table-cell">{{ formatStatus(project.status) }}</v-col>
               <v-col class="table-cell actions-cell">
                 <v-btn
                   class="action-btn view-btn"
