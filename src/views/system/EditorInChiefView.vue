@@ -647,6 +647,27 @@ const formatDate = (dateString) => {
   })
 }
 
+const formatStatus = (status) => {
+  if (!status) return 'Draft'
+
+  // Replace underscores with spaces and capitalize each word
+  let formatted = status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+
+  // Special case: "To Editor In Chief" should be "To Editor-in-Chief"
+  formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
+
+  // Ensure proper capitalization for Chief Adviser
+  formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
+
+  // Ensure proper capitalization for For Publish
+  formatted = formatted.replace(/For Publish/gi, 'For Publish')
+
+  return formatted
+}
+
 onUnmounted(() => {
   if (saveTimeout.value) {
     clearTimeout(saveTimeout.value)
@@ -689,7 +710,7 @@ onMounted(() => {
                 <div class="metadata-item">
                   <span class="label">Submission Status:</span>
                   <v-chip :color="getStatusColor(project.status)" size="small">
-                    {{ project.status }}
+                    {{ formatStatus(project.status) }}
                   </v-chip>
                 </div>
                 <div class="metadata-item">

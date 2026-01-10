@@ -677,6 +677,18 @@ const formatDate = (dateString) => {
   })
 }
 
+const formatStatus = (status) => {
+  if (!status) return 'Draft'
+  let formatted = status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+  formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
+  formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
+  formatted = formatted.replace(/For Publish/gi, 'For Publish')
+  return formatted
+}
+
 onUnmounted(() => {
   if (saveTimeout.value) {
     clearTimeout(saveTimeout.value)
@@ -719,7 +731,7 @@ onMounted(() => {
                 <div class="metadata-item">
                   <span class="label">Submission Status:</span>
                   <v-chip :color="getStatusColor(project.status)" size="small">
-                    {{ project.status }}
+                    {{ formatStatus(project.status) }}
                   </v-chip>
                 </div>
                 <div class="metadata-item">
