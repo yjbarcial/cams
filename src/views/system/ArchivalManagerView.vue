@@ -117,6 +117,11 @@ const updateLastSaveTime = () => {
   project.value.lastModified = lastSaveTime.value
 }
 
+const handleContentChange = () => {
+  // Archival Manager cannot edit, so this does nothing
+  // Keeping method for template compatibility
+}
+
 // ARCHIVAL MANAGER - Only publish button available
 const approvalActions = computed(() => {
   // Only show publish button if status is "For Publish"
@@ -524,69 +529,80 @@ onMounted(() => {
     <v-main class="main-content">
       <v-container fluid class="project-container pa-5">
         <v-row>
-          <!-- Left Panel -->
-          <v-col cols="12" md="8" class="left-panel">
+          <v-col cols="12" lg="8" class="left-panel">
             <div class="title-section">
               <h1 class="project-title">
-                <v-icon class="mr-2">mdi-file-document-outline</v-icon>
                 {{ project.title }}
+                <v-chip color="primary" size="small" class="ml-3"> Archival Manager Review </v-chip>
               </h1>
             </div>
 
-            <div class="project-description">
-              <div class="description-label">Project Description</div>
-              <p class="description-text">{{ project.description }}</p>
+            <div v-if="project.description" class="project-description">
+              <div class="description-label">Description</div>
+              <div class="description-text">{{ project.description }}</div>
             </div>
 
-            <v-card class="project-history-card" elevation="0">
-              <v-card-text class="history-content">
-                <ProjectHistory
-                  v-if="showHistory"
-                  :project-id="projectId"
-                  :project-type="projectType"
-                />
-              </v-card-text>
-            </v-card>
-          </v-col>
-
-          <!-- Right Panel -->
-          <v-col cols="12" md="4" class="right-panel">
             <div class="project-metadata">
               <div class="metadata-row">
                 <div class="metadata-item">
-                  <span class="label">Status:</span>
-                  <v-chip
-                    :color="getStatusColor(project.status)"
-                    size="small"
-                    variant="flat"
-                    class="value"
-                  >
+                  <span class="label">Submission Status:</span>
+                  <v-chip :color="getStatusColor(project.status)" size="small">
                     {{ project.status }}
                   </v-chip>
                 </div>
                 <div class="metadata-item">
+                  <span class="label">Section Head:</span>
+                  <span class="value">{{ project.sectionHead || 'Not assigned' }}</span>
+                </div>
+              </div>
+
+              <div class="metadata-row">
+                <div class="metadata-item">
                   <span class="label">Due Date:</span>
                   <span class="value">{{ formatDate(project.dueDate) }}</span>
                 </div>
+                <div class="metadata-item">
+                  <span class="label">Writer:</span>
+                  <span class="value">{{
+                    project.writers || project.submittedBy || 'Not assigned'
+                  }}</span>
+                </div>
               </div>
+
               <div class="metadata-row">
                 <div class="metadata-item">
-                  <span class="label">Section Head:</span>
-                  <span class="value">{{ project.sectionHead }}</span>
+                  <span class="label">Last Modified:</span>
+                  <span class="value">{{ project.lastModified }}</span>
                 </div>
                 <div class="metadata-item">
-                  <span class="label">Priority:</span>
-                  <span class="value">{{ project.priority }}</span>
+                  <span class="label">Artist:</span>
+                  <span class="value">{{ project.artists || 'Not assigned' }}</span>
                 </div>
               </div>
+
               <div class="metadata-row metadata-row-last">
                 <div class="metadata-item">
-                  <span class="label">Writers:</span>
-                  <span class="value">{{ project.writers }}</span>
+                  <span class="label">Media Uploaded:</span>
+                  <span class="value">{{
+                    project.mediaFiles?.length > 0
+                      ? `${project.mediaFiles.length} file(s)`
+                      : 'No media'
+                  }}</span>
                 </div>
-                <div class="metadata-item">
-                  <span class="label">Artists:</span>
-                  <span class="value">{{ project.artists }}</span>
+                <div class="metadata-item metadata-item-priority">
+                  <span class="label">Priority:</span>
+                  <v-chip
+                    :color="
+                      project.priority === 'High'
+                        ? 'error'
+                        : project.priority === 'Medium'
+                          ? 'warning'
+                          : 'success'
+                    "
+                    size="small"
+                  >
+                    {{ project.priority }}
+                  </v-chip>
                 </div>
               </div>
             </div>
@@ -594,53 +610,88 @@ onMounted(() => {
             <div class="editor-section">
               <QuillEditor
                 ref="quillEditorRef"
-                v-model:content="editorContent"
-                :editable="isEditorEditable"
+                v-model="editorContent"
+                :read-only="!isEditorEditable"
                 :project-id="projectId"
                 :project-type="projectType"
-                @update:content="editorContent = $event"
-                @comments-updated="handleHighlightCommentsUpdated"
-                @highlight-text="handleHighlightText"
-                @delete-comment="handleDeleteHighlightComment"
-                @load-comments="handleLoadHighlightComments"
+                height="500px"
+                placeholder="Project content..."
+                @text-change="handleContentChange"
+                @highlight-comments-updated="handleHighlightCommentsUpdated"
               />
             </div>
 
             <div class="action-buttons">
-              <v-btn
-                v-for="action in approvalActions"
-                :key="action.value"
-                :color="action.color"
-                :disabled="action.disabled"
-                :class="[
-                  `${action.value}-btn`,
-                  { 'publish-btn-locked': action.disabled && action.value === 'publish' },
-                ]"
-                @click="startApproval(action.value)"
-              >
-                <v-icon v-if="action.icon" left>{{ action.icon }}</v-icon>
-                {{ action.text }}
-              </v-btn>
+              <template v-for="action in approvalActions" :key="action.value">
+                <v-btn
+                  @click="startApproval(action.value)"
+                  variant="flat"
+                  :disabled="action.disabled"
+                  :class="{
+                    'publish-btn': action.value === 'publish',
+                    'publish-btn-locked': action.value === 'publish' && action.disabled,
+                  }"
+                >
+                  <v-icon v-if="action.icon" left>{{ action.icon }}</v-icon>
+                  {{ action.text }}
+                </v-btn>
+              </template>
+            </div>
+          </v-col>
+
+          <v-col cols="12" lg="4" class="right-panel">
+            <div class="history-section mb-4">
+              <v-card class="project-history-card">
+                <v-card-title class="d-flex justify-space-between align-center">
+                  <span>
+                    <v-icon class="mr-2">mdi-history</v-icon>
+                    Approval History
+                  </span>
+                  <v-btn icon variant="text" size="small" @click="showHistory = !showHistory">
+                    <v-icon>{{ showHistory ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+                  </v-btn>
+                </v-card-title>
+
+                <v-expand-transition>
+                  <v-card-text v-if="showHistory" class="history-content">
+                    <ProjectHistory
+                      :project-id="projectId"
+                      :project-type="projectType"
+                      mode="approval"
+                    />
+                  </v-card-text>
+                </v-expand-transition>
+              </v-card>
             </div>
 
             <HighlightComments
+              :comments="highlightComments"
+              :quill-editor="quillEditorRef?.quill"
               :project-id="projectId"
               :project-type="projectType"
               @delete-comment="handleDeleteHighlightComment"
+              @highlight-text="handleHighlightText"
+              @load-comments="handleLoadHighlightComments"
+              :read-only="!isEditorEditable"
             />
 
             <div class="comments-section">
               <div class="comments-header">
                 <h3>Comments</h3>
+                <div class="header-actions">
+                  <v-btn icon size="small" variant="text" @click="loadProjectComments">
+                    <v-icon>mdi-refresh</v-icon>
+                  </v-btn>
+                </div>
               </div>
 
               <div class="comment-search">
                 <v-text-field
                   v-model="commentSearch"
-                  density="compact"
-                  variant="outlined"
-                  label="Search comments..."
+                  placeholder="Search comments"
                   prepend-inner-icon="mdi-magnify"
+                  variant="outlined"
+                  density="compact"
                   hide-details
                 />
               </div>
@@ -648,51 +699,49 @@ onMounted(() => {
               <div class="add-comment">
                 <v-textarea
                   v-model="newComment"
-                  density="compact"
+                  placeholder="Add comment..."
                   variant="outlined"
-                  label="Add a comment..."
-                  rows="2"
+                  rows="3"
                   hide-details
+                  append-inner-icon="mdi-send"
+                  @click:append-inner="addComment"
                 />
-                <v-btn color="primary" size="small" class="mt-2" @click="addComment">
-                  Add Comment
-                </v-btn>
               </div>
 
               <div class="comments-list">
-                <div v-if="filteredComments.length === 0" class="text-center text-grey">
-                  No comments yet
-                </div>
                 <div v-for="comment in filteredComments" :key="comment.id" class="comment-item">
                   <div class="comment-avatar">
-                    <img src="/images/default-avatar.png" alt="User Avatar" />
+                    <img :src="comment.avatar" :alt="comment.author" />
                   </div>
                   <div class="comment-content">
                     <div class="comment-header">
                       <span class="comment-author">{{ comment.author }}</span>
                       <span class="comment-time">{{ formatCommentTime(comment.timestamp) }}</span>
                     </div>
-                    <p class="comment-text">{{ comment.content }}</p>
-                    <div class="comment-actions">
-                      <v-btn
-                        size="x-small"
-                        variant="text"
-                        :color="comment.isApproved ? 'success' : 'default'"
-                        @click="toggleCommentApprovalStatus(comment.id)"
-                      >
-                        <v-icon size="small">{{
-                          comment.isApproved ? 'mdi-check-circle' : 'mdi-check-circle-outline'
-                        }}</v-icon>
-                      </v-btn>
-                      <v-btn
-                        size="x-small"
-                        variant="text"
-                        color="error"
-                        @click="deleteComment(comment.id)"
-                      >
-                        <v-icon size="small">mdi-delete</v-icon>
-                      </v-btn>
-                    </div>
+                    <div class="comment-text">{{ comment.content }}</div>
+                  </div>
+                  <div class="comment-actions">
+                    <v-menu>
+                      <template v-slot:activator="{ props }">
+                        <v-btn icon size="small" variant="text" v-bind="props">
+                          <v-icon>mdi-dots-vertical</v-icon>
+                        </v-btn>
+                      </template>
+                      <v-list>
+                        <v-list-item @click="toggleCommentApprovalStatus(comment.id)">
+                          <v-list-item-title>
+                            {{ comment.isApproved ? 'Unapprove' : 'Approve' }}
+                          </v-list-item-title>
+                        </v-list-item>
+                        <v-list-item
+                          v-if="isEditorEditable"
+                          @click="deleteComment(comment.id)"
+                          class="text-error"
+                        >
+                          <v-list-item-title>Delete</v-list-item-title>
+                        </v-list-item>
+                      </v-list>
+                    </v-menu>
                   </div>
                 </div>
               </div>
@@ -975,7 +1024,6 @@ onMounted(() => {
   height: 36px !important;
   padding: 8px 16px !important;
   border: 2px solid #353535 !important;
-  width: 100%;
 }
 
 .publish-btn:hover {

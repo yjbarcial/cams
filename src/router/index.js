@@ -16,6 +16,7 @@ import SectionHeadView from '@/views/system/SectionHeadView.vue'
 import TechnicalEditorView from '@/views/system/TechnicalEditorView.vue'
 import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
 import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
+import ArchivalManagerView from '@/views/system/ArchivalManagerView.vue'
 
 // Admin email list - users with admin privileges
 const adminEmails = [
@@ -164,7 +165,7 @@ const router = createRouter({
       beforeEnter: requireAuth,
     },
 
-    // Approval Routes - Updated Flow: Section Head → Technical Editor → EIC → Chief Adviser → EIC
+    // Approval Routes - Updated Flow: Section Head → Technical Editor → EIC → Chief Adviser → Archival Manager
     {
       path: '/section-head/:id',
       name: 'section-head',
@@ -190,6 +191,13 @@ const router = createRouter({
       path: '/chief-adviser/:id',
       name: 'chief-adviser',
       component: ChiefAdviserView,
+      props: true,
+      beforeEnter: requireAuth,
+    },
+    {
+      path: '/archival-manager/:id',
+      name: 'archival-manager',
+      component: ArchivalManagerView,
       props: true,
       beforeEnter: requireAuth,
     },

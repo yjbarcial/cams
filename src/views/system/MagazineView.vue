@@ -101,10 +101,11 @@ const handleView = (projectId) => {
     project.status === 'to_editor_in_chief' ||
     project.status === 'EIC Review' ||
     project.status === 'Returned by EIC' ||
-    project.status === 'Returned by Chief Adviser' ||
-    project.status === 'For Publish' // Added this status to route to EIC
+    project.status === 'Returned by Chief Adviser'
   ) {
     router.push(`/editor-in-chief/${projectId}?type=magazine`)
+  } else if (project.status === 'For Publish') {
+    router.push(`/archival-manager/${projectId}?type=magazine`)
   } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
     router.push(`/chief-adviser/${projectId}?type=magazine`)
   } else if (project.status === 'Published' || project.status === 'EIC Approved') {

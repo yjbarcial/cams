@@ -168,7 +168,7 @@ const getNextStatus = (action) => {
 // CHIEF ADVISER - Comment placeholder
 const getCommentPlaceholder = () => {
   if (approvalAction.value === 'approve') {
-    return 'Add consultation notes for Editor-in-Chief...'
+    return 'Add consultation notes for Archival Manager...'
   }
   if (approvalAction.value === 'return') {
     return 'Explain what needs to be improved or reconsidered...'
@@ -322,7 +322,7 @@ const submitApproval = async () => {
           oldStatus: 'To Chief Adviser',
           newStatus: 'For Publish',
           actionBy: currentUser.value,
-          recipient: 'Editor-in-Chief',
+          recipient: 'Archival Manager',
           comments: approvalComments.value,
         })
       } else if (action === 'return') {
@@ -388,7 +388,10 @@ const submitApproval = async () => {
       approvalComments.value = ''
 
       if (action === 'approve') {
-        showNotification('Project approved and ready for publishing by Editor-in-Chief!', 'success')
+        showNotification(
+          'Project approved and ready for publishing by Archival Manager!',
+          'success',
+        )
       } else if (action === 'return') {
         showNotification('Project returned for reconsideration', 'warning')
       } else if (action === 'reject') {
@@ -950,7 +953,7 @@ onMounted(() => {
           <div class="approval-info-box">
             <p class="approval-message">
               <template v-if="approvalAction === 'approve'">
-                Approve <strong>"{{ project.title }}"</strong> and send back to Editor-in-Chief for
+                Approve <strong>"{{ project.title }}"</strong> and send to Archival Manager for
                 final publishing.
               </template>
               <template v-else-if="approvalAction === 'return'">
@@ -992,8 +995,8 @@ onMounted(() => {
               <v-icon size="20">mdi-information-outline</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Next Step:</strong> Project will be sent back to Editor-in-Chief with
-              approval. EIC can now publish the project.
+              <strong>Next Step:</strong> Project will be sent to Archival Manager with approval.
+              Archival Manager can now publish the project.
             </div>
           </v-alert>
 
