@@ -205,10 +205,10 @@ function scrollToPublications() {
     <v-main id="publications-section" class="publications">
       <v-row no-gutters>
         <v-col cols="12">
-          <v-card-title class="mb-1 font-weight-bold">Publications</v-card-title>
+          <v-card-title class="font-weight-bold">Publications</v-card-title>
 
           <v-row class="archive-controls" no-gutters>
-            <v-col cols="12" md="2" class="archive-search-group">
+            <v-col cols="12" md="4" class="archive-search-group">
               <v-text-field
                 v-model="searchQuery"
                 prepend-inner-icon="mdi-magnify"
@@ -217,9 +217,10 @@ function scrollToPublications() {
                 variant="outlined"
                 density="comfortable"
                 class="archive-search"
+                rounded
               ></v-text-field>
             </v-col>
-            <v-col cols="12" md="2" class="archive-categories">
+            <v-col cols="12" md="8" class="archive-categories">
               <v-btn
                 v-for="cat in categories"
                 :key="cat"
@@ -242,6 +243,7 @@ function scrollToPublications() {
               sm="4"
               md="3"
               lg="2"
+              xl="2"
               class="grid-item"
             >
               <div
@@ -443,53 +445,66 @@ function scrollToPublications() {
 }
 
 .publications {
-  padding: 24px 12px 32px !important;
+  padding: 40px 16px 50px !important;
+  max-width: 100%;
 }
 
 .publications .v-card-title {
-  margin: 0 0 12px 0 !important;
-  font-size: 22px !important;
-  padding: 0 !important;
+  margin: 0 0 32px 0 !important;
+  font-size: 32px !important;
+  padding: 0 12px !important;
+  color: #2c3e50;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
 .archive-controls {
   display: flex !important;
   align-items: center !important;
-  gap: 12px !important;
-  flex-wrap: wrap !important;
-  margin-bottom: 16px !important;
-  padding: 0 !important;
+  gap: 20px !important;
+  flex-wrap: nowrap !important;
+  margin-bottom: 40px !important;
+  padding: 0 4px !important;
 }
 
 .archive-search-group {
   position: relative;
   padding: 0 !important;
+  flex-shrink: 0;
 }
 
 .archive-categories {
   display: inline-flex !important;
-  gap: 8px !important;
+  gap: 12px !important;
   padding: 0 !important;
   justify-content: flex-start !important;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .grid {
-  padding: 0 !important;
+  padding: 0 4px !important;
 }
 
 .grid-item {
-  padding: 4px !important;
+  padding: 8px !important;
 }
 
 .card {
-  border: 1px solid #eee !important;
-  border-radius: 8px !important;
+  border: none !important;
+  border-radius: 12px !important;
   overflow: hidden !important;
   background: #fff !important;
   display: flex !important;
   flex-direction: column !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
   height: 100% !important;
+  transition: all 0.3s ease !important;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12) !important;
 }
 
 .cover {
@@ -502,26 +517,36 @@ function scrollToPublications() {
 }
 
 .meta {
-  padding: 8px 10px 10px !important;
+  padding: 12px 16px 16px !important;
   flex-grow: 1 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .category {
-  display: inline-block !important;
-  font-size: 10px !important;
-  padding: 4px 6px !important;
-  margin-bottom: 4px !important;
-  border-radius: 3px !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 6px 12px !important;
+  margin-bottom: 0 !important;
+  border-radius: 16px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  width: fit-content;
+  line-height: 1;
 }
 
 .category.magazine {
   background-color: #f5c52b !important;
-  color: #353535 !important;
+  color: #2c3e50 !important;
 }
 
 .category.folio {
   background-color: #39acff !important;
-  color: #353535 !important;
+  color: white !important;
 }
 
 .category.newsletter {
@@ -532,8 +557,15 @@ function scrollToPublications() {
 .article-title {
   margin: 0;
   font-size: 15px !important;
-  line-height: 1.2 !important;
-  display: block;
+  line-height: 1.4 !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: #2c3e50;
+  font-weight: 600;
+  min-height: 42px;
 }
 
 /* Flip overlay styles */
@@ -578,31 +610,44 @@ function scrollToPublications() {
 }
 
 .date {
-  font-size: 10px !important;
-  color: #888 !important;
+  font-size: 12px !important;
+  color: #7f8c8d !important;
   padding: 0 !important;
+  font-weight: 500;
+  margin-top: auto;
 }
 
 @media (max-width: 960px) {
+  .archive-controls {
+    padding: 0 12px !important;
+    flex-wrap: wrap !important;
+  }
+
   .archive-categories {
     justify-content: flex-start !important;
-    margin-top: 8px !important;
+    margin-top: 12px !important;
   }
 }
 
 @media (max-width: 640px) {
+  .publications .v-card-title {
+    font-size: 26px !important;
+  }
+
   .archive-controls {
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 10px !important;
+    gap: 16px !important;
+    padding: 0 12px !important;
   }
 
   .archive-categories {
     margin-top: 0 !important;
+    justify-content: flex-start !important;
   }
 
   .grid-item {
-    padding: 2px !important;
+    padding: 6px !important;
   }
 
   :deep(.archive-search.v-text-field) {
@@ -612,45 +657,65 @@ function scrollToPublications() {
 
 /* Override Vuetify default styles to match original */
 :deep(.v-text-field) {
-  width: 260px;
+  width: 100%;
   max-width: 100%;
 }
 
+:deep(.v-text-field .v-field) {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
 :deep(.v-text-field .v-field__input) {
-  padding: 8px 10px 8px 8px;
+  padding: 10px 12px 10px 8px;
   font-size: 14px;
+  color: #2c3e50;
 }
 
 :deep(.v-text-field .v-field__input::placeholder) {
   font-size: 14px;
+  color: #9ca3af;
 }
 
 :deep(.v-btn.archive-chip) {
   text-transform: none;
   letter-spacing: normal;
-  height: 32px;
+  height: 40px;
+  padding: 0 20px;
   background: white;
-  color: #333;
-  border: 1px solid #ddd !important;
+  color: #6b7280;
+  border: 2px solid transparent !important;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 :deep(.v-btn.archive-chip.active) {
   background: #f5c52b !important;
   border-color: #f5c52b !important;
-  color: #333 !important;
+  color: #2c3e50 !important;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(245, 197, 43, 0.3);
 }
 
 :deep(.v-btn.archive-chip:hover) {
-  background: white;
+  background: #f8f9fa;
+  border-color: transparent !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 :deep(.v-btn.archive-chip.active:hover) {
-  background: #f5c52b !important;
+  background: #f0b90b !important;
+  border-color: #f0b90b !important;
+  box-shadow: 0 3px 8px rgba(245, 197, 43, 0.4);
 }
 
 :deep(.v-card) {
-  border: 1px solid #eee;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
 }
 
 :deep(.v-img.logo) {
