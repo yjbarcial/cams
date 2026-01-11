@@ -46,6 +46,26 @@ const departments = ['News', 'Sports', 'Arts', 'Opinion', 'Features']
 
 const activeTab = ref('users')
 
+// Format status function to remove underscores and capitalize
+const formatStatus = (status) => {
+  if (!status) return 'Draft'
+
+  // Replace underscores with spaces and capitalize each word
+  let formatted = status
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+
+  // Special case: "To Editor In Chief" should be "To Editor-in-Chief"
+  formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
+  formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
+  formatted = formatted.replace(/For Publish/gi, 'For Publish')
+  formatted = formatted.replace(/Creative Director/gi, 'Creative Director')
+  formatted = formatted.replace(/Technical Editor/gi, 'Technical Editor')
+
+  return formatted
+}
+
 // ⭐ CLEANED: Function to load only real projects from localStorage and Supabase
 const loadAllProjects = () => {
   const magazineProjects = JSON.parse(localStorage.getItem('magazine_projects') || '[]')
@@ -512,7 +532,7 @@ const performClearClientData = async () => {
                                   "
                                   size="small"
                                 >
-                                  {{ project.status }}
+                                  {{ formatStatus(project.status) }}
                                 </v-chip>
                               </td>
                               <td>
@@ -673,7 +693,7 @@ const performClearClientData = async () => {
                                 "
                                 size="small"
                               >
-                                {{ record.status }}
+                                {{ formatStatus(record.status) }}
                               </v-chip>
                               <span v-else>{{ record.department }}</span>
                             </td>

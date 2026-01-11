@@ -977,11 +977,11 @@ const getBackButtonText = computed(() => {
   const typeNames = {
     magazine: 'Magazine',
     newsletter: 'Newsletter',
-    folio: 'Folios',
-    other: 'Others',
-    'social-media': 'Others',
+    folio: 'Folio',
+    other: 'Other',
+    'social-media': 'Other',
   }
-  return `Back to ${typeNames[projectType.value] || 'Magazines'}`
+  return `Back to ${typeNames[projectType.value] || 'Magazine'}`
 })
 </script>
 

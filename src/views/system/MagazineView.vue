@@ -484,13 +484,13 @@ const deleteFromEdit = () => {
               <v-select
                 v-model="editingProject.status"
                 :items="[
-                  'draft',
-                  'to_section_head',
-                  'to_editor_in_chief',
-                  'to_technical_editor',
-                  'to_creative_director',
-                  'to_publish',
-                  'published',
+                  { title: 'Draft', value: 'draft' },
+                  { title: 'To Section Head', value: 'to_section_head' },
+                  { title: 'To Editor-in-Chief', value: 'to_editor_in_chief' },
+                  { title: 'To Technical Editor', value: 'to_technical_editor' },
+                  { title: 'To Creative Director', value: 'to_creative_director' },
+                  { title: 'To Publish', value: 'to_publish' },
+                  { title: 'Published', value: 'published' },
                 ]"
                 variant="outlined"
                 density="comfortable"

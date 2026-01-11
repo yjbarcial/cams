@@ -496,7 +496,7 @@ const saveAsDraft = () => {
                       <v-container class="assign-header pa-0">
                         <v-row no-gutters>
                           <v-col cols="12">
-                            <v-label class="label">Assign to Artist(s) (Optional)</v-label>
+                            <v-label class="label">Assign to Artist(s)</v-label>
                             <v-select
                               v-model="selectedArtists"
                               :items="users.artists"

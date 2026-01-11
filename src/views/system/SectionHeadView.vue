@@ -194,11 +194,11 @@ const getCommentPlaceholder = () => {
 const getBackButtonText = computed(() => {
   // Get the project type to return to the correct view
   const typeNames = {
-    magazine: 'Magazines',
-    newsletter: 'Newsletters',
-    folio: 'Folios',
-    other: 'Others',
-    'social-media': 'Others',
+    magazine: 'Magazine',
+    newsletter: 'Newsletter',
+    folio: 'Folio',
+    other: 'Other',
+    'social-media': 'Other',
   }
   return `Back to ${typeNames[projectType.value] || 'Projects'}`
 })
