@@ -300,7 +300,14 @@ function scrollToPublications() {
         <v-row justify="center" align="start" no-gutters>
           <v-col cols="12" sm="4" class="d-flex flex-column align-center">
             <div class="address-block">
-              <v-img src="/images/csu-logo.png" alt="CSU Logo" class="csu-logo mb-4" />
+              <a
+                href="https://www.carsu.edu.ph/"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="csu-logo-link"
+              >
+                <v-img src="/images/csu-logo.png" alt="CSU Logo" class="csu-logo mb-4" />
+              </a>
               <v-card-text class="px-0 font-weight-bold"
                 >Caraga State University - Main Campus, 8600</v-card-text
               >
@@ -654,6 +661,16 @@ function scrollToPublications() {
   width: 120px;
   height: auto;
   object-fit: contain;
+  transition: transform 0.2s ease;
+}
+
+.csu-logo-link {
+  display: block;
+  cursor: pointer;
+}
+
+.csu-logo-link:hover .csu-logo {
+  transform: scale(1.05);
 }
 
 .address-block {
