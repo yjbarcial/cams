@@ -132,8 +132,9 @@ const assignProject = () => {
     return
   }
 
-  if (selectedWriters.value.length === 0) {
-    showNotification('Please select at least one writer', 'warning')
+  // Require at least one writer OR artist (not both mandatory)
+  if (selectedWriters.value.length === 0 && selectedArtists.value.length === 0) {
+    showNotification('Please select at least one writer or artist', 'warning')
     return
   }
 

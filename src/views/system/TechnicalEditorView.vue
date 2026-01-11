@@ -22,8 +22,24 @@ const projectId = route.params.id
 // Project type
 const projectType = ref('magazine')
 
-// User role - TECHNICAL EDITOR ONLY
-const currentUserRole = ref('Technical Editor')
+// User role - TECHNICAL EDITOR OR CREATIVE DIRECTOR
+const currentUserRole = computed(() => {
+  const hasWriter =
+    project.value?.writers &&
+    project.value.writers !== 'Not assigned' &&
+    project.value.writers.trim() !== ''
+  const hasArtist =
+    project.value?.artists &&
+    project.value.artists !== 'Not assigned' &&
+    project.value.artists.trim() !== ''
+
+  // If only artist (no writer), use Creative Director
+  if (hasArtist && !hasWriter) {
+    return 'Creative Director'
+  }
+  // Otherwise use Technical Editor (for writers or default)
+  return 'Technical Editor'
+})
 const currentUser = ref('Technical Editor User')
 
 // Project data
@@ -133,7 +149,7 @@ const debouncedSave = () => {
   }, 1000)
 }
 
-// TECHNICAL EDITOR - Approval actions (3 buttons matching Section Head)
+// TECHNICAL EDITOR / CREATIVE DIRECTOR - Approval actions (3 buttons matching Section Head)
 const approvalActions = computed(() => {
   return [
     { value: 'edit', text: 'Request to Edit', color: 'dark', icon: 'mdi-pencil' },
@@ -301,11 +317,20 @@ const submitApproval = async () => {
 
       // Create notification based on action
       if (approvalAction.value === 'approve') {
+        const hasWriter =
+          project.value?.writers &&
+          project.value.writers !== 'Not assigned' &&
+          project.value.writers.trim() !== ''
+        const hasArtist =
+          project.value?.artists &&
+          project.value.artists !== 'Not assigned' &&
+          project.value.artists.trim() !== ''
+        const isCreativeDirector = hasArtist && !hasWriter
         createStatusChangeNotification({
           projectId: projectId,
           projectType: actualStorage.type,
           projectTitle: project.value.title,
-          oldStatus: 'to_technical_editor',
+          oldStatus: isCreativeDirector ? 'to_creative_director' : 'to_technical_editor',
           newStatus: 'to_editor_in_chief',
           actionBy: currentUser.value,
           recipient: 'Editor-in-Chief',
@@ -327,10 +352,20 @@ const submitApproval = async () => {
       // Try to save to Supabase (non-blocking)
       try {
         if (project.value.supabaseId) {
+          const hasWriter =
+            project.value?.writers &&
+            project.value.writers !== 'Not assigned' &&
+            project.value.writers.trim() !== ''
+          const hasArtist =
+            project.value?.artists &&
+            project.value.artists !== 'Not assigned' &&
+            project.value.artists.trim() !== ''
+          const isCreativeDirector = hasArtist && !hasWriter
+          const roleName = isCreativeDirector ? 'Creative Director' : 'Technical Editor'
           await createProjectVersionSupabase(
             project.value.supabaseId,
             project.value.content || editorContent.value,
-            `Technical Editor ${approvalAction.value}`,
+            `${roleName} ${approvalAction.value}`,
             currentUser.value,
           )
         }
@@ -630,7 +665,28 @@ const formatStatus = (status) => {
   formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
   formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
   formatted = formatted.replace(/For Publish/gi, 'For Publish')
+  formatted = formatted.replace(/Creative Director/gi, 'Creative Director')
   return formatted
+}
+
+const getProjectStatus = (action) => {
+  // Determine if this is Technical Editor or Creative Director
+  const hasWriter =
+    project.value?.writers &&
+    project.value.writers !== 'Not assigned' &&
+    project.value.writers.trim() !== ''
+  const hasArtist =
+    project.value?.artists &&
+    project.value.artists !== 'Not assigned' &&
+    project.value.artists.trim() !== ''
+  const isCreativeDirector = hasArtist && !hasWriter
+
+  const statusMap = {
+    edit: isCreativeDirector ? 'returned_by_creative_director' : 'returned_by_technical_editor',
+    approve: 'to_editor_in_chief',
+    publish: 'Published',
+  }
+  return statusMap[action] || project.value.status
 }
 
 onUnmounted(() => {
@@ -661,7 +717,11 @@ onMounted(() => {
             <div class="title-section">
               <h1 class="project-title">
                 {{ project.title }}
-                <v-chip color="info" size="small" class="ml-3"> Technical Review </v-chip>
+                <v-chip color="info" size="small" class="ml-3">
+                  {{
+                    currentUserRole === 'Creative Director' ? 'Creative Review' : 'Technical Review'
+                  }}
+                </v-chip>
               </h1>
             </div>
 
@@ -863,7 +923,7 @@ onMounted(() => {
               <div class="add-comment">
                 <v-textarea
                   v-model="newComment"
-                  placeholder="Add comment..."
+                  :placeholder="`Add ${currentUserRole} comment...`"
                   variant="outlined"
                   rows="3"
                   hide-details

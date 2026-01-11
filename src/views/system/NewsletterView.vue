@@ -76,10 +76,14 @@ const handleView = (projectId) => {
     router.push(`/project/${projectId}?type=newsletter`)
   } else if (
     project.status === 'to_section_head' ||
-    project.status === 'returned_by_technical_editor'
+    project.status === 'returned_by_technical_editor' ||
+    project.status === 'returned_by_creative_director'
   ) {
     router.push(`/section-head/${projectId}?type=newsletter`)
-  } else if (project.status === 'to_technical_editor') {
+  } else if (
+    project.status === 'to_technical_editor' ||
+    project.status === 'to_creative_director'
+  ) {
     router.push(`/technical-editor/${projectId}?type=newsletter`)
   } else if (
     project.status === 'to_editor_in_chief' ||
@@ -460,6 +464,7 @@ const updateDueDate = (newDate) => {
                   'draft',
                   'to_section_head',
                   'to_technical_editor',
+                  'to_creative_director',
                   'to_editor_in_chief',
                   'to_publish',
                   'published',

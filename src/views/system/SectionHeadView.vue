@@ -152,7 +152,22 @@ const approvalActions = computed(() => {
 // SECTION HEAD ONLY - Simple status mapping
 // SECTION HEAD - Updated status mapping
 const getNextStatus = (action) => {
-  if (action === 'approve') return 'to_technical_editor' // Changed from 'To Editor-in-Chief'
+  if (action === 'approve') {
+    // Route to Technical Editor for writers, Creative Director for artists only
+    const hasWriter =
+      project.value?.writers &&
+      project.value.writers !== 'Not assigned' &&
+      project.value.writers.trim() !== ''
+    const hasArtist =
+      project.value?.artists &&
+      project.value.artists !== 'Not assigned' &&
+      project.value.artists.trim() !== ''
+
+    if (hasArtist && !hasWriter) {
+      return 'to_creative_director'
+    }
+    return 'to_technical_editor' // Default for writers
+  }
   if (action === 'return') return 'returned_by_section_head'
   return project.value.status
 }
@@ -160,7 +175,16 @@ const getNextStatus = (action) => {
 // SECTION HEAD - Updated comment placeholder
 const getCommentPlaceholder = () => {
   if (approvalAction.value === 'approve') {
-    return 'Add any comments or notes for the Technical Editor...' // Updated
+    const hasWriter =
+      project.value?.writers &&
+      project.value.writers !== 'Not assigned' &&
+      project.value.writers.trim() !== ''
+    const hasArtist =
+      project.value?.artists &&
+      project.value.artists !== 'Not assigned' &&
+      project.value.artists.trim() !== ''
+    const recipient = hasArtist && !hasWriter ? 'Creative Director' : 'Technical Editor'
+    return `Add any comments or notes for the ${recipient}...`
   }
   if (approvalAction.value === 'return') {
     return 'Explain what needs to be edited or improved...'
@@ -299,14 +323,23 @@ const submitApproval = async () => {
 
       // Create notification based on action
       if (action === 'approve') {
+        const hasWriter =
+          project.value?.writers &&
+          project.value.writers !== 'Not assigned' &&
+          project.value.writers.trim() !== ''
+        const hasArtist =
+          project.value?.artists &&
+          project.value.artists !== 'Not assigned' &&
+          project.value.artists.trim() !== ''
+        const isCreativeDirector = hasArtist && !hasWriter
         createStatusChangeNotification({
           projectId: projectId,
           projectType: actualStorage.type,
           projectTitle: project.value.title,
           oldStatus: 'to_section_head',
-          newStatus: 'to_technical_editor',
+          newStatus: isCreativeDirector ? 'to_creative_director' : 'to_technical_editor',
           actionBy: currentUser.value,
-          recipient: 'Technical Editor',
+          recipient: isCreativeDirector ? 'Creative Director' : 'Technical Editor',
           comments: approvalComments.value,
         })
       } else if (action === 'return') {
