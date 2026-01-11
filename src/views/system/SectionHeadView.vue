@@ -170,11 +170,11 @@ const getCommentPlaceholder = () => {
 const getBackButtonText = computed(() => {
   // Get the project type to return to the correct view
   const typeNames = {
-    magazine: 'Magazine',
-    newsletter: 'Newsletter',
-    folio: 'Folio',
-    other: 'Other',
-    'social-media': 'Other',
+    magazine: 'Magazines',
+    newsletter: 'Newsletters',
+    folio: 'Folios',
+    other: 'Others',
+    'social-media': 'Others',
   }
   return `Back to ${typeNames[projectType.value] || 'Projects'}`
 })
@@ -1107,6 +1107,7 @@ onMounted(() => {
 .back-button {
   background: white !important;
   border: 1px solid #d1d5db !important;
+  text-transform: none !important;
 }
 
 .back-button:hover {
