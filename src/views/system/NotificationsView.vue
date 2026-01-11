@@ -14,9 +14,25 @@ const router = useRouter()
 
 // Load notifications from service
 const notifications = ref([])
+const visibleCount = ref(10) // Show 10 notifications initially
 
 const loadNotifications = () => {
   notifications.value = getNotifications()
+}
+
+// Show only limited notifications
+const visibleNotifications = computed(() => {
+  return notifications.value.slice(0, visibleCount.value)
+})
+
+// Check if there are more notifications to show
+const hasMore = computed(() => {
+  return notifications.value.length > visibleCount.value
+})
+
+// Show all notifications
+const showMore = () => {
+  visibleCount.value = notifications.value.length
 }
 
 const formatTimestamp = (timestamp) => {
@@ -130,7 +146,7 @@ onMounted(() => {
 
           <div v-else class="notifications-list">
             <div
-              v-for="notification in notifications"
+              v-for="notification in visibleNotifications"
               :key="notification.id"
               class="notification-item"
               :class="{ unread: !notification.isRead }"
@@ -182,6 +198,19 @@ onMounted(() => {
                   </div>
                 </div>
               </div>
+            </div>
+
+            <!-- See More Button -->
+            <div v-if="hasMore" class="see-more-container">
+              <v-btn
+                @click="showMore"
+                variant="outlined"
+                size="large"
+                class="see-more-btn"
+                prepend-icon="mdi-chevron-down"
+              >
+                See All Notifications
+              </v-btn>
             </div>
           </div>
         </div>
@@ -256,16 +285,15 @@ onMounted(() => {
 }
 
 .notifications-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  background: transparent;
 }
 
 .no-notifications {
   text-align: center;
   padding: 80px 24px;
-  color: #9ca3af;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .no-notifications-title {
@@ -283,27 +311,31 @@ onMounted(() => {
 }
 
 .notifications-list {
-  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .notification-item {
   position: relative;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background-color: white;
-  margin-bottom: 12px;
-  transition: all 0.2s ease;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  border: 1px solid #f3f4f6;
 }
 
 .notification-item:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  border-color: #e5e7eb;
 }
 
 .notification-item.unread {
-  background-color: #f0f9ff;
+  background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
   border-left: 4px solid #3b82f6;
+  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.15);
 }
 
 .notification-item.unread .notification-indicator {
@@ -321,36 +353,40 @@ onMounted(() => {
 }
 
 .notification-main {
-  padding: 20px;
+  padding: 24px;
 }
 
 .notification-header-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
 .notification-type-badge {
-  padding: 4px 12px;
-  border-radius: 16px;
+  padding: 6px 14px;
+  border-radius: 20px;
   color: white;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   display: inline-flex;
   align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .notification-time {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 13px;
   color: #6b7280;
   margin-left: auto;
+  padding: 4px 12px;
+  background: #f9fafb;
+  border-radius: 12px;
 }
 
 .time-icon {
@@ -358,7 +394,7 @@ onMounted(() => {
 }
 
 .delete-btn {
-  opacity: 0.4;
+  opacity: 0.5;
   transition: all 0.2s ease;
   color: #6b7280;
 }
@@ -366,59 +402,61 @@ onMounted(() => {
 .delete-btn:hover {
   opacity: 1;
   color: #ef4444 !important;
-  background-color: #fee2e2;
+  background-color: #fee2e2 !important;
+  transform: scale(1.1);
 }
 
 .notification-body-content {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .notification-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 8px 0;
-  line-height: 1.4;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 10px 0;
+  line-height: 1.5;
 }
 
 .notification-description {
   font-size: 14px;
-  color: #6b7280;
+  color: #4b5563;
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .notification-footer {
   display: flex;
   justify-content: flex-end;
-  padding-top: 12px;
+  padding-top: 16px;
   border-top: 1px solid #f3f4f6;
 }
 
 .notification-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .action-btn {
-  padding: 6px 16px;
+  padding: 8px 20px;
   border: 2px solid;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-transform: none;
-  letter-spacing: normal;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .action-btn:hover {
   background-color: currentColor;
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: white !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .action-btn.accept {
@@ -426,14 +464,63 @@ onMounted(() => {
   color: #10b981;
 }
 
+.action-btn.accept:hover {
+  background-color: #10b981;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
 .action-btn.reject {
   border-color: #ef4444;
   color: #ef4444;
 }
 
+.action-btn.reject:hover {
+  background-color: #ef4444;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
 .action-btn.view {
   border-color: #3b82f6;
   color: #3b82f6;
+}
+
+.action-btn.view:hover {
+  background-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* See More Button */
+.see-more-container {
+  display: flex;
+  justify-content: center;
+  padding: 32px 0 8px 0;
+}
+
+.see-more-btn {
+  border: 2px solid #353535;
+  color: #353535;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.3px;
+  border-radius: 10px;
+  padding: 14px 40px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:deep(.see-more-btn .v-btn__content) {
+  justify-content: center;
+}
+
+.see-more-btn:hover {
+  background-color: #353535;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 /* Responsive design */
