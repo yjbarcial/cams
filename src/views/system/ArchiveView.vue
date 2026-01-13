@@ -11,36 +11,7 @@ const activeCategory = ref('All')
 
 const categories = ['All', 'Folio', 'Magazine', 'Newsletter']
 
-const articles = ref([
-  {
-    id: 1,
-    title: 'Exploring Literary Horizons',
-    category: 'Folio',
-    cover: '/images/lib-hd.jpg',
-    publishedAt: '2025-02-12',
-  },
-  {
-    id: 2,
-    title: 'Campus Life: Spring Edition',
-    category: 'Magazine',
-    cover: '/images/lib-hd.jpg',
-    publishedAt: '2025-03-05',
-  },
-  {
-    id: 3,
-    title: 'Alumni Newsletter – April',
-    category: 'Newsletter',
-    cover: '/images/lib-hd.jpg',
-    publishedAt: '2025-04-01',
-  },
-  {
-    id: 4,
-    title: 'The Gold Panicles: Special Feature',
-    category: 'Magazine',
-    cover: '/images/lib-hd.jpg',
-    publishedAt: '2025-05-18',
-  },
-])
+const articles = ref([])
 
 const filteredArticles = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -51,17 +22,26 @@ const filteredArticles = computed(() => {
   })
 })
 
-// Viewer state: open a flipbook-style viewer in-page instead of navigating (prevents login redirect)
+// Viewer state: show content like Facebook posts
 const viewerVisible = ref(false)
 const viewerPages = ref([])
 const viewerTitle = ref('')
 const viewerCategory = ref('Magazine')
+const viewerContent = ref('')
+const viewerMedia = ref('')
+const viewerAuthor = ref('')
+const viewerDate = ref('')
 
 function openDeliverable(item, event) {
   // Prevent navigation to route that may trigger auth checks. Open in-page viewer instead.
   event && event.preventDefault && event.preventDefault()
   viewerTitle.value = item.title
   viewerCategory.value = item.category || 'Magazine'
+  viewerContent.value = item.content || ''
+  viewerMedia.value = item.cover || item.mediaUploaded || ''
+  viewerAuthor.value = item.writers || item.artists || 'The Gold Panicles'
+  viewerDate.value = item.publishedAt || new Date().toISOString()
+
   // If article has explicit pages, use them; otherwise generate simple pages from cover
   if (Array.isArray(item.pages) && item.pages.length) {
     viewerPages.value = item.pages
@@ -77,7 +57,20 @@ function closeViewer() {
   viewerVisible.value = false
   viewerPages.value = []
   viewerTitle.value = ''
+  viewerContent.value = ''
+  viewerMedia.value = ''
+  viewerAuthor.value = ''
+  viewerDate.value = ''
   viewerCategory.value = 'Magazine'
+}
+
+// Extract first image from HTML content
+const extractFirstImage = (htmlContent) => {
+  if (!htmlContent) return null
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(htmlContent, 'text/html')
+  const img = doc.querySelector('img')
+  return img ? img.src : null
 }
 
 // Prevent back navigation to dashboard
@@ -105,12 +98,57 @@ onMounted(() => {
   // Replace the current history entry to remove previous page from history
   window.history.replaceState(null, '', window.location.href)
 
-  // Fetch publications from Supabase and merge into articles
+  // Fetch ONLY published projects from localStorage
+  const loadPublishedProjects = () => {
+    const projectTypes = [
+      'magazine_projects',
+      'newsletter_projects',
+      'folio_projects',
+      'other_projects',
+      'social-media_projects',
+    ]
+    const publishedProjects = []
+
+    projectTypes.forEach((storageKey) => {
+      const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      const published = projects.filter((p) => p.status === 'Published')
+
+      published.forEach((p) => {
+        const firstImage = extractFirstImage(p.content)
+        publishedProjects.push({
+          id: p.id,
+          title: p.title || 'Untitled',
+          category: p.type
+            ? String(p.type).charAt(0).toUpperCase() + String(p.type).slice(1)
+            : 'Magazine',
+          cover: p.mediaUploaded || firstImage || '/images/lib-hd.jpg',
+          publishedAt: p.lastModified || p.createdAtISO || new Date().toISOString(),
+          content: p.content || '',
+          mediaUploaded: p.mediaUploaded || firstImage || '',
+          writers: p.writers || '',
+          artists: p.artists || '',
+          pages:
+            p.mediaUploaded && p.mediaUploaded.toLowerCase().endsWith('.pdf')
+              ? p.mediaUploaded
+              : null,
+        })
+      })
+    })
+
+    // Replace articles with published projects
+    articles.value = publishedProjects
+  }
+
+  // Load published projects
+  loadPublishedProjects()
+
+  // Also fetch from Supabase for backup
   ;(async () => {
     try {
       const { data, error } = await supabase
         .from('projects')
         .select('*')
+        .eq('status', 'Published')
         .order('created_at', { ascending: false })
       if (error) {
         console.error('Error fetching publications from Supabase', error)
@@ -118,19 +156,26 @@ onMounted(() => {
       }
 
       if (data && data.length) {
-        const mapped = data.map((p) => ({
-          id: p.id,
-          title: p.title || 'Untitled',
-          category: p.project_type
-            ? String(p.project_type).charAt(0).toUpperCase() + String(p.project_type).slice(1)
-            : 'Magazine',
-          cover: p.media_uploaded || '/images/lib-hd.jpg',
-          publishedAt: p.created_at || p.due_date || new Date().toISOString(),
-          pages:
-            p.media_uploaded && p.media_uploaded.toLowerCase().endsWith('.pdf')
-              ? p.media_uploaded
-              : null,
-        }))
+        const mapped = data.map((p) => {
+          const firstImage = extractFirstImage(p.content)
+          return {
+            id: p.id,
+            title: p.title || 'Untitled',
+            category: p.project_type
+              ? String(p.project_type).charAt(0).toUpperCase() + String(p.project_type).slice(1)
+              : 'Magazine',
+            cover: p.media_uploaded || firstImage || '/images/lib-hd.jpg',
+            publishedAt: p.created_at || p.due_date || new Date().toISOString(),
+            content: p.content || '',
+            mediaUploaded: p.media_uploaded || firstImage || '',
+            writers: p.writers || '',
+            artists: p.artists || '',
+            pages:
+              p.media_uploaded && p.media_uploaded.toLowerCase().endsWith('.pdf')
+                ? p.media_uploaded
+                : null,
+          }
+        })
 
         // Merge, avoiding duplicates by id
         mapped.forEach((m) => {
@@ -257,12 +302,18 @@ function scrollToPublications() {
               >
                 <v-card class="card" hover>
                   <v-img
-                    :src="a.cover"
+                    :src="a.cover || a.mediaUploaded || '/images/lib-hd.jpg'"
                     :alt="`${a.title} cover`"
                     class="cover"
                     aspect-ratio="1.2"
                     cover
-                  />
+                  >
+                    <template v-slot:error>
+                      <div class="cover-placeholder">
+                        <v-icon size="64" color="grey-lighten-2">mdi-image-outline</v-icon>
+                      </div>
+                    </template>
+                  </v-img>
                   <v-card-text class="meta">
                     <v-chip
                       :class="['category', a.category.toLowerCase()]"
@@ -375,18 +426,189 @@ function scrollToPublications() {
       </v-container>
     </v-sheet>
 
-    <!-- Flip overlay used for animated transition to deliverable view -->
-    <!-- FlipBook viewer (in-page modal) -->
-    <FlipBookViewer
-      v-model="viewerVisible"
-      :pages="viewerPages"
-      :title="viewerTitle"
-      :category="viewerCategory"
-    />
+    <!-- Content Viewer Dialog (Facebook-style post viewer) -->
+    <v-dialog v-model="viewerVisible" max-width="900px" scrollable>
+      <v-card class="content-viewer">
+        <v-card-title class="viewer-header">
+          <div class="header-content">
+            <v-chip
+              :color="
+                viewerCategory === 'Magazine'
+                  ? '#f5c52b'
+                  : viewerCategory === 'Folio'
+                    ? '#39acff'
+                    : '#353535'
+              "
+              class="category-chip"
+            >
+              {{ viewerCategory }}
+            </v-chip>
+            <v-spacer></v-spacer>
+            <v-btn icon @click="closeViewer" variant="text">
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </div>
+        </v-card-title>
+
+        <v-divider></v-divider>
+
+        <v-card-text class="viewer-body">
+          <!-- Post Header -->
+          <div class="post-header">
+            <div class="post-author">
+              <v-avatar color="primary" size="48">
+                <v-icon color="white">mdi-account</v-icon>
+              </v-avatar>
+              <div class="author-info">
+                <div class="author-name">{{ viewerAuthor }}</div>
+                <div class="post-date">
+                  {{
+                    new Date(viewerDate).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })
+                  }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Post Title -->
+          <h2 class="post-title">{{ viewerTitle }}</h2>
+
+          <!-- Post Media -->
+          <div v-if="viewerMedia" class="post-media">
+            <v-img :src="viewerMedia" :alt="viewerTitle" cover class="media-image"></v-img>
+          </div>
+
+          <!-- Post Content -->
+          <div class="post-content" v-html="viewerContent"></div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
 <style scoped>
+/* Content Viewer Styles */
+.content-viewer {
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+.viewer-header {
+  padding: 16px 20px !important;
+  background: #f8f9fa;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.category-chip {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.viewer-body {
+  padding: 0 !important;
+  background: white;
+}
+
+.post-header {
+  padding: 20px 24px 16px;
+  background: white;
+}
+
+.post-author {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.author-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.author-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #1f2937;
+}
+
+.post-date {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.post-title {
+  padding: 0 24px 16px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.post-media {
+  width: 100%;
+  max-height: 500px;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+.media-image {
+  width: 100%;
+  object-fit: contain;
+}
+
+.post-content {
+  padding: 24px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #374151;
+}
+
+.post-content :deep(p) {
+  margin-bottom: 16px;
+}
+
+.post-content :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.post-content :deep(h1),
+.post-content :deep(h2),
+.post-content :deep(h3) {
+  font-weight: 700;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  color: #1f2937;
+}
+
+.post-content :deep(ul),
+.post-content :deep(ol) {
+  padding-left: 24px;
+  margin-bottom: 16px;
+}
+
+.post-content :deep(blockquote) {
+  border-left: 4px solid #f5c52b;
+  padding-left: 16px;
+  margin: 16px 0;
+  font-style: italic;
+  color: #6b7280;
+}
+
 .hero {
   padding: 32px 12px 20px !important;
   text-align: center;
@@ -514,6 +736,15 @@ function scrollToPublications() {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
 }
 
 .meta {
