@@ -38,7 +38,11 @@ function openDeliverable(item, event) {
   viewerTitle.value = item.title
   viewerCategory.value = item.category || 'Magazine'
   viewerContent.value = item.content || ''
-  viewerMedia.value = item.cover || item.mediaUploaded || ''
+
+  // Don't show separate media if content already has images (from Quill editor)
+  const hasContentImages = item.content && item.content.includes('<img')
+  viewerMedia.value = hasContentImages ? '' : item.cover || item.mediaUploaded || ''
+
   viewerAuthor.value = item.writers || item.artists || 'The Gold Panicles'
   viewerDate.value = item.publishedAt || new Date().toISOString()
 
@@ -48,7 +52,7 @@ function openDeliverable(item, event) {
   } else if (typeof item.pages === 'string' && item.pages.toLowerCase().endsWith('.pdf')) {
     viewerPages.value = item.pages // FlipBookViewer will detect PDF string
   } else {
-    viewerPages.value = [item.cover, item.cover]
+    viewerPages.value = item.cover ? [item.cover] : []
   }
   viewerVisible.value = true
 }
@@ -64,13 +68,21 @@ function closeViewer() {
   viewerCategory.value = 'Magazine'
 }
 
-// Extract first image from HTML content
+// Extract first image from HTML content (including base64 images from Quill editor)
 const extractFirstImage = (htmlContent) => {
   if (!htmlContent) return null
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(htmlContent, 'text/html')
-  const img = doc.querySelector('img')
-  return img ? img.src : null
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(htmlContent, 'text/html')
+    const img = doc.querySelector('img')
+    if (img && img.src) {
+      // Return the image src (works with both URLs and base64 data URIs)
+      return img.src
+    }
+  } catch (error) {
+    console.error('Error extracting image:', error)
+  }
+  return null
 }
 
 // Prevent back navigation to dashboard
@@ -115,16 +127,18 @@ onMounted(() => {
 
       published.forEach((p) => {
         const firstImage = extractFirstImage(p.content)
+        const coverImage = firstImage || p.mediaUploaded || '/images/lib-hd.jpg'
+
         publishedProjects.push({
           id: p.id,
           title: p.title || 'Untitled',
           category: p.type
             ? String(p.type).charAt(0).toUpperCase() + String(p.type).slice(1)
             : 'Magazine',
-          cover: p.mediaUploaded || firstImage || '/images/lib-hd.jpg',
+          cover: coverImage,
           publishedAt: p.lastModified || p.createdAtISO || new Date().toISOString(),
           content: p.content || '',
-          mediaUploaded: p.mediaUploaded || firstImage || '',
+          mediaUploaded: firstImage || p.mediaUploaded || '',
           writers: p.writers || '',
           artists: p.artists || '',
           pages:
@@ -165,16 +179,18 @@ onMounted(() => {
       if (data && data.length) {
         const mapped = data.map((p) => {
           const firstImage = extractFirstImage(p.content)
+          const coverImage = firstImage || p.media_uploaded || '/images/lib-hd.jpg'
+
           return {
             id: p.id,
             title: p.title || 'Untitled',
             category: p.project_type
               ? String(p.project_type).charAt(0).toUpperCase() + String(p.project_type).slice(1)
               : 'Magazine',
-            cover: p.media_uploaded || firstImage || '/images/lib-hd.jpg',
+            cover: coverImage,
             publishedAt: p.created_at || p.due_date || new Date().toISOString(),
             content: p.content || '',
-            mediaUploaded: p.media_uploaded || firstImage || '',
+            mediaUploaded: firstImage || p.media_uploaded || '',
             writers: p.writers || '',
             artists: p.artists || '',
             pages:
