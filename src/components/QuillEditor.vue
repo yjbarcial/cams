@@ -26,6 +26,14 @@ const props = defineProps({
     type: String,
     default: 'magazine',
   },
+  disableImages: {
+    type: Boolean,
+    default: false,
+  },
+  textOnly: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits([
@@ -61,20 +69,22 @@ const quillOptions = {
   placeholder: props.placeholder,
   readOnly: props.readOnly,
   modules: {
-    toolbar: [
-      [{ header: [1, 2, 3, 4, 5, 6, false] }],
-      [{ font: [] }],
-      [{ size: ['small', false, 'large', 'huge'] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ color: [] }, { background: [] }],
-      [{ script: 'sub' }, { script: 'super' }],
-      [{ list: 'ordered' }, { list: 'bullet' }],
-      [{ indent: '-1' }, { indent: '+1' }],
-      [{ align: [] }],
-      ['blockquote', 'code-block'],
-      ['link', 'image', 'video'],
-      ['clean'],
-    ],
+    toolbar: props.textOnly
+      ? [['bold', 'italic', 'underline'], [{ list: 'ordered' }, { list: 'bullet' }], ['clean']]
+      : [
+          [{ header: [1, 2, 3, 4, 5, 6, false] }],
+          [{ font: [] }],
+          [{ size: ['small', false, 'large', 'huge'] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ color: [] }, { background: [] }],
+          [{ script: 'sub' }, { script: 'super' }],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          [{ indent: '-1' }, { indent: '+1' }],
+          [{ align: [] }],
+          ['blockquote', 'code-block'],
+          ['link', 'image', 'video'],
+          ['clean'],
+        ],
     history: {
       delay: 2000,
       maxStack: 500,
@@ -1009,6 +1019,15 @@ const showNotification = (message, type = 'warning') => {
 
 // Local image upload handler
 const selectLocalImage = () => {
+  // Check if image uploads are disabled for this role
+  if (props.disableImages) {
+    showNotification(
+      'Image upload is disabled for Technical Editor role. Only Creative Director (Artists) can upload images.',
+      'warning',
+    )
+    return
+  }
+
   const input = document.createElement('input')
   input.setAttribute('type', 'file')
   input.setAttribute('accept', 'image/*')

@@ -23,21 +23,21 @@ const projectId = route.params.id
 const projectType = ref('magazine')
 
 // User role - TECHNICAL EDITOR OR CREATIVE DIRECTOR
+// This file handles BOTH roles - the status determines which role is currently active
 const currentUserRole = computed(() => {
-  const hasWriter =
-    project.value?.writers &&
-    project.value.writers !== 'Not assigned' &&
-    project.value.writers.trim() !== ''
-  const hasArtist =
-    project.value?.artists &&
-    project.value.artists !== 'Not assigned' &&
-    project.value.artists.trim() !== ''
+  const status = project.value?.status
 
-  // If only artist (no writer), use Creative Director
-  if (hasArtist && !hasWriter) {
+  // Status-based role determination:
+  // - to_technical_editor = Technical Editor (Writer) - NO image upload
+  // - to_creative_director = Creative Director (Artist) - CAN upload images
+
+  if (status === 'to_creative_director') {
+    console.log('✅ Role: Creative Director (Artist) - Image upload ENABLED')
     return 'Creative Director'
   }
-  // Otherwise use Technical Editor (for writers or default)
+
+  // Default to Technical Editor for all other statuses
+  console.log('✅ Role: Technical Editor (Writer) - Image upload DISABLED')
   return 'Technical Editor'
 })
 const currentUser = ref('Technical Editor User')
@@ -814,6 +814,7 @@ onMounted(() => {
                 ref="quillEditorRef"
                 v-model="editorContent"
                 :read-only="false"
+                :disable-images="currentUserRole === 'Technical Editor'"
                 :project-id="projectId"
                 :project-type="projectType"
                 height="500px"
