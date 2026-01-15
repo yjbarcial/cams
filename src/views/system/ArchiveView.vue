@@ -135,6 +135,13 @@ onMounted(() => {
       })
     })
 
+    // Sort by most recent first (by publishedAt date)
+    publishedProjects.sort((a, b) => {
+      const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0
+      const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0
+      return dateB - dateA // Most recent first
+    })
+
     // Replace articles with published projects
     articles.value = publishedProjects
   }
@@ -183,6 +190,13 @@ onMounted(() => {
             (a) => String(a.id) === String(m.id) || a.title === m.title,
           )
           if (!exists) articles.value.unshift(m)
+        })
+
+        // Sort the final merged array by most recent first
+        articles.value.sort((a, b) => {
+          const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0
+          const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0
+          return dateB - dateA // Most recent first
         })
       }
     } catch (err) {
@@ -748,11 +762,11 @@ function scrollToPublications() {
 }
 
 .meta {
-  padding: 12px 16px 16px !important;
+  padding: 10px 12px 12px !important;
   flex-grow: 1 !important;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 }
 
 .category {
@@ -788,7 +802,7 @@ function scrollToPublications() {
 .article-title {
   margin: 0;
   font-size: 15px !important;
-  line-height: 1.4 !important;
+  line-height: 1.3 !important;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -796,7 +810,6 @@ function scrollToPublications() {
   overflow: hidden;
   color: #2c3e50;
   font-weight: 600;
-  min-height: 42px;
 }
 
 /* Flip overlay styles */
@@ -845,7 +858,16 @@ function scrollToPublications() {
   color: #7f8c8d !important;
   padding: 0 !important;
   font-weight: 500;
-  margin-top: auto;
+  margin-top: 0 !important;
+}
+
+/* Override Vuetify default padding for compact cards */
+.meta :deep(.v-card-title) {
+  padding: 0 !important;
+}
+
+.meta :deep(.v-card-text.date) {
+  padding: 0 !important;
 }
 
 @media (max-width: 960px) {
