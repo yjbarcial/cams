@@ -16,6 +16,15 @@ const router = useRouter()
 const notifications = ref([])
 const visibleCount = ref(10) // Show 10 notifications initially
 
+// Archive viewer state
+const viewerVisible = ref(false)
+const viewerTitle = ref('')
+const viewerCategory = ref('Magazine')
+const viewerContent = ref('')
+const viewerMedia = ref('')
+const viewerAuthor = ref('')
+const viewerDate = ref('')
+
 const loadNotifications = () => {
   notifications.value = getNotifications()
 }
@@ -58,7 +67,86 @@ const formatTimestamp = (timestamp) => {
   }
 }
 
-const handleAction = (notification, actionType) => {
+const handleNotificationClick = (notification) => {
+  // Mark notification as read when user clicks on it
+  if (!notification.isRead) {
+    markAsRead(notification.id)
+    notification.isRead = true
+  }
+
+  // Check if project exists
+  if (notification.projectId && notification.projectType) {
+    // First try the specified storage key
+    let storageKey = `${notification.projectType}_projects`
+    let projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
+    let project = projects.find((p) => String(p.id) === String(notification.projectId))
+
+    // If not found, search in all storage keys
+    if (!project) {
+      const allStorageKeys = [
+        'magazine_projects',
+        'newsletter_projects',
+        'folio_projects',
+        'other_projects',
+        'social-media_projects',
+      ]
+
+      for (const key of allStorageKeys) {
+        projects = JSON.parse(localStorage.getItem(key) || '[]')
+        project = projects.find((p) => String(p.id) === String(notification.projectId))
+        if (project) {
+          // Update the storage key to the one where we found it
+          storageKey = key
+          break
+        }
+      }
+    }
+
+    if (project) {
+      // If project is published, show in archive viewer
+      if (project.status === 'Published') {
+        openProjectViewer(project, notification.projectType)
+      } else {
+        // Otherwise navigate to project view
+        router.push(`/project/${notification.projectId}?type=${notification.projectType}`)
+      }
+    } else {
+      // Project not found
+      alert('Project not found. It may have been deleted.')
+    }
+  }
+}
+
+const openProjectViewer = (project, projectType) => {
+  viewerTitle.value = project.title || 'Untitled'
+  viewerCategory.value = projectType
+    ? String(projectType).charAt(0).toUpperCase() + String(projectType).slice(1)
+    : 'Magazine'
+  viewerContent.value = project.content || ''
+
+  // Check if content has images
+  const hasContentImages = project.content && project.content.includes('<img')
+  viewerMedia.value = hasContentImages ? '' : project.mediaUploaded || ''
+
+  viewerAuthor.value = project.writers || project.artists || 'The Gold Panicles'
+  viewerDate.value = project.lastModified || new Date().toISOString()
+  viewerVisible.value = true
+}
+
+const closeViewer = () => {
+  viewerVisible.value = false
+  viewerTitle.value = ''
+  viewerContent.value = ''
+  viewerMedia.value = ''
+  viewerAuthor.value = ''
+  viewerDate.value = ''
+  viewerCategory.value = 'Magazine'
+}
+
+const handleAction = (notification, actionType, event) => {
+  // Stop propagation to prevent card click
+  event.stopPropagation()
+
   // Mark notification as read when user interacts with it
   if (!notification.isRead) {
     markAsRead(notification.id)
@@ -67,14 +155,6 @@ const handleAction = (notification, actionType) => {
 
   // Handle the action logic
   switch (actionType) {
-    case 'view':
-      // Navigate to project if projectId exists
-      if (notification.projectId && notification.projectType) {
-        // Determine route based on project status
-        // For now, navigate to project view
-        router.push(`/project/${notification.projectId}?type=${notification.projectType}`)
-      }
-      break
     case 'accept':
       // Handle accept action
       console.log('Accept action for notification:', notification.id)
@@ -88,7 +168,10 @@ const handleAction = (notification, actionType) => {
   }
 }
 
-const handleDelete = (notificationId) => {
+const handleDelete = (notificationId, event) => {
+  // Stop propagation to prevent card click
+  event.stopPropagation()
+
   if (confirm('Are you sure you want to delete this notification?')) {
     deleteNotification(notificationId)
     loadNotifications()
@@ -150,6 +233,7 @@ onMounted(() => {
               :key="notification.id"
               class="notification-item"
               :class="{ unread: !notification.isRead }"
+              @click="handleNotificationClick(notification)"
             >
               <div class="notification-indicator" v-if="!notification.isRead"></div>
 
@@ -169,7 +253,7 @@ onMounted(() => {
                     icon
                     size="x-small"
                     variant="text"
-                    @click="handleDelete(notification.id)"
+                    @click="handleDelete(notification.id, $event)"
                     class="delete-btn"
                   >
                     <v-icon size="16">mdi-close</v-icon>
@@ -181,17 +265,20 @@ onMounted(() => {
                   <p class="notification-description">{{ notification.description }}</p>
                 </div>
 
-                <div class="notification-footer">
+                <div
+                  class="notification-footer"
+                  v-if="notification.actions && notification.actions.some((a) => a.type !== 'view')"
+                >
                   <div class="notification-actions">
                     <v-btn
-                      v-for="action in notification.actions"
+                      v-for="action in notification.actions.filter((a) => a.type !== 'view')"
                       :key="action.label"
                       class="action-btn"
                       :class="action.type"
                       :style="{ borderColor: action.color, color: action.color }"
                       variant="outlined"
                       size="small"
-                      @click="handleAction(notification, action.type)"
+                      @click="handleAction(notification, action.type, $event)"
                     >
                       {{ action.label }}
                     </v-btn>
@@ -216,6 +303,68 @@ onMounted(() => {
         </div>
       </v-container>
     </v-main>
+
+    <!-- Archive Viewer Dialog for Published Projects -->
+    <v-dialog v-model="viewerVisible" max-width="900px" scrollable>
+      <v-card class="content-viewer">
+        <v-card-title class="viewer-header">
+          <div class="header-content">
+            <v-chip
+              :color="
+                viewerCategory === 'Magazine'
+                  ? '#f5c52b'
+                  : viewerCategory === 'Folio'
+                    ? '#39acff'
+                    : '#353535'
+              "
+              class="category-chip"
+            >
+              {{ viewerCategory }}
+            </v-chip>
+            <v-spacer></v-spacer>
+            <v-btn icon @click="closeViewer" variant="text">
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </div>
+        </v-card-title>
+
+        <v-divider></v-divider>
+
+        <v-card-text class="viewer-body">
+          <!-- Post Header -->
+          <div class="post-header">
+            <div class="post-author">
+              <v-avatar color="primary" size="48">
+                <v-icon color="white">mdi-account</v-icon>
+              </v-avatar>
+              <div class="author-info">
+                <div class="author-name">{{ viewerAuthor }}</div>
+                <div class="post-date">
+                  {{
+                    new Date(viewerDate).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })
+                  }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Post Title -->
+          <h2 class="post-title">{{ viewerTitle }}</h2>
+
+          <!-- Post Media -->
+          <div v-if="viewerMedia" class="post-media">
+            <v-img :src="viewerMedia" :alt="viewerTitle" cover class="media-image"></v-img>
+          </div>
+
+          <!-- Post Content -->
+          <div class="post-content" v-html="viewerContent"></div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
 
     <Footer />
   </v-app>
@@ -324,6 +473,7 @@ onMounted(() => {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   border: 1px solid #f3f4f6;
+  cursor: pointer;
 }
 
 .notification-item:hover {
@@ -521,6 +671,124 @@ onMounted(() => {
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Archive Viewer Styles */
+.content-viewer {
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+.viewer-header {
+  padding: 16px 20px !important;
+  background: #f8f9fa;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.category-chip {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.viewer-body {
+  padding: 0 !important;
+  background: white;
+}
+
+.post-header {
+  padding: 20px 24px 16px;
+  background: white;
+}
+
+.post-author {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.author-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.author-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #1f2937;
+}
+
+.post-date {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.post-title {
+  padding: 0 24px 16px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.post-media {
+  width: 100%;
+  max-height: 500px;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+.media-image {
+  width: 100%;
+  object-fit: contain;
+}
+
+.post-content {
+  padding: 24px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #374151;
+}
+
+.post-content :deep(p) {
+  margin-bottom: 16px;
+}
+
+.post-content :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.post-content :deep(h1),
+.post-content :deep(h2),
+.post-content :deep(h3) {
+  font-weight: 700;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  color: #1f2937;
+}
+
+.post-content :deep(ul),
+.post-content :deep(ol) {
+  padding-left: 24px;
+  margin-bottom: 16px;
+}
+
+.post-content :deep(blockquote) {
+  border-left: 4px solid #f5c52b;
+  padding-left: 16px;
+  margin: 16px 0;
+  font-style: italic;
+  color: #6b7280;
 }
 
 /* Responsive design */
