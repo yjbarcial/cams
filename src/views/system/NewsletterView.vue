@@ -135,6 +135,9 @@ const getCreatedMs = (p) => {
 const filteredProjects = computed(() => {
   let filtered = projects.value
 
+  // Filter out published projects (they're in Archive now)
+  filtered = filtered.filter((project) => project.status !== 'Published')
+
   // Filter by search query
   if (searchQuery.value) {
     filtered = filtered.filter(
