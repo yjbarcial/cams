@@ -14,7 +14,8 @@ const router = useRouter()
 
 // Load notifications from service
 const notifications = ref([])
-const visibleCount = ref(10) // Show 10 notifications initially
+// Restore visible count from localStorage, default to 10
+const visibleCount = ref(parseInt(localStorage.getItem('notifications_visible_count')) || 10)
 
 // Archive viewer state
 const viewerVisible = ref(false)
@@ -27,6 +28,11 @@ const viewerDate = ref('')
 
 const loadNotifications = () => {
   notifications.value = getNotifications()
+  // Update visible count if it exceeds total notifications
+  if (visibleCount.value > notifications.value.length) {
+    visibleCount.value = notifications.value.length
+    localStorage.setItem('notifications_visible_count', notifications.value.length.toString())
+  }
 }
 
 // Show only limited notifications
@@ -42,6 +48,8 @@ const hasMore = computed(() => {
 // Show all notifications
 const showMore = () => {
   visibleCount.value = notifications.value.length
+  // Save expanded state to localStorage
+  localStorage.setItem('notifications_visible_count', notifications.value.length.toString())
 }
 
 const formatTimestamp = (timestamp) => {
@@ -107,8 +115,39 @@ const handleNotificationClick = (notification) => {
       if (project.status === 'Published') {
         openProjectViewer(project, notification.projectType)
       } else {
-        // Otherwise navigate to project view
-        router.push(`/project/${notification.projectId}?type=${notification.projectType}`)
+        // Route based on project status to the correct view
+        const projectId = notification.projectId
+        const projectType = notification.projectType
+
+        if (project.status === 'draft' || project.status === 'returned_by_section_head') {
+          router.push(`/project/${projectId}?type=${projectType}`)
+        } else if (
+          project.status === 'to_section_head' ||
+          project.status === 'returned_by_technical_editor' ||
+          project.status === 'returned_by_creative_director'
+        ) {
+          router.push(`/section-head/${projectId}?type=${projectType}`)
+        } else if (
+          project.status === 'to_technical_editor' ||
+          project.status === 'to_creative_director'
+        ) {
+          router.push(`/technical-editor/${projectId}?type=${projectType}`)
+        } else if (
+          project.status === 'to_editor_in_chief' ||
+          project.status === 'returned_by_chief_adviser' ||
+          project.status === 'Returned by Chief Adviser'
+        ) {
+          router.push(`/editor-in-chief/${projectId}?type=${projectType}`)
+        } else if (project.status === 'For Publish') {
+          router.push(`/archival-manager/${projectId}?type=${projectType}`)
+        } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
+          router.push(`/chief-adviser/${projectId}?type=${projectType}`)
+        } else if (project.status === 'EIC Approved') {
+          router.push(`/project/${projectId}?type=${projectType}`)
+        } else {
+          // Default to project view
+          router.push(`/project/${projectId}?type=${projectType}`)
+        }
       }
     } else {
       // Project not found
