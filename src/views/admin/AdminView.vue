@@ -70,26 +70,30 @@ const formatStatus = (status) => {
 const getStatusColor = (status) => {
   if (!status) return 'grey'
 
-  const statusLower = status.toLowerCase()
+  const statusColors = {
+    draft: 'grey',
+    to_section_head: 'orange',
+    returned_by_section_head: 'amber',
+    to_technical_editor: 'blue',
+    to_creative_director: 'cyan',
+    returned_by_technical_editor: 'deep-orange',
+    returned_by_creative_director: 'deep-orange',
+    to_editor_in_chief: 'indigo',
+    'Returned by EIC': 'pink',
+    returned_by_eic: 'pink',
+    'EIC Approved': 'light-green',
+    'To Chief Adviser': 'deep-purple',
+    'Adviser Review': 'purple',
+    'Returned by Chief Adviser': 'brown',
+    returned_by_chief_adviser: 'brown',
+    'For Publish': 'teal',
+    for_publish: 'teal',
+    Published: 'green',
+    published: 'green',
+    rejected: 'red',
+  }
 
-  if (statusLower === 'draft') return 'grey'
-  if (statusLower === 'to_section_head' || statusLower.includes('section head')) return 'orange'
-  if (statusLower === 'to_technical_editor' || statusLower.includes('technical editor'))
-    return 'blue'
-  if (statusLower === 'to_creative_director' || statusLower.includes('creative director'))
-    return 'blue'
-  if (
-    statusLower === 'to_editor_in_chief' ||
-    statusLower.includes('editor-in-chief') ||
-    statusLower.includes('editor in chief')
-  )
-    return 'red'
-  if (statusLower === 'to_chief_adviser' || statusLower.includes('chief adviser')) return 'brown'
-  if (statusLower === 'for publish' || statusLower === 'for_publish') return 'teal'
-  if (statusLower === 'published') return 'success'
-  if (statusLower.includes('returned')) return 'warning'
-
-  return 'default'
+  return statusColors[status] || 'default'
 }
 
 // ⭐ CLEANED: Function to load only real projects from localStorage and Supabase
