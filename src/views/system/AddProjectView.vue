@@ -187,7 +187,7 @@ const assignProject = () => {
     createdBy: 'Current User',
     created_at: createdAtISO,
     description: description.value.trim() || 'No description provided',
-    status: 'Draft',
+    status: 'draft',
     content: '',
     lastModified: new Date().toLocaleString(),
     mediaUploaded: 'No media',

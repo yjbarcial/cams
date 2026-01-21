@@ -472,7 +472,7 @@ const loadProjectData = () => {
               ...foundProject,
               id: String(projectId),
               title: foundProject.title || 'Untitled Project',
-              status: foundProject.status || 'Draft',
+              status: foundProject.status || 'draft',
               lastModified: foundProject.lastModified || new Date().toLocaleString(),
               content: foundProject.content || '',
             }
@@ -499,7 +499,7 @@ const loadProjectData = () => {
             ...foundProject,
             id: String(projectId),
             title: foundProject.title || 'Untitled Project',
-            status: foundProject.status || 'Draft',
+            status: foundProject.status || 'draft',
             lastModified: foundProject.lastModified || new Date().toLocaleString(),
             content: foundProject.content || '',
           }
@@ -532,7 +532,7 @@ const loadProjectData = () => {
           ...foundProject,
           id: String(projectId),
           title: foundProject.title || 'Untitled Project',
-          status: foundProject.status || 'Draft',
+          status: foundProject.status || 'draft',
           lastModified: foundProject.lastModified || new Date().toLocaleString(),
           content: foundProject.content || '',
         }

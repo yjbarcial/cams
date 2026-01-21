@@ -134,6 +134,9 @@ export const createProjectVersion = async (
       // Map priority to lowercase to match ENUM
       const mappedPriority = (projectData.priority || 'medium').toLowerCase()
 
+      // Normalize status to lowercase and replace spaces with underscores to match ENUM values
+      const normalizedStatus = (projectData.status || 'draft').toLowerCase().replace(/\s+/g, '_')
+
       // Get current user ID
       const currentUserId = await getCurrentUserId()
 
@@ -141,7 +144,7 @@ export const createProjectVersion = async (
         title: projectData.title,
         description: projectData.description,
         project_type: mappedProjectType,
-        status: projectData.status || 'draft',
+        status: normalizedStatus,
         priority: mappedPriority,
         start_date: projectData.startDate
           ? new Date(projectData.startDate).toISOString().split('T')[0]
@@ -340,7 +343,7 @@ export const restoreProjectVersion = async (projectType, projectId, versionId) =
         title: version.data.title,
         description: version.data.description,
         content: version.data.content,
-        status: version.data.status,
+        status: (version.data.status || 'draft').toLowerCase().replace(/\s+/g, '_'),
         section_head: version.data.sectionHead,
         writers: version.data.writers,
         artists: version.data.artists,
