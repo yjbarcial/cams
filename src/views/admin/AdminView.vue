@@ -66,6 +66,36 @@ const formatStatus = (status) => {
   return formatted
 }
 
+// Get status color matching workflow views
+const getStatusColor = (status) => {
+  if (!status) return 'grey'
+
+  const statusColors = {
+    draft: 'grey',
+    to_section_head: 'orange',
+    returned_by_section_head: 'amber',
+    to_technical_editor: 'blue',
+    to_creative_director: 'cyan',
+    returned_by_technical_editor: 'deep-orange',
+    returned_by_creative_director: 'deep-orange',
+    to_editor_in_chief: 'indigo',
+    'Returned by EIC': 'pink',
+    returned_by_eic: 'pink',
+    'EIC Approved': 'light-green',
+    'To Chief Adviser': 'deep-purple',
+    'Adviser Review': 'purple',
+    'Returned by Chief Adviser': 'brown',
+    returned_by_chief_adviser: 'brown',
+    'For Publish': 'teal',
+    for_publish: 'teal',
+    Published: 'green',
+    published: 'green',
+    rejected: 'red',
+  }
+
+  return statusColors[status] || 'default'
+}
+
 // ⭐ CLEANED: Function to load only real projects from localStorage and Supabase
 const loadAllProjects = () => {
   const magazineProjects = JSON.parse(localStorage.getItem('magazine_projects') || '[]')
@@ -413,67 +443,83 @@ const performClearClientData = async () => {
         <!-- Dashboard Overview -->
         <v-row>
           <v-col cols="12">
-            <v-card class="mb-6">
-              <v-card-title
-                class="text-h5 font-weight-bold d-flex justify-space-between align-center"
-              >
-                <div class="d-flex align-center">
-                  <v-icon class="mr-2" color="primary">mdi-view-dashboard</v-icon>
-                  CAMS Admin Dashboard
-                </div>
-                <div>
-                  <v-btn color="error" variant="outlined" small @click="showClearDialog = true">
-                    <v-icon left>mdi-delete-alert</v-icon>
+            <v-card class="dashboard-header mb-6" elevation="2">
+              <v-card-title class="px-6 py-5">
+                <div class="d-flex justify-space-between align-center flex-wrap">
+                  <div class="d-flex align-center mb-2 mb-md-0">
+                    <div class="icon-wrapper primary">
+                      <v-icon size="28" color="white">mdi-view-dashboard</v-icon>
+                    </div>
+                    <div class="ml-3">
+                      <div class="text-h5 font-weight-bold">Admin Dashboard</div>
+                      <div class="text-caption text-grey">Content & Archival Management System</div>
+                    </div>
+                  </div>
+                  <v-btn
+                    color="error"
+                    variant="outlined"
+                    @click="showClearDialog = true"
+                    class="clear-btn"
+                  >
+                    <v-icon start>mdi-delete-alert</v-icon>
                     Clear Local Data
                   </v-btn>
                 </div>
               </v-card-title>
-              <v-card-text>
-                <v-row>
+              <v-card-text class="px-6 pb-6">
+                <v-row class="stats-cards">
                   <!-- Stats Cards -->
                   <v-col cols="12" sm="6" md="3">
-                    <v-card class="pa-4" color="primary" dark elevation="4">
-                      <div class="d-flex align-center">
-                        <v-icon size="36" class="mr-3">mdi-account-group</v-icon>
-                        <div>
-                          <div class="text-h4 mb-2">{{ statistics.totalUsers }}</div>
-                          <div class="text-subtitle-1">Total Users</div>
+                    <v-card class="stat-card stat-card-primary" elevation="0">
+                      <div class="stat-card-content">
+                        <div class="stat-icon-wrapper">
+                          <v-icon size="40" color="white">mdi-account-group</v-icon>
+                        </div>
+                        <div class="stat-info">
+                          <div class="stat-value">{{ statistics.totalUsers }}</div>
+                          <div class="stat-label">Total Users</div>
                         </div>
                       </div>
                     </v-card>
                   </v-col>
 
                   <v-col cols="12" sm="6" md="3">
-                    <v-card class="pa-4" color="success" dark elevation="4">
-                      <div class="d-flex align-center">
-                        <v-icon size="36" class="mr-3">mdi-account-check</v-icon>
-                        <div>
-                          <div class="text-h4 mb-2">{{ statistics.activeUsers }}</div>
-                          <div class="text-subtitle-1">Active Users</div>
+                    <v-card class="stat-card stat-card-success" elevation="0">
+                      <div class="stat-card-content">
+                        <div class="stat-icon-wrapper">
+                          <v-icon size="40" color="white">mdi-account-check</v-icon>
+                        </div>
+                        <div class="stat-info">
+                          <div class="stat-value">{{ statistics.activeUsers }}</div>
+                          <div class="stat-label">Active Users</div>
                         </div>
                       </div>
                     </v-card>
                   </v-col>
 
                   <v-col cols="12" sm="6" md="3">
-                    <v-card class="pa-4" color="info" dark elevation="4">
-                      <div class="d-flex align-center">
-                        <v-icon size="36" class="mr-3">mdi-folder-multiple</v-icon>
-                        <div>
-                          <div class="text-h4 mb-2">{{ statistics.totalProjects }}</div>
-                          <div class="text-subtitle-1">Total Projects</div>
+                    <v-card class="stat-card stat-card-info" elevation="0">
+                      <div class="stat-card-content">
+                        <div class="stat-icon-wrapper">
+                          <v-icon size="40" color="white">mdi-folder-multiple</v-icon>
+                        </div>
+                        <div class="stat-info">
+                          <div class="stat-value">{{ statistics.totalProjects }}</div>
+                          <div class="stat-label">Total Projects</div>
                         </div>
                       </div>
                     </v-card>
                   </v-col>
 
                   <v-col cols="12" sm="6" md="3">
-                    <v-card class="pa-4" color="warning" dark elevation="4">
-                      <div class="d-flex align-center">
-                        <v-icon size="36" class="mr-3">mdi-file-document-multiple</v-icon>
-                        <div>
-                          <div class="text-h4 mb-2">{{ statistics.totalSubmissions }}</div>
-                          <div class="text-subtitle-1">Total Submissions</div>
+                    <v-card class="stat-card stat-card-warning" elevation="0">
+                      <div class="stat-card-content">
+                        <div class="stat-icon-wrapper">
+                          <v-icon size="40" color="white">mdi-file-document-multiple</v-icon>
+                        </div>
+                        <div class="stat-info">
+                          <div class="stat-value">{{ statistics.totalSubmissions }}</div>
+                          <div class="stat-label">Total Submissions</div>
                         </div>
                       </div>
                     </v-card>
@@ -481,25 +527,30 @@ const performClearClientData = async () => {
                 </v-row>
 
                 <!-- Recent Activity - Fixed Tables -->
-                <v-row class="mt-4">
+                <v-row class="mt-6">
                   <v-col cols="12">
-                    <v-card>
-                      <v-card-title class="text-h6 d-flex justify-space-between align-center">
-                        <div>
-                          <v-icon class="mr-2" color="primary">mdi-folder-multiple</v-icon>
-                          All Projects
+                    <v-card class="data-table-card" elevation="2">
+                      <v-card-title class="table-header px-6 py-4">
+                        <div class="d-flex justify-space-between align-center w-100">
+                          <div class="d-flex align-center">
+                            <div class="icon-wrapper-small primary">
+                              <v-icon size="20" color="white">mdi-folder-multiple</v-icon>
+                            </div>
+                            <span class="text-h6 font-weight-bold ml-3">All Projects</span>
+                          </div>
+                          <v-btn
+                            variant="text"
+                            color="#757575"
+                            @click="fetchAllRecords('projects')"
+                            class="view-details-btn"
+                          >
+                            View Details
+                            <v-icon end size="18">mdi-chevron-right</v-icon>
+                          </v-btn>
                         </div>
-                        <v-btn
-                          variant="text"
-                          color="primary"
-                          @click="fetchAllRecords('projects')"
-                          class="text-none"
-                        >
-                          View Details
-                          <v-icon end>mdi-chevron-right</v-icon>
-                        </v-btn>
                       </v-card-title>
-                      <v-card-text>
+                      <v-divider></v-divider>
+                      <v-card-text class="pa-0">
                         <v-table>
                           <thead>
                             <tr>
@@ -520,18 +571,7 @@ const performClearClientData = async () => {
                               <td>{{ project.title }}</td>
                               <td>{{ project.type }}</td>
                               <td>
-                                <v-chip
-                                  :color="
-                                    project.status === 'Published' ||
-                                    project.status === 'To Publish'
-                                      ? 'success'
-                                      : project.status.includes('Review') ||
-                                          project.status.includes('Editor')
-                                        ? 'warning'
-                                        : 'default'
-                                  "
-                                  size="small"
-                                >
+                                <v-chip :color="getStatusColor(project.status)" size="small">
                                   {{ formatStatus(project.status) }}
                                 </v-chip>
                               </td>
@@ -550,12 +590,12 @@ const performClearClientData = async () => {
                     <v-card>
                       <v-card-title class="text-h6 d-flex justify-space-between align-center">
                         <div>
-                          <v-icon class="mr-2" color="primary">mdi-file-document-multiple</v-icon>
+                          <v-icon class="mr-2" color="#757575">mdi-file-document-multiple</v-icon>
                           All Submissions
                         </div>
                         <v-btn
                           variant="text"
-                          color="primary"
+                          color="#757575"
                           @click="fetchAllRecords('submissions')"
                           class="text-none"
                         >
@@ -683,14 +723,7 @@ const performClearClientData = async () => {
                             <td>
                               <v-chip
                                 v-if="showAllType === 'projects'"
-                                :color="
-                                  record.status === 'Published' || record.status === 'To Publish'
-                                    ? 'success'
-                                    : record.status.includes('Review') ||
-                                        record.status.includes('Editor')
-                                      ? 'warning'
-                                      : 'default'
-                                "
+                                :color="getStatusColor(record.status)"
                                 size="small"
                               >
                                 {{ formatStatus(record.status) }}
@@ -714,10 +747,18 @@ const performClearClientData = async () => {
         <v-row>
           <v-col cols="12">
             <v-card>
-              <v-tabs v-model="activeTab" color="primary">
-                <v-tab value="users">User Management</v-tab>
-                <v-tab value="content">Content Management</v-tab>
+              <v-tabs v-model="activeTab" bg-color="#fafafa" color="#f5c52b">
+                <v-tab value="users">
+                  <v-icon start size="20" color="#424242">mdi-account-group</v-icon>
+                  User Management
+                </v-tab>
+                <v-tab value="content">
+                  <v-icon start size="20" color="#424242">mdi-folder-multiple</v-icon>
+                  Content Management
+                </v-tab>
               </v-tabs>
+
+              <v-divider></v-divider>
 
               <v-window v-model="activeTab">
                 <!-- User Management Tab -->
@@ -745,10 +786,14 @@ const performClearClientData = async () => {
                           hide-details
                         ></v-select>
                       </v-col>
-                      <v-col cols="12" md="3" class="d-flex justify-end">
-                        <v-btn color="primary" @click="showAddUserDialog = true">
-                          <v-icon left>mdi-plus</v-icon>
-                          Add User
+                      <v-col cols="12" md="5" class="d-flex justify-end">
+                        <v-btn
+                          color="#f5c52b"
+                          class="add-user-btn"
+                          @click="showAddUserDialog = true"
+                        >
+                          <v-icon start color="#2c3e50">mdi-plus-circle</v-icon>
+                          <span style="color: #2c3e50">Add User</span>
                         </v-btn>
                       </v-col>
                     </v-row>
@@ -789,10 +834,15 @@ const performClearClientData = async () => {
                     <!-- Add User Dialog -->
                     <v-dialog v-model="showAddUserDialog" max-width="600">
                       <v-card>
-                        <v-card-title class="text-h6">
-                          <v-icon class="mr-2">mdi-account-plus</v-icon>
-                          Add New User
+                        <v-card-title class="dialog-title-admin">
+                          <div class="d-flex align-center">
+                            <div class="dialog-icon-admin">
+                              <v-icon size="24" color="white">mdi-account-plus</v-icon>
+                            </div>
+                            <span class="ml-3 text-h6">Add New User</span>
+                          </div>
                         </v-card-title>
+                        <v-divider></v-divider>
                         <v-card-text>
                           <v-text-field
                             v-model="newUser.full_name"
@@ -825,8 +875,12 @@ const performClearClientData = async () => {
                         </v-card-text>
                         <v-card-actions>
                           <v-spacer></v-spacer>
-                          <v-btn variant="text" @click="showAddUserDialog = false">Cancel</v-btn>
-                          <v-btn color="primary" @click="addUser">Add User</v-btn>
+                          <v-btn variant="text" @click="showAddUserDialog = false" color="#757575">
+                            Cancel
+                          </v-btn>
+                          <v-btn color="#f5c52b" @click="addUser" class="px-6">
+                            <span style="color: #2c3e50; font-weight: 600">Add User</span>
+                          </v-btn>
                         </v-card-actions>
                       </v-card>
                     </v-dialog>
@@ -843,9 +897,13 @@ const performClearClientData = async () => {
                         <p class="text-grey">
                           Manage newsletters, folios, and other content submissions
                         </p>
-                        <v-btn color="primary" class="mt-4" @click="showUploadView = true">
-                          <v-icon left>mdi-cloud-upload</v-icon>
-                          Upload Content
+                        <v-btn
+                          color="#f5c52b"
+                          class="mt-4 upload-content-btn"
+                          @click="showUploadView = true"
+                        >
+                          <v-icon start color="#2c3e50">mdi-cloud-upload</v-icon>
+                          <span style="color: #2c3e50; font-weight: 600">Upload Content</span>
                         </v-btn>
                       </div>
                     </div>
@@ -868,7 +926,7 @@ const performClearClientData = async () => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #f8fafc;
+  background: #f5f5f5;
 }
 
 .main-content {
@@ -876,49 +934,323 @@ const performClearClientData = async () => {
   padding: 0 !important;
 }
 
-.v-card {
-  border-radius: 8px;
+/* Dashboard Header */
+.dashboard-header {
+  border-radius: 16px !important;
+  background: white;
+  border-left: 4px solid #f5c52b;
 }
 
-.v-table {
-  border-radius: 8px;
+.icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2c3e50;
+  box-shadow: 0 4px 12px rgba(44, 62, 80, 0.2);
 }
 
-.v-btn {
-  text-transform: none;
-  letter-spacing: normal;
+.icon-wrapper-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2c3e50;
 }
 
-.v-chip {
+.clear-btn {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-weight: 500;
+  border-radius: 8px !important;
+  padding: 0 20px !important;
+}
+
+/* Stats Cards */
+.stats-cards {
+  margin-top: 24px;
+}
+
+.stat-card {
+  border-radius: 16px !important;
+  padding: 24px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  border: 2px solid #e0e0e0 !important;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15) !important;
+  border-color: #bdbdbd !important;
+}
+
+.stat-card-primary {
+  background: #f5c52b;
+  color: #2c3e50;
+  box-shadow: 0 2px 8px rgba(245, 197, 43, 0.2);
+}
+
+.stat-card-success {
+  background: white;
+  color: #2c3e50;
+  border: 2px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card-info {
+  background: #424242;
+  color: white;
+  box-shadow: 0 2px 8px rgba(66, 66, 66, 0.2);
+}
+
+.stat-card-warning {
+  background: #757575;
+  color: white;
+  box-shadow: 0 2px 8px rgba(117, 117, 117, 0.2);
+}
+
+.stat-card-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat-icon-wrapper {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.stat-card-success .stat-icon-wrapper {
+  background: #f5c52b;
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+/* Data Table Cards */
+.data-table-card {
+  border-radius: 16px !important;
+  overflow: hidden;
+  background: white;
+}
+
+.table-header {
+  background: #fafafa;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.view-details-btn {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-weight: 500;
+  padding: 0 16px !important;
+}
+
+/* Tables */
+.v-table {
+  border-radius: 0 !important;
 }
 
 .v-table thead th {
-  background-color: #f8fafc;
-  border-bottom: 2px solid #e0e0e0;
-  font-weight: 600;
-  padding: 16px;
-  color: #424242;
+  background: #fafafa !important;
+  border-bottom: 2px solid #e0e0e0 !important;
+  font-weight: 600 !important;
+  padding: 18px 16px !important;
+  color: #424242 !important;
+  font-size: 0.875rem !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .v-table tbody tr {
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .v-table tbody tr:hover {
-  background-color: #f5f5f5;
+  background-color: #fffbea !important;
+  border-left: 3px solid #f5c52b;
 }
 
 .v-table tbody td {
-  padding: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 16px !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  color: #2c3e50;
+  font-size: 0.9rem;
 }
 
-@media (max-width: 768px) {
+/* Buttons */
+.v-btn {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-weight: 500;
+  border-radius: 8px !important;
+}
+
+/* Chips */
+.v-chip {
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  padding: 0 12px !important;
+  height: 28px !important;
+}
+
+/* Cards */
+.v-card {
+  border-radius: 12px !important;
+}
+
+/* Tabs */
+:deep(.v-tabs) {
+  background: #fafafa;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+:deep(.v-tab) {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: #757575 !important;
+}
+
+:deep(.v-tab--selected) {
+  color: #2c3e50 !important;
+}
+
+:deep(.v-tab__slider) {
+  background-color: #f5c52b !important;
+  height: 3px !important;
+}
+
+/* Add User Button */
+.add-user-btn {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(245, 197, 43, 0.3) !important;
+}
+
+.add-user-btn:hover {
+  box-shadow: 0 4px 12px rgba(245, 197, 43, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+/* Upload Content Button */
+.upload-content-btn {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(245, 197, 43, 0.3) !important;
+}
+
+.upload-content-btn:hover {
+  box-shadow: 0 4px 12px rgba(245, 197, 43, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+/* Dialog Styling */
+.dialog-title-admin {
+  background: #fafafa !important;
+  padding: 20px 24px !important;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dialog-icon-admin {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2c3e50;
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);
+}
+
+/* Dialogs */
+:deep(.v-dialog .v-card) {
+  border-radius: 16px !important;
+}
+
+/* Text Fields */
+:deep(.v-text-field .v-field) {
+  border-radius: 8px !important;
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+  .stat-card {
+    padding: 20px;
+  }
+
+  .stat-value {
+    font-size: 1.75rem;
+  }
+
+  .stat-icon-wrapper {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-header .v-card-title {
+    padding: 16px !important;
+  }
+
+  .icon-wrapper {
+    width: 48px;
+    height: 48px;
+  }
+
+  .stat-card-content {
+    gap: 12px;
+  }
+
+  .stat-icon-wrapper {
+    width: 48px;
+    height: 48px;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+  }
+
   .v-table thead th,
   .v-table tbody td {
-    padding: 12px 8px;
-    font-size: 14px;
+    padding: 12px 8px !important;
+    font-size: 0.85rem !important;
+  }
+
+  .table-header {
+    padding: 12px 16px !important;
   }
 }
 </style>
