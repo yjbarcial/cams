@@ -28,16 +28,16 @@ const currentUserRole = computed(() => {
   const status = project.value?.status
 
   // Status-based role determination:
-  // - to_technical_editor = Technical Editor (Writer) - NO image upload
-  // - to_creative_director = Creative Director (Artist) - CAN upload images
+  // - to_technical_editor = Technical Editor (Writer) - CAN edit text, NO image upload
+  // - to_creative_director = Creative Director (Artist) - CANNOT edit text, CAN upload images
 
   if (status === 'to_creative_director') {
-    console.log('✅ Role: Creative Director (Artist) - Image upload ENABLED')
+    console.log('✅ Role: Creative Director (Artist) - Image upload ENABLED, Text editing DISABLED')
     return 'Creative Director'
   }
 
   // Default to Technical Editor for all other statuses
-  console.log('✅ Role: Technical Editor (Writer) - Image upload DISABLED')
+  console.log('✅ Role: Technical Editor (Writer) - Image upload DISABLED, Text editing ENABLED')
   return 'Technical Editor'
 })
 const currentUser = ref('Technical Editor User')
@@ -64,7 +64,10 @@ const project = ref({
 // Rich text editor state
 const editorContent = ref('')
 const quillEditorRef = ref(null)
-const isEditorEditable = ref(true) // Technical Editor can always edit
+// Editor editability based on role:
+// - Technical Editor: CAN edit text (true)
+// - Creative Director: CANNOT edit text (false) - can only upload images
+const isEditorEditable = computed(() => currentUserRole.value === 'Technical Editor')
 
 // Auto-save state
 const lastSaveTime = ref(null)
@@ -131,7 +134,9 @@ const updateLastSaveTime = () => {
 }
 
 const handleContentChange = () => {
-  if (isEditorEditable.value) {
+  // Technical Editor can edit text freely
+  // Creative Director can only insert images (editor is read-only but images can be added)
+  if (isEditorEditable.value || currentUserRole.value === 'Creative Director') {
     hasUnsavedChanges.value = true
     debouncedSave()
   }
@@ -143,16 +148,23 @@ const debouncedSave = () => {
   }
 
   saveTimeout.value = setTimeout(() => {
-    if (hasUnsavedChanges.value && isEditorEditable.value) {
+    // Allow both Technical Editor and Creative Director to save
+    // Technical Editor saves text edits, Creative Director saves image uploads
+    if (hasUnsavedChanges.value) {
       saveContentChanges()
     }
   }, 1000)
 }
 
-// TECHNICAL EDITOR / CREATIVE DIRECTOR - Approval actions (3 buttons matching Section Head)
+// TECHNICAL EDITOR / CREATIVE DIRECTOR - Approval actions
 const approvalActions = computed(() => {
+  const isCreativeDirector = currentUserRole.value === 'Creative Director'
+
   return [
-    { value: 'edit', text: 'Request to Edit', color: 'dark', icon: 'mdi-pencil' },
+    // Only Technical Editor can request to edit text
+    ...(!isCreativeDirector
+      ? [{ value: 'edit', text: 'Request to Edit', color: 'dark', icon: 'mdi-pencil' }]
+      : []),
     { value: 'approve', text: 'Approve', color: 'warning', icon: 'mdi-check' },
     {
       value: 'publish',
@@ -527,6 +539,54 @@ const loadProjectData = () => {
         editorContent.value = foundProject.content || ''
         updateLastSaveTime()
         loadProjectComments()
+
+        // Set editor read-only for Creative Director after data loads
+        setTimeout(() => {
+          if (quillEditorRef.value && currentUserRole.value === 'Creative Director') {
+            // For Creative Director: Disable text editing but allow image insertion
+            const editor = quillEditorRef.value.quill
+            if (editor) {
+              // Prevent keyboard input
+              editor.root.addEventListener('keydown', (e) => {
+                // Allow Ctrl/Cmd shortcuts and navigation keys
+                if (
+                  !e.ctrlKey &&
+                  !e.metaKey &&
+                  !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)
+                ) {
+                  e.preventDefault()
+                  showNotification(
+                    'Text editing is disabled for Creative Director. You can upload images only.',
+                    'warning',
+                  )
+                }
+              })
+
+              // Prevent paste
+              editor.root.addEventListener('paste', (e) => {
+                // Allow image paste but prevent text paste
+                const items = (e.clipboardData || e.originalEvent.clipboardData).items
+                let hasImage = false
+                for (const item of items) {
+                  if (item.type.indexOf('image') !== -1) {
+                    hasImage = true
+                    break
+                  }
+                }
+                if (!hasImage) {
+                  e.preventDefault()
+                  showNotification(
+                    'Text pasting is disabled for Creative Director. You can upload images only.',
+                    'warning',
+                  )
+                }
+              })
+
+              console.log('✅ Creative Director: Text editing disabled, image upload enabled')
+            }
+          }
+        }, 100)
+
         console.log('✅ Project loaded successfully from', type)
         return
       }
@@ -725,6 +785,46 @@ onMounted(() => {
               </h1>
             </div>
 
+            <!-- Role Instructions Alert -->
+            <v-alert
+              v-if="currentUserRole === 'Creative Director'"
+              type="info"
+              variant="tonal"
+              class="role-alert mb-4"
+              border="start"
+              border-color="#2c3e50"
+            >
+              <template v-slot:prepend>
+                <v-icon>mdi-palette</v-icon>
+              </template>
+              <div class="role-alert-text">
+                <strong>Creative Director Mode</strong>
+                <p>
+                  You can upload and manage images. Use the comments section below to communicate
+                  with the Technical Editor about any changes needed.
+                </p>
+              </div>
+            </v-alert>
+            <v-alert
+              v-else
+              type="info"
+              variant="tonal"
+              class="role-alert mb-4"
+              border="start"
+              border-color="#2c3e50"
+            >
+              <template v-slot:prepend>
+                <v-icon>mdi-pencil</v-icon>
+              </template>
+              <div class="role-alert-text">
+                <strong>Technical Editor Mode</strong>
+                <p>
+                  You can edit text content. Use the comments section below to communicate with the
+                  Creative Director about image needs.
+                </p>
+              </div>
+            </v-alert>
+
             <div v-if="project.description" class="project-description">
               <div class="description-label">Description</div>
               <div class="description-text">{{ project.description }}</div>
@@ -815,10 +915,15 @@ onMounted(() => {
                 v-model="editorContent"
                 :read-only="false"
                 :disable-images="currentUserRole === 'Technical Editor'"
+                :text-only="currentUserRole === 'Creative Director'"
                 :project-id="projectId"
                 :project-type="projectType"
                 height="500px"
-                placeholder="Edit project content..."
+                :placeholder="
+                  currentUserRole === 'Creative Director'
+                    ? 'Upload images using the toolbar button...'
+                    : 'Edit project content...'
+                "
                 @text-change="handleContentChange"
                 @highlight-comments-updated="handleHighlightCommentsUpdated"
               />
@@ -1195,6 +1300,27 @@ onMounted(() => {
 
 .title-section {
   margin-bottom: 24px;
+}
+
+.role-alert {
+  border-radius: 8px;
+}
+
+.role-alert-text {
+  font-size: 14px;
+}
+
+.role-alert-text strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 15px;
+  color: #2c3e50;
+}
+
+.role-alert-text p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.5;
 }
 
 .project-title {
