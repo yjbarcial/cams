@@ -110,113 +110,45 @@ onMounted(() => {
   // Replace the current history entry to remove previous page from history
   window.history.replaceState(null, '', window.location.href)
 
-  // Fetch ONLY published projects from localStorage
-  const loadPublishedProjects = () => {
-    const projectTypes = [
-      'magazine_projects',
-      'newsletter_projects',
-      'folio_projects',
-      'other_projects',
-      'social-media_projects',
-    ]
-    const publishedProjects = []
-
-    projectTypes.forEach((storageKey) => {
-      const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-      const published = projects.filter((p) => p.status === 'Published')
-
-      published.forEach((p) => {
-        const firstImage = extractFirstImage(p.content)
-        const coverImage = firstImage || p.mediaUploaded || '/images/lib-hd.jpg'
-
-        publishedProjects.push({
-          id: p.id,
-          title: p.title || 'Untitled',
-          category: p.type
-            ? String(p.type).charAt(0).toUpperCase() + String(p.type).slice(1)
-            : 'Magazine',
-          cover: coverImage,
-          publishedAt: p.lastModified || p.createdAtISO || new Date().toISOString(),
-          content: p.content || '',
-          mediaUploaded: firstImage || p.mediaUploaded || '',
-          writers: p.writers || '',
-          artists: p.artists || '',
-          pages:
-            p.mediaUploaded && p.mediaUploaded.toLowerCase().endsWith('.pdf')
-              ? p.mediaUploaded
-              : null,
-        })
-      })
-    })
-
-    // Sort by most recent first (by publishedAt date)
-    publishedProjects.sort((a, b) => {
-      const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0
-      const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0
-      return dateB - dateA // Most recent first
-    })
-
-    // Replace articles with published projects
-    articles.value = publishedProjects
-  }
-
-  // Load published projects
-  loadPublishedProjects()
-
-  // Also fetch from Supabase for backup
+  // Fetch archives from Supabase
   ;(async () => {
     try {
       const { data, error } = await supabase
-        .from('projects')
+        .from('archives')
         .select('*')
-        .eq('status', 'Published')
+        .order('publication_date_iso', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
+
       if (error) {
-        console.error('Error fetching publications from Supabase', error)
+        console.error('Error fetching archives from Supabase', error)
         return
       }
 
       if (data && data.length) {
-        const mapped = data.map((p) => {
-          const firstImage = extractFirstImage(p.content)
-          const coverImage = firstImage || p.media_uploaded || '/images/lib-hd.jpg'
+        const mapped = data.map((archive) => ({
+          id: archive.id,
+          title: archive.title || 'Untitled',
+          category: archive.category
+            ? String(archive.category).charAt(0).toUpperCase() + String(archive.category).slice(1)
+            : 'Magazine',
+          cover: archive.cover_image_url || '/images/lib-hd.jpg',
+          publishedAt: archive.publication_date_iso || archive.created_at,
+          content: archive.description || '',
+          mediaUploaded: archive.file_url || '',
+          writers: archive.authors || '',
+          artists: archive.authors || '',
+          pages:
+            archive.file_url && archive.file_url.toLowerCase().endsWith('.pdf')
+              ? archive.file_url
+              : null,
+          volumeIssue: archive.volume_issue || '',
+          tags: archive.tags || [],
+        }))
 
-          return {
-            id: p.id,
-            title: p.title || 'Untitled',
-            category: p.project_type
-              ? String(p.project_type).charAt(0).toUpperCase() + String(p.project_type).slice(1)
-              : 'Magazine',
-            cover: coverImage,
-            publishedAt: p.created_at || p.due_date || new Date().toISOString(),
-            content: p.content || '',
-            mediaUploaded: firstImage || p.media_uploaded || '',
-            writers: p.writers || '',
-            artists: p.artists || '',
-            pages:
-              p.media_uploaded && p.media_uploaded.toLowerCase().endsWith('.pdf')
-                ? p.media_uploaded
-                : null,
-          }
-        })
-
-        // Merge, avoiding duplicates by id
-        mapped.forEach((m) => {
-          const exists = articles.value.find(
-            (a) => String(a.id) === String(m.id) || a.title === m.title,
-          )
-          if (!exists) articles.value.unshift(m)
-        })
-
-        // Sort the final merged array by most recent first
-        articles.value.sort((a, b) => {
-          const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0
-          const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0
-          return dateB - dateA // Most recent first
-        })
+        articles.value = mapped
       }
     } catch (err) {
-      console.error('Error loading publications:', err)
+      console.error('Error loading archives:', err)
     }
   })()
 })
@@ -354,6 +286,9 @@ function scrollToPublications() {
                     <v-card-title>
                       <span class="article-title">{{ a.title }}</span>
                     </v-card-title>
+                    <v-card-text v-if="a.volumeIssue" class="volume-issue">
+                      {{ a.volumeIssue }}
+                    </v-card-text>
                     <v-card-text class="date">
                       <time :datetime="a.publishedAt">
                         {{ new Date(a.publishedAt).toLocaleDateString() }}

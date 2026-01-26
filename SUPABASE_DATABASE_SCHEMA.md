@@ -116,6 +116,34 @@ CREATE INDEX idx_highlight_comments_project_id ON highlight_comments(project_id)
 CREATE INDEX idx_highlight_comments_created_at ON highlight_comments(created_at DESC);
 ```
 
+### 6. Archives Table
+
+```sql
+CREATE TABLE archives (
+  id BIGSERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT NOT NULL CHECK (category IN ('magazine', 'newsletter', 'folio', 'other')),
+  publication_date DATE,
+  publication_date_iso TIMESTAMPTZ,
+  file_url TEXT NOT NULL, -- URL to the uploaded file (PDF, etc.)
+  cover_image_url TEXT, -- Optional cover image
+  authors TEXT, -- Writers, artists, etc.
+  volume_issue TEXT, -- e.g., "Vol. 1 Issue 2"
+  tags TEXT[], -- Array of tags for searching
+  uploaded_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for better performance
+CREATE INDEX idx_archives_category ON archives(category);
+CREATE INDEX idx_archives_publication_date ON archives(publication_date DESC);
+CREATE INDEX idx_archives_uploaded_by ON archives(uploaded_by);
+CREATE INDEX idx_archives_created_at ON archives(created_at DESC);
+CREATE INDEX idx_archives_tags ON archives USING GIN(tags);
+```
+
 ## Row Level Security (RLS) Policies
 
 ### Enable RLS on all tables
@@ -126,6 +154,7 @@ ALTER TABLE project_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE version_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE highlight_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE archives ENABLE ROW LEVEL SECURITY;
 ```
 
 ### Projects Table Policies
@@ -188,6 +217,30 @@ CREATE POLICY "Users can update own highlight comments" ON highlight_comments FO
 USING (created_by = auth.uid());
 CREATE POLICY "Users can delete own highlight comments" ON highlight_comments FOR DELETE
 USING (created_by = auth.uid());
+
+-- Archives
+CREATE POLICY "Users can view all archives" ON archives FOR SELECT USING (true);
+CREATE POLICY "Admins can insert archives" ON archives FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND auth.users.email IN ('yssahjulianah.barcial@carsu.edu.ph', 'lovellhudson.clavel@carsu.edu.ph', 'altheaaguila.gorres@carsu.edu.ph')
+  )
+);
+CREATE POLICY "Admins can update archives" ON archives FOR UPDATE USING (
+  EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND auth.users.email IN ('yssahjulianah.barcial@carsu.edu.ph', 'lovellhudson.clavel@carsu.edu.ph', 'altheaaguila.gorres@carsu.edu.ph')
+  )
+);
+CREATE POLICY "Admins can delete archives" ON archives FOR DELETE USING (
+  EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND auth.users.email IN ('yssahjulianah.barcial@carsu.edu.ph', 'lovellhudson.clavel@carsu.edu.ph', 'altheaaguila.gorres@carsu.edu.ph')
+  )
+);
 ```
 
 ## Functions and Triggers
@@ -325,13 +378,14 @@ GRANT SELECT ON project_details TO authenticated;
 
 This schema supports:
 
-1. **Project Management**: Full CRUD operations for projects
-2. **Version Control**: Complete project history with versioning
-3. **Comments System**: Both project-level and version-level comments
+1. **Project Management**: Full CRUD operations for projects with content management features
+2. **Version Control**: Complete project history with versioning and restoration
+3. **Comments System**: Both project-level and version-level comments with approval workflow
 4. **Highlight Comments**: Text-specific comments with range tracking
-5. **User Management**: Integration with Supabase Auth
-6. **Security**: Row-level security policies
-7. **Performance**: Proper indexing for fast queries
-8. **Statistics**: Built-in functions for project analytics
+5. **Archives**: Separate storage for published deliverables (PDFs, etc.) independent of project management
+6. **User Management**: Integration with Supabase Auth with role-based access
+7. **Security**: Row-level security policies for data protection
+8. **Performance**: Proper indexing for fast queries
+9. **Statistics**: Built-in functions for project analytics
 
 The schema is designed to be backward compatible with your current localStorage structure while providing the scalability and features needed for a production application.
