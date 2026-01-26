@@ -123,21 +123,54 @@ async function submit() {
     return
   }
 
-  // ⭐ REMOVE THIS CHECK - Allow all @carsu.edu.ph emails
-  // if (!carsuEmails.includes(email.value)) {
-  //   errorMessage.value = 'This CARSU email is not authorized to access the system.'
-  //   return
-  // }
-
   loading.value = true
   errorMessage.value = ''
 
   try {
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    // Step 1: Sign in with Supabase (creates auth session)
+    console.log('🚀 Authenticating with Supabase:', email.value)
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.value,
+      password: password.value,
+    })
 
-    // ⭐ ADD MORE DEBUG LOGS
+    console.log('📊 Auth response:', { authData, authError })
+
+    if (authError) {
+      // If user doesn't exist in Supabase auth, sign them up
+      if (authError.message.includes('Invalid login credentials')) {
+        console.log('👤 User not found in auth, attempting to sign up...')
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: email.value,
+          password: password.value,
+        })
+
+        console.log('📊 Sign up response:', { signUpData, signUpError })
+
+        if (signUpError) {
+          throw new Error(`Sign up failed: ${signUpError.message}`)
+        }
+
+        console.log('✅ Sign up successful')
+        console.log(
+          '⚠️  Session:',
+          signUpData?.session ? 'Created' : 'Not created (check if email confirmation needed)',
+        )
+      } else {
+        throw new Error(authError.message)
+      }
+    } else {
+      console.log('✅ Authentication successful')
+      console.log('📊 Session:', authData?.session ? 'Available' : 'Not available')
+    }
+
+    // Step 1b: Check current session status
+    console.log('🔍 Checking session status...')
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+    console.log('📊 Current session:', { hasSession: !!sessionData?.session, error: sessionError })
+
+    // Step 2: Add/update user in profiles table
     console.log('🚀 Creating user profile for:', email.value)
-
     const mockUser = {
       email: email.value,
       user_metadata: {
@@ -151,13 +184,25 @@ async function submit() {
     }
 
     console.log('📝 Mock user object:', mockUser)
-
-    // Add user to Supabase profiles
     console.log('⏳ Calling addUserToProfiles...')
     await addUserToProfiles(mockUser)
     console.log('✅ addUserToProfiles completed')
 
-    // Store user session
+    // Step 3: Verify session is established before storing anything
+    console.log('⏳ Verifying session is established...')
+    const {
+      data: { user },
+      error: verifyError,
+    } = await supabase.auth.getUser()
+
+    if (verifyError || !user) {
+      console.error('❌ Verification error:', verifyError)
+      throw new Error('Session verification failed - user not authenticated')
+    }
+
+    console.log('✅ Session verified for user:', user.id, user.email)
+
+    // Step 4: Store user session
     localStorage.setItem('userEmail', email.value)
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem(
@@ -169,11 +214,12 @@ async function submit() {
     )
 
     console.log('✅ Login successful for:', email.value)
+    console.log('📍 Navigating to dashboard...')
 
     window.history.replaceState(null, '', '/dashboard')
-    router.push('/dashboard')
+    await router.push('/dashboard')
   } catch (error) {
-    errorMessage.value = 'Login failed. Please try again.'
+    errorMessage.value = error.message || 'Login failed. Please try again.'
     console.error('❌ Login error:', error)
   } finally {
     loading.value = false

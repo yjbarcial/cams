@@ -6,31 +6,47 @@
 import { supabase } from '@/utils/supabase.js'
 
 /**
- * Get current user UUID from profiles table
+ * Get current user UUID from Supabase auth session
  * @returns {Promise<string|null>} - Current user's UUID or null if not found
  */
 const getCurrentUserId = async () => {
   try {
-    const userEmail = localStorage.getItem('userEmail')
-    if (!userEmail) {
-      console.warn('No user email found in localStorage')
-      return null
+    // First, try to restore session from localStorage
+    console.log('🔄 Attempting to get user session...')
+
+    // Try to get user with a small delay to ensure session is available
+    let attempts = 0
+    let user = null
+    let error = null
+
+    while (attempts < 3) {
+      const result = await supabase.auth.getUser()
+      user = result.data?.user
+      error = result.error
+
+      if (user) {
+        console.log('✅ Current authenticated user:', user.id, user.email)
+        return user.id
+      }
+
+      attempts++
+      if (attempts < 3) {
+        console.log(`⏳ Attempt ${attempts} failed, retrying in 500ms...`)
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
     }
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', userEmail)
-      .single()
-
+    // If we get here, no session found
     if (error) {
-      console.error('Error getting current user ID:', error)
-      return null
+      console.error('❌ Error getting authenticated user:', error.message)
+    } else {
+      console.warn('⚠️  No authenticated user found. User must be logged in to create projects.')
+      console.log('📝 Check that you are logged in and page has loaded completely.')
     }
 
-    return data?.id || null
+    return null
   } catch (error) {
-    console.error('Error in getCurrentUserId:', error)
+    console.error('❌ Error in getCurrentUserId:', error.message)
     return null
   }
 }
@@ -113,9 +129,9 @@ export const createProjectVersion = async (
         .from('projects')
         .select('id')
         .eq('id', actualProjectId)
-        .single()
+        .maybeSingle()
 
-      if (projectError && projectError.code !== 'PGRST116') {
+      if (projectError) {
         throw projectError
       }
       project = existingProject
@@ -139,6 +155,11 @@ export const createProjectVersion = async (
 
       // Get current user ID
       const currentUserId = await getCurrentUserId()
+      console.log('Current user ID for insert:', currentUserId)
+
+      if (!currentUserId) {
+        throw new Error('Cannot create project: User not authenticated. Please log in first.')
+      }
 
       const insertPayload = {
         title: projectData.title,
@@ -161,19 +182,25 @@ export const createProjectVersion = async (
 
       console.log('Insert payload:', JSON.stringify(insertPayload, null, 2))
 
-      const { data: newProject, error: createError } = await supabase
+      const { data: newProjectArray, error: createError } = await supabase
         .from('projects')
         .insert(insertPayload)
         .select()
-        .single()
 
       if (createError) {
         console.error('Error creating project in Supabase:', createError)
+        console.error('Error code:', createError.code)
+        console.error('Error message:', createError.message)
         throw createError
-      } else {
-        console.log('Project created successfully in Supabase:', newProject)
-        actualProjectId = newProject.id
       }
+
+      const newProject = newProjectArray?.[0]
+      if (!newProject) {
+        throw new Error('Project creation returned no data')
+      }
+
+      console.log('Project created successfully in Supabase:', newProject)
+      actualProjectId = newProject.id
     } else {
       console.log('Project already exists:', project.id)
     }
@@ -231,7 +258,7 @@ export const createProjectVersion = async (
         project_history_comments (*)
       `,
       )
-      .single()
+      .maybeSingle()
 
     if (error) {
       console.error('Error creating version in Supabase:', error)
@@ -307,12 +334,13 @@ export const getProjectVersion = async (projectType, projectId, versionId) => {
       )
       .eq('id', versionId)
       .eq('project_id', projectId)
-      .single()
+      .maybeSingle()
 
     if (error) {
-      if (error.code === 'PGRST116') return null
       throw error
     }
+
+    if (!data) return null
 
     return transformVersionFromDB(data)
   } catch (error) {
@@ -403,7 +431,7 @@ export const addVersionComment = async (projectType, projectId, versionId, comme
         is_approved: false,
       })
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) throw error
 
