@@ -42,8 +42,8 @@ export async function addUserToProfiles(user) {
       return
     }
 
-    // ⭐ Determine user role
-    const userRole = isAdminEmail(user.email) ? 'admin' : 'user'
+    // ⭐ Determine user role - use 'member' instead of 'user' to match enum
+    const userRole = isAdminEmail(user.email) ? 'admin' : 'member'
     console.log(`👤 Role assigned: ${userRole}`)
 
     if (existingUser) {
@@ -52,10 +52,9 @@ export async function addUserToProfiles(user) {
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
-          last_login: new Date().toISOString(),
+          last_active: new Date().toISOString(),
           status: 'active',
-          user_role: userRole, // ⭐ Update role in case it changed
-          updated_at: new Date().toISOString(),
+          role: userRole, // Column name is 'role'
         })
         .eq('email', user.email)
 
@@ -71,11 +70,9 @@ export async function addUserToProfiles(user) {
 
     const newUser = {
       email: user.email,
-      user_role: userRole, // ⭐ Assign Admin or User role
+      role: userRole, // Column name is 'role', not 'user_role'
       status: 'active',
-      last_login: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      last_active: new Date().toISOString(),
     }
 
     console.log('📝 User to insert:', newUser)

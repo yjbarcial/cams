@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ArchiveHeader from '@/components/layout/ArchiveHeader.vue'
-import { supabase } from '@/utils/supabase.js'
+import { archivesAPI } from '@/services/apiService'
 import FlipBookViewer from '@/components/FlipBookViewer.vue'
 
 // router is already initialized above
@@ -110,19 +110,11 @@ onMounted(() => {
   // Replace the current history entry to remove previous page from history
   window.history.replaceState(null, '', window.location.href)
 
-  // Fetch archives from Supabase
+  // Fetch archives from backend API
   ;(async () => {
     try {
-      const { data, error } = await supabase
-        .from('archives')
-        .select('*')
-        .order('publication_date_iso', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching archives from Supabase', error)
-        return
-      }
+      const response = await archivesAPI.getAll()
+      const data = response.data
 
       if (data && data.length) {
         const mapped = data.map((archive) => ({
@@ -148,7 +140,8 @@ onMounted(() => {
         articles.value = mapped
       }
     } catch (err) {
-      console.error('Error loading archives:', err)
+      console.error('Error loading archives from API:', err)
+      // Fallback: articles remain empty array
     }
   })()
 })

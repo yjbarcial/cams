@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
+import { projectsAPI } from '@/services/apiService'
 
 const router = useRouter()
 
@@ -18,20 +19,24 @@ onMounted(() => {
   loadProjects()
 })
 
-const loadProjects = () => {
-  const savedProjects = JSON.parse(localStorage.getItem('magazine_projects') || '[]')
-  const allProjects = [...savedProjects, ...defaultProjects]
-
-  // Remove duplicates based on title and merge data
-  const uniqueProjects = allProjects.reduce((acc, project) => {
-    const existing = acc.find((p) => p.title === project.title)
-    if (!existing) {
-      acc.push(project)
-    }
-    return acc
-  }, [])
-
-  projects.value = uniqueProjects
+const loadProjects = async () => {
+  try {
+    // Load from backend API
+    const response = await projectsAPI.getAll({ project_type: 'magazine' })
+    projects.value = response.data.map(project => ({
+      ...project,
+      id: project.id,
+      title: project.title,
+      status: project.status,
+      deadline: project.deadline,
+      createdAt: project.created_at,
+      updatedAt: project.updated_at,
+      starred: project.is_starred || false
+    }))
+  } catch (error) {
+    console.error('Error loading projects from API:', error)
+    projects.value = []
+  }
 }
 
 // Date formatter function - ADD THIS
@@ -125,16 +130,20 @@ const handleAddProject = () => {
   // Handle add project logic here
 }
 
-const toggleStar = (projectId) => {
+const toggleStar = async (projectId) => {
   const project = projects.value.find((p) => p.id === projectId)
   if (project) {
     project.isStarred = !project.isStarred
-    // Save to localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('magazine_projects') || '[]')
-    const updatedProjects = savedProjects.map((p) =>
-      p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
-    )
-    localStorage.setItem('magazine_projects', JSON.stringify(updatedProjects))
+    // Update via backend API
+    try {
+      await projectsAPI.update(projectId, {
+        is_starred: project.isStarred
+      })
+    } catch (error) {
+      console.error('Error updating star status:', error)
+      // Revert on error
+      project.isStarred = !project.isStarred
+    }
   }
 }
 
@@ -216,28 +225,34 @@ const startEdit = (project) => {
   }
 }
 
-const saveEdit = () => {
+const saveEdit = async () => {
   if (!editingProject.value.title.trim()) {
     alert('Please enter a project title')
     return
   }
 
-  const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
-  if (projectIndex !== -1) {
-    // Update the project
-    projects.value[projectIndex] = { ...editingProject.value }
+  try {
+    // Update via backend API
+    await projectsAPI.update(editingProject.value.id, {
+      title: editingProject.value.title,
+      description: editingProject.value.description,
+      deadline: editingProject.value.deadline,
+      status: editingProject.value.status
+    })
 
-    // Save to localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('magazine_projects') || '[]')
-    const updatedProjects = savedProjects.map((p) =>
-      p.id === editingProject.value.id ? { ...editingProject.value } : p,
-    )
-    localStorage.setItem('magazine_projects', JSON.stringify(updatedProjects))
+    // Update local state
+    const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
+    if (projectIndex !== -1) {
+      projects.value[projectIndex] = { ...editingProject.value }
+    }
+
+    // Close the dialog
+    editingProject.value = null
+    showEditDialog.value = false
+  } catch (error) {
+    console.error('Error updating project:', error)
+    alert('Failed to update project: ' + (error.error?.message || error.message))
   }
-
-  // Close the dialog
-  editingProject.value = null
-  showEditDialog.value = false
 }
 
 const cancelEdit = () => {
@@ -255,19 +270,22 @@ const startDelete = (project) => {
   }
 }
 
-const confirmDelete = () => {
+const confirmDelete = async () => {
   if (projectToDelete.value) {
-    // Remove from projects array
-    projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
+    try {
+      // Delete via backend API
+      await projectsAPI.delete(projectToDelete.value.id)
 
-    // Remove from localStorage
-    const savedProjects = JSON.parse(localStorage.getItem('magazine_projects') || '[]')
-    const updatedProjects = savedProjects.filter((p) => p.id !== projectToDelete.value.id)
-    localStorage.setItem('magazine_projects', JSON.stringify(updatedProjects))
+      // Remove from local state
+      projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
+
+      projectToDelete.value = null
+      showDeleteConfirm.value = false
+    } catch (error) {
+      console.error('Error deleting project:', error)
+      alert('Failed to delete project: ' + (error.error?.message || error.message))
+    }
   }
-
-  showDeleteConfirm.value = false
-  projectToDelete.value = null
 }
 
 const cancelDelete = () => {

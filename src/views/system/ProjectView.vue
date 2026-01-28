@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
+import { projectsAPI, tasksAPI } from '@/services/apiService'
 import { autoCreateVersionOnEdit } from '@/services/localProjectHistory.js'
 import {
   getProjectComments,
@@ -119,41 +120,23 @@ const startEditingTitle = () => {
   }, 50)
 }
 
-const saveTitleEdit = () => {
+const saveTitleEdit = async () => {
   if (tempTitle.value.trim()) {
     project.value.title = tempTitle.value.trim()
     isEditingTitle.value = false
 
-    // Save to localStorage - use actual storage key
+    // Save to backend API
     try {
-      // Get the actual storage key where the project exists
-      const actualStorage = getActualStorageKey(projectId)
-      if (!actualStorage) {
-        console.error('Could not find project storage location')
-        showNotification('Error: Project storage location not found', 'error')
-        return
-      }
+      await projectsAPI.update(projectId, {
+        title: tempTitle.value.trim(),
+        updated_at: new Date().toISOString()
+      })
 
-      const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-      const projectIndex = projects.findIndex((p) => p.id == projectId)
-
-      if (projectIndex !== -1) {
-        projects[projectIndex].title = tempTitle.value.trim()
-        projects[projectIndex].lastModified = new Date().toLocaleString()
-        // PRESERVE STATUS - don't change it when saving title
-        if (project.value.status) {
-          projects[projectIndex].status = project.value.status
-        }
-        localStorage.setItem(actualStorage.key, JSON.stringify(projects))
-
-        // Update projectType - use displayType for UI
-        projectType.value = actualStorage.displayType || actualStorage.type
-        console.log('Title updated and saved to localStorage:', project.value.title)
-        showNotification('Title updated successfully')
-        updateLastSaveTime()
-      }
+      console.log('✅ Title updated via API:', project.value.title)
+      showNotification('Title updated successfully')
+      updateLastSaveTime()
     } catch (error) {
-      console.error('Error saving title to localStorage:', error)
+      console.error('❌ Error saving title:', error)
       showNotification('Error saving title', 'error')
     }
   } else {
@@ -179,8 +162,8 @@ const handleTitleKeydown = (event) => {
 // Track previous content for version history
 const previousContent = ref('')
 
-// Enhanced auto-save content function
-const saveContent = (showNotif = false) => {
+// Enhanced auto-save content function with API
+const saveContent = async (showNotif = false) => {
   if (quillEditorRef.value) {
     const content = quillEditorRef.value.getContent()
 
@@ -193,61 +176,27 @@ const saveContent = (showNotif = false) => {
     editorContent.value = content
     project.value.content = content
 
-    // Save to localStorage - use actual storage key
+    // Save to backend API
     try {
-      // Get the actual storage key where the project exists
-      const actualStorage = getActualStorageKey(projectId)
-      if (!actualStorage) {
-        console.error('Could not find project storage location')
-        if (showNotif) {
-          showNotification('Error: Project storage location not found', 'error')
-        }
-        return false
+      await projectsAPI.update(projectId, {
+        content: content,
+        updated_at: new Date().toISOString()
+      })
+
+      console.log('✅ Content saved to API')
+
+      // Update previous content for next comparison
+      previousContent.value = content
+
+      updateLastSaveTime()
+      hasUnsavedChanges.value = false
+
+      if (showNotif) {
+        showNotification('Content saved', 'success')
       }
 
-      const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-      const projectIndex = projects.findIndex((p) => p.id == projectId)
-
-      if (projectIndex !== -1) {
-        projects[projectIndex].content = content
-        projects[projectIndex].lastModified = new Date().toLocaleString()
-        // PRESERVE STATUS - don't change it when saving content
-        if (project.value.status) {
-          projects[projectIndex].status = project.value.status
-        }
-        localStorage.setItem(actualStorage.key, JSON.stringify(projects))
-
-        // Update projectType - use displayType for UI
-        projectType.value = actualStorage.displayType || actualStorage.type
-
-        // Auto-create version history (like Google Docs)
-        const projectData = {
-          ...project.value,
-          content: content,
-        }
-        const version = autoCreateVersionOnEdit(
-          projectType.value,
-          projectId,
-          projectData,
-          oldContent,
-        )
-        if (version) {
-          console.log('Auto-created version:', version.versionNumber)
-        }
-
-        // Update previous content for next comparison
-        previousContent.value = content
-
-        updateLastSaveTime()
-        hasUnsavedChanges.value = false
-
-        if (showNotif) {
-          showNotification('Content saved', 'success')
-        }
-
-        console.log('Content auto-saved to localStorage')
-        return true // Successfully saved
-      }
+      console.log('Content auto-saved to localStorage')
+      return true // Successfully saved
     } catch (error) {
       console.error('Error saving content to localStorage:', error)
       if (showNotif) {
@@ -312,29 +261,7 @@ const saveAsDraft = () => {
   // Update status to draft if not already
   if (project.value.status !== 'draft') {
     project.value.status = 'draft'
-
-    try {
-      // Get the actual storage key where the project exists
-      const actualStorage = getActualStorageKey(projectId)
-      if (!actualStorage) {
-        console.error('Could not find project storage location')
-        return
-      }
-
-      const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-      const projectIndex = projects.findIndex((p) => p.id == projectId)
-
-      if (projectIndex !== -1) {
-        projects[projectIndex].status = 'draft'
-        projects[projectIndex].lastModified = new Date().toLocaleString()
-        localStorage.setItem(actualStorage.key, JSON.stringify(projects))
-
-        // Update projectType - use displayType for UI
-        projectType.value = actualStorage.displayType || actualStorage.type
-      }
-    } catch (error) {
-      console.error('Error saving draft status:', error)
-    }
+    // Status will be updated by saveContent function via API
   }
 
   showNotification('Project saved as draft')
@@ -352,59 +279,48 @@ const submitForApproval = () => {
 
 const confirmSubmitForApproval = async () => {
   try {
-    // Get the actual storage key where the project exists
-    const actualStorage = getActualStorageKey(projectId)
-    if (!actualStorage) {
-      console.error('Could not find project storage location')
-      showNotification('Error: Project storage location not found', 'error')
-      return
+    // Update via backend API
+    await projectsAPI.update(projectId, {
+      status: 'to_section_head',
+      priority: submitPriority.value,
+      submitted_by: 'Current User',
+      submitted_date: new Date().toISOString(),
+      submission_comments: submitComments.value,
+      updated_at: new Date().toISOString()
+    })
+
+    console.log('✅ Project submitted via API')
+
+    project.value.status = 'to_section_head'
+    hasUnsavedChanges.value = false
+
+    // Create notification for Section Head
+    createStatusChangeNotification({
+      projectId: projectId,
+      projectType: projectType.value,
+      projectTitle: project.value.title,
+      oldStatus: 'draft',
+      newStatus: 'to_section_head',
+      actionBy: 'Current User',
+      recipient: 'Section Head',
+      comments: submitComments.value,
+    })
+
+    showNotification('Project submitted for approval successfully!', 'success')
+    showSubmitDialog.value = false
+
+    // Navigate back to project list based on type
+    const listRoutes = {
+      magazine: '/magazine',
+      newsletter: '/newsletter',
+      folio: '/folio',
+      other: '/other',
+      'social-media': '/other',
     }
 
-    const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-    const projectIndex = projects.findIndex((p) => p.id == projectId)
-
-    if (projectIndex !== -1) {
-      projects[projectIndex].status = 'to_section_head'
-      projects[projectIndex].priority = submitPriority.value
-      projects[projectIndex].submittedBy = 'Current User'
-      projects[projectIndex].submittedDate = new Date().toISOString()
-      projects[projectIndex].lastModified = new Date().toLocaleString()
-      projects[projectIndex].submissionComments = submitComments.value
-
-      localStorage.setItem(actualStorage.key, JSON.stringify(projects))
-
-      project.value.status = 'to_section_head'
-      projectType.value = actualStorage.type
-      hasUnsavedChanges.value = false
-
-      // Create notification for Section Head
-      createStatusChangeNotification({
-        projectId: projectId,
-        projectType: actualStorage.type,
-        projectTitle: project.value.title,
-        oldStatus: 'draft',
-        newStatus: 'to_section_head',
-        actionBy: 'Current User',
-        recipient: 'Section Head',
-        comments: submitComments.value,
-      })
-
-      showNotification('Project submitted for approval successfully!', 'success')
-      showSubmitDialog.value = false
-
-      // Navigate back to project list based on type
-      const listRoutes = {
-        magazine: '/magazine',
-        newsletter: '/newsletter',
-        folio: '/folio',
-        other: '/other',
-        'social-media': '/other',
-      }
-
-      setTimeout(() => {
-        router.push(listRoutes[actualStorage.type] || '/magazine')
-      }, 600)
-    }
+    setTimeout(() => {
+      router.push(listRoutes[projectType.value] || '/magazine')
+    }, 600)
   } catch (error) {
     console.error('Error submitting project:', error)
     showNotification('Error submitting project for approval', 'error')
@@ -487,9 +403,9 @@ const performNavigation = () => {
 }
 
 // Load comments for the current project
-const loadProjectComments = () => {
+const loadProjectComments = async () => {
   try {
-    comments.value = getProjectComments(projectType.value, projectId)
+    comments.value = await getProjectComments(projectType.value, projectId)
     console.log('Comments loaded:', comments.value)
   } catch (error) {
     console.error('Error loading comments:', error)
@@ -497,262 +413,72 @@ const loadProjectComments = () => {
   }
 }
 
-// Helper function to get the actual storage key where a project exists
-const getActualStorageKey = (projectId) => {
-  // For other/social-media types, check both storage keys
-  // Check other_projects first, then social-media_projects
-  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
-  const socialMediaProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
-
-  const inOther = otherProjects.some((p) => String(p.id) === String(projectId))
-  const inSocialMedia = socialMediaProjects.some((p) => String(p.id) === String(projectId))
-
-  // For display purposes, both other and social-media are treated as "other"
-  if (inOther) return { key: 'other_projects', type: 'other', displayType: 'other' }
-  if (inSocialMedia) return { key: 'social-media_projects', type: 'other', displayType: 'other' }
-
-  // For other types, check their specific storage
-  const projectTypes = ['magazine', 'newsletter', 'folio']
-  for (const type of projectTypes) {
-    const storageKey = `${type}_projects`
-    const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    if (projects.some((p) => String(p.id) === String(projectId))) {
-      return { key: storageKey, type: type, displayType: type }
-    }
-  }
-
-  return null
-}
-
-// Load project data from localStorage
-const loadProjectData = () => {
+// Load project data from backend API
+const loadProjectData = async () => {
   try {
-    console.log('Loading project data for ID:', projectId)
+    console.log('🔍 Loading project from backend API:', projectId)
 
-    // First, try to get type from query parameter
-    const queryType = route.query.type
+    // Try to load from backend API first
+    const response = await projectsAPI.getById(projectId)
+    const foundProject = response.data
 
-    if (queryType) {
-      console.log('Trying to load project from query type:', queryType)
+    console.log('✅ Project loaded from API:', foundProject)
 
-      // For other/social-media types, check both storage keys to find where project actually exists
-      if (queryType === 'other' || queryType === 'social-media') {
-        const actualStorage = getActualStorageKey(projectId)
-
-        if (actualStorage) {
-          const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-          const foundProject = projects.find((p) => String(p.id) === String(projectId))
-
-          if (foundProject) {
-            console.log('Found project in', actualStorage.type, ':', foundProject)
-
-            // Update project data - PRESERVE STATUS
-            // Normalize status: if it's "To Technical Editor", fix it to Draft (ProjectView is for draft projects)
-            let normalizedStatus = foundProject.status || 'draft'
-            // If status is "To Technical Editor", it should be Draft in ProjectView
-            if (normalizedStatus === 'to_technical_editor') {
-              normalizedStatus = 'draft'
-              // Also update it in the storage to fix the corrupted status
-              const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-              const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
-              if (projectIndex !== -1) {
-                projects[projectIndex].status = 'draft'
-                localStorage.setItem(actualStorage.key, JSON.stringify(projects))
-                console.log('Fixed corrupted status from "to_technical_editor" to "draft"')
-              }
-            }
-
-            project.value = {
-              ...foundProject,
-              id: projectId,
-              status: normalizedStatus, // Use normalized status
-              lastModified: foundProject.createdAtISO
-                ? new Date(foundProject.createdAtISO).toLocaleString()
-                : foundProject.lastModified || new Date().toLocaleString(),
-              content: foundProject.content || '',
-              writers: foundProject.writers || 'Not assigned',
-              artists: foundProject.artists || 'Not assigned',
-              sectionHead: foundProject.sectionHead || 'Not assigned',
-              description: foundProject.description || 'No description provided',
-            }
-
-            // Set project type - use displayType for UI, but keep actual type for storage
-            // For other/social-media, both display as "other"
-            projectType.value = actualStorage.displayType || actualStorage.type
-
-            // Set editor content
-            editorContent.value = foundProject.content || ''
-            previousContent.value = foundProject.content || '' // Initialize for version history
-
-            // Update temp title for editing
-            tempTitle.value = foundProject.title
-
-            // Initialize last save time
-            updateLastSaveTime()
-
-            // Load comments for this project
-            loadProjectComments()
-
-            // Load highlight comments from QuillEditor
-            if (quillEditorRef.value) {
-              const storedComments = quillEditorRef.value.getHighlightComments()
-              highlightComments.value = storedComments
-            }
-
-            console.log('Project loaded successfully from', actualStorage.type)
-            return
-          }
-        }
-        console.log('Project not found in other or social-media storage')
-      } else {
-        // For other types (magazine, newsletter, folio), use the query type directly
-        const storageKey = `${queryType}_projects`
-        const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-        const foundProject = projects.find((p) => String(p.id) === String(projectId))
-
-        if (foundProject) {
-          console.log('Found project:', foundProject)
-
-          // Update project data - PRESERVE STATUS
-          // Normalize status: if it's "to_technical_editor", fix it to draft (ProjectView is for draft projects)
-          let normalizedStatus = foundProject.status || 'draft'
-          // If status is "to_technical_editor", it should be draft in ProjectView
-          if (normalizedStatus === 'to_technical_editor') {
-            normalizedStatus = 'draft'
-            // Also update it in the storage to fix the corrupted status
-            const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-            const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
-            if (projectIndex !== -1) {
-              projects[projectIndex].status = 'draft'
-              localStorage.setItem(storageKey, JSON.stringify(projects))
-              console.log('Fixed corrupted status from "to_technical_editor" to "draft"')
-            }
-          }
-
-          project.value = {
-            ...foundProject,
-            id: projectId,
-            status: normalizedStatus, // Use normalized status
-            lastModified: foundProject.createdAtISO
-              ? new Date(foundProject.createdAtISO).toLocaleString()
-              : foundProject.lastModified || new Date().toLocaleString(),
-            content: foundProject.content || '',
-            writers: foundProject.writers || 'Not assigned',
-            artists: foundProject.artists || 'Not assigned',
-            sectionHead: foundProject.sectionHead || 'Not assigned',
-            description: foundProject.description || 'No description provided',
-          }
-
-          // Set project type
-          projectType.value = queryType
-
-          // Set editor content
-          editorContent.value = foundProject.content || ''
-          previousContent.value = foundProject.content || '' // Initialize for version history
-
-          // Update temp title for editing
-          tempTitle.value = foundProject.title
-
-          // Initialize last save time
-          updateLastSaveTime()
-
-          // Load comments for this project
-          loadProjectComments()
-
-          // Load highlight comments from QuillEditor
-          if (quillEditorRef.value) {
-            const storedComments = quillEditorRef.value.getHighlightComments()
-            highlightComments.value = storedComments
-          }
-
-          console.log('Project loaded successfully')
-          return
-        }
-      }
+    // Normalize status for draft projects
+    let normalizedStatus = foundProject.status || 'draft'
+    if (normalizedStatus === 'to_technical_editor') {
+      normalizedStatus = 'draft'
     }
 
-    // If not found with query type, search all project types
-    console.log('Searching all project types...')
-    const projectTypes = [
-      { type: 'magazine', storageKey: 'magazine_projects' },
-      { type: 'newsletter', storageKey: 'newsletter_projects' },
-      { type: 'folio', storageKey: 'folio_projects' },
-      { type: 'other', storageKey: 'other_projects' },
-      { type: 'social-media', storageKey: 'social-media_projects' },
-    ]
-
-    for (const { type, storageKey } of projectTypes) {
-      const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-      console.log(`Checking ${type} projects (${storageKey}):`, projects.length, 'projects found')
-
-      const foundProject = projects.find((p) => String(p.id) === String(projectId))
-
-      if (foundProject) {
-        console.log('Found project:', foundProject)
-
-        // Update project data - PRESERVE STATUS
-        // Normalize status: if it's "To Technical Editor", fix it to Draft (ProjectView is for draft projects)
-        let normalizedStatus = foundProject.status || 'draft'
-        // If status is "To Technical Editor", it should be Draft in ProjectView
-        if (normalizedStatus === 'to_technical_editor') {
-          normalizedStatus = 'draft'
-          // Also update it in the storage to fix the corrupted status
-          const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-          const projectIndex = projects.findIndex((p) => String(p.id) === String(projectId))
-          if (projectIndex !== -1) {
-            projects[projectIndex].status = 'draft'
-            localStorage.setItem(storageKey, JSON.stringify(projects))
-            console.log('Fixed corrupted status from "to_technical_editor" to "draft"')
-          }
-        }
-
-        project.value = {
-          ...foundProject,
-          id: projectId,
-          status: normalizedStatus, // Use normalized status
-          lastModified: foundProject.createdAtISO
-            ? new Date(foundProject.createdAtISO).toLocaleString()
-            : foundProject.lastModified || new Date().toLocaleString(),
-          content: foundProject.content || '',
-          writers: foundProject.writers || 'Not assigned',
-          artists: foundProject.artists || 'Not assigned',
-          sectionHead: foundProject.sectionHead || 'Not assigned',
-          description: foundProject.description || 'No description provided',
-        }
-
-        // Set project type - normalize social-media to other for display
-        projectType.value = type === 'social-media' ? 'other' : type
-
-        // Set editor content
-        editorContent.value = foundProject.content || ''
-        previousContent.value = foundProject.content || '' // Initialize for version history
-
-        // Update temp title for editing
-        tempTitle.value = foundProject.title
-
-        // Initialize last save time
-        updateLastSaveTime()
-
-        // Load comments for this project
-        loadProjectComments()
-
-        // Load highlight comments from QuillEditor
-        if (quillEditorRef.value) {
-          const storedComments = quillEditorRef.value.getHighlightComments()
-          highlightComments.value = storedComments
-        }
-
-        console.log('Project loaded successfully')
-        return
-      }
+    project.value = {
+      ...foundProject,
+      id: String(projectId),
+      title: foundProject.title || 'Untitled Project',
+      status: normalizedStatus,
+      lastModified: foundProject.updated_at
+        ? new Date(foundProject.updated_at).toLocaleString()
+        : new Date().toLocaleString(),
+      content: foundProject.content || '',
+      writers: foundProject.writers || foundProject.assigned_writers || 'Not assigned',
+      artists: foundProject.artists || foundProject.assigned_artists || 'Not assigned',
+      sectionHead: foundProject.section_head || foundProject.created_by || 'Not assigned',
+      description: foundProject.description || 'No description provided',
+      dueDate: foundProject.due_date || foundProject.deadline || '',
+      department: foundProject.department || '',
+      priority: foundProject.priority || 'Medium',
     }
 
-    // If project not found, show error
-    console.error('Project not found with ID:', projectId)
-    showNotification('Project not found. Please check the project ID.', 'error')
+    // Set project type
+    projectType.value = foundProject.project_type || route.query.type || 'magazine'
+
+    // Set editor content
+    editorContent.value = foundProject.content || ''
+    previousContent.value = foundProject.content || ''
+
+    // Update temp title for editing
+    tempTitle.value = foundProject.title
+
+    // Initialize last save time
+    updateLastSaveTime()
+
+    // Load comments for this project
+    loadProjectComments()
+
+    // Load highlight comments from QuillEditor
+    if (quillEditorRef.value) {
+      const storedComments = quillEditorRef.value.getHighlightComments()
+      highlightComments.value = storedComments
+    }
+
+    console.log('✅ Project loaded successfully from API')
   } catch (error) {
-    console.error('Error loading project:', error)
-    showNotification('Error loading project data.', 'error')
+    console.error('❌ Error loading project:', error)
+    showNotification('Project not found. Please check the project ID.', 'error')
+    
+    // Redirect to project list after a delay
+    setTimeout(() => {
+      router.push('/magazine')
+    }, 2000)
   }
 }
 
@@ -946,10 +672,10 @@ watch(
 )
 
 // Setup auto-save system
-onMounted(() => {
-  // Load project data from localStorage
+onMounted(async () => {
+  // Load project data from backend API
   console.log('Loading project:', projectId)
-  loadProjectData()
+  await loadProjectData()
 
   // Set up real-time auto-save interval (every 1 second)
   autoSaveInterval.value = setInterval(() => {

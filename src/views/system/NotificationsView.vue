@@ -8,7 +8,8 @@ import {
   markAsRead,
   deleteNotification,
   markAllAsRead,
-} from '@/services/notificationsService.js'
+} from '@/services/notificationsServiceAPI.js'
+import * as projectsAPI from '@/services/api.js'
 
 const router = useRouter()
 
@@ -75,82 +76,61 @@ const formatTimestamp = (timestamp) => {
   }
 }
 
-const handleNotificationClick = (notification) => {
+const handleNotificationClick = async (notification) => {
   // Mark notification as read when user clicks on it
   if (!notification.isRead) {
     markAsRead(notification.id)
     notification.isRead = true
   }
 
-  // Check if project exists
+  // Check if project exists via API
   if (notification.projectId && notification.projectType) {
-    // First try the specified storage key
-    let storageKey = `${notification.projectType}_projects`
-    let projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    let project = projects.find((p) => String(p.id) === String(notification.projectId))
+    try {
+      const response = await projectsAPI.getById(notification.projectId)
+      const project = response.data
 
-    // If not found, search in all storage keys
-    if (!project) {
-      const allStorageKeys = [
-        'magazine_projects',
-        'newsletter_projects',
-        'folio_projects',
-        'other_projects',
-        'social-media_projects',
-      ]
-
-      for (const key of allStorageKeys) {
-        projects = JSON.parse(localStorage.getItem(key) || '[]')
-        project = projects.find((p) => String(p.id) === String(notification.projectId))
-        if (project) {
-          // Update the storage key to the one where we found it
-          storageKey = key
-          break
-        }
-      }
-    }
-
-    if (project) {
-      // If project is published, show in archive viewer
-      if (project.status === 'Published') {
-        openProjectViewer(project, notification.projectType)
-      } else {
-        // Route based on project status to the correct view
-        const projectId = notification.projectId
-        const projectType = notification.projectType
-
-        if (project.status === 'draft' || project.status === 'returned_by_section_head') {
-          router.push(`/project/${projectId}?type=${projectType}`)
-        } else if (
-          project.status === 'to_section_head' ||
-          project.status === 'returned_by_technical_editor' ||
-          project.status === 'returned_by_creative_director'
-        ) {
-          router.push(`/section-head/${projectId}?type=${projectType}`)
-        } else if (
-          project.status === 'to_technical_editor' ||
-          project.status === 'to_creative_director'
-        ) {
-          router.push(`/technical-editor/${projectId}?type=${projectType}`)
-        } else if (
-          project.status === 'to_editor_in_chief' ||
-          project.status === 'returned_by_chief_adviser' ||
-          project.status === 'Returned by Chief Adviser'
-        ) {
-          router.push(`/editor-in-chief/${projectId}?type=${projectType}`)
-        } else if (project.status === 'For Publish') {
-          router.push(`/archival-manager/${projectId}?type=${projectType}`)
-        } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
-          router.push(`/chief-adviser/${projectId}?type=${projectType}`)
-        } else if (project.status === 'EIC Approved') {
-          router.push(`/project/${projectId}?type=${projectType}`)
+      if (project) {
+        // If project is published, show in archive viewer
+        if (project.status === 'Published') {
+          openProjectViewer(project, notification.projectType)
         } else {
-          // Default to project view
-          router.push(`/project/${projectId}?type=${projectType}`)
+          // Route based on project status to the correct view
+          const projectId = notification.projectId
+          const projectType = project.project_type || notification.projectType
+
+          if (project.status === 'draft' || project.status === 'returned_by_section_head') {
+            router.push(`/project/${projectId}?type=${projectType}`)
+          } else if (
+            project.status === 'to_section_head' ||
+            project.status === 'returned_by_technical_editor' ||
+            project.status === 'returned_by_creative_director'
+          ) {
+            router.push(`/section-head/${projectId}?type=${projectType}`)
+          } else if (
+            project.status === 'to_technical_editor' ||
+            project.status === 'to_creative_director'
+          ) {
+            router.push(`/technical-editor/${projectId}?type=${projectType}`)
+          } else if (
+            project.status === 'to_editor_in_chief' ||
+            project.status === 'returned_by_chief_adviser' ||
+            project.status === 'Returned by Chief Adviser'
+          ) {
+            router.push(`/editor-in-chief/${projectId}?type=${projectType}`)
+          } else if (project.status === 'For Publish') {
+            router.push(`/archival-manager/${projectId}?type=${projectType}`)
+          } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
+            router.push(`/chief-adviser/${projectId}?type=${projectType}`)
+          } else if (project.status === 'EIC Approved') {
+            router.push(`/project/${projectId}?type=${projectType}`)
+          } else {
+            // Default to project view
+            router.push(`/project/${projectId}?type=${projectType}`)
+          }
         }
       }
-    } else {
-      // Project not found
+    } catch (error) {
+      console.error('Error loading project:', error)
       alert('Project not found. It may have been deleted.')
     }
   }

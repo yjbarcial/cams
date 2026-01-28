@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 const emit = defineEmits(['close'])
-import { supabase } from '@/utils/supabase.js'
+import { archivesAPI, mediaFilesAPI } from '@/services/apiService'
 
 const uploadDialog = ref(false)
 const selectedFiles = ref([])
@@ -19,18 +19,6 @@ const handleFileSelect = (event) => {
   selectedFiles.value = [...selectedFiles.value, ...filtered]
 }
 
-// Quick connectivity check to make "Failed to fetch" errors easier to diagnose.
-const checkSupabase = async () => {
-  try {
-    // small, safe query to validate connectivity and credentials
-    const { data, error } = await supabase.from('projects').select('id').limit(1)
-    if (error) return { ok: false, error }
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err }
-  }
-}
-
 const removeFile = (index) => {
   selectedFiles.value.splice(index, 1)
 }
@@ -43,57 +31,18 @@ const uploadFiles = async () => {
   }
 
   uploading.value = true
-  // run a quick connectivity check first to fail fast with better diagnostics
-  const connectivity = await checkSupabase()
-  if (!connectivity.ok) {
-    console.error('Supabase connectivity check failed', connectivity.error)
-    uploading.value = false
-    alert(
-      'Supabase connectivity check failed: ' +
-        (connectivity.error?.message || String(connectivity.error)) +
-        '\nPossible causes: network/CORS issue, incorrect VITE_SUPABASE_URL or VITE_SUPABASE_KEY, or storage policies preventing anonymous uploads. Check browser console for details.',
-    )
-    return
-  }
   try {
-    const bucket = 'publications'
-    const uploadedUrls = []
-
     for (const file of selectedFiles.value) {
-      const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(fileName, file, { cacheControl: '3600', upsert: false })
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('title', title.value)
+      formData.append('category', category.value.toLowerCase())
+      formData.append('publication_date', publishedAt.value)
+      formData.append('description', `Publication: ${title.value}`)
 
-      if (uploadError) {
-        // Common client-side symptom is a network/CORS failure which often surfaces as a generic fetch failure.
-        // Provide a little more guidance to the developer in this case.
-        if (uploadError.message && uploadError.message.toLowerCase().includes('failed to fetch')) {
-          uploadError.message =
-            uploadError.message +
-            '\nHint: "Failed to fetch" often means a network/CORS problem or that the Supabase URL/Key is incorrect. Check VITE_SUPABASE_URL and VITE_SUPABASE_KEY in your environment and the browser console network tab.'
-        }
-        throw uploadError
-      }
-
-      // get public URL
-      const { data: publicData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(uploadData.path || fileName)
-      const publicUrl = publicData?.publicUrl || publicData?.publicURL || `/${fileName}`
-      uploadedUrls.push(publicUrl)
-
-      // Insert project row in projects table
-      const payload = {
-        title: title.value,
-        project_type: category.value.toLowerCase(),
-        media_uploaded: publicUrl,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-
-      const { error: insertError } = await supabase.from('projects').insert(payload)
-      if (insertError) throw insertError
+      // Upload archive via backend API
+      await archivesAPI.create(formData)
     }
 
     // Clear form and close
@@ -102,13 +51,15 @@ const uploadFiles = async () => {
     category.value = 'Magazine'
     publishedAt.value = new Date().toISOString().split('T')[0]
     uploadDialog.value = false
-    // notify parent to close (AdminView listens to @close)
+    
+    // Notify parent to close (AdminView listens to @close)
     emit('close')
-    // notify success
+    
+    // Notify success
     alert('Upload successful')
   } catch (error) {
     console.error('Upload error:', error)
-    alert('Upload failed: ' + (error.message || String(error)))
+    alert('Upload failed: ' + (error.error?.message || error.message || String(error)))
   } finally {
     uploading.value = false
   }

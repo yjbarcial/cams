@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { supabase } from '@/utils/supabase.js'
+import { profilesAPI, projectsAPI } from '@/services/apiService'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import UploadView from '@/views/system/UploadView.vue'
@@ -96,43 +96,55 @@ const getStatusColor = (status) => {
   return statusColors[status] || 'default'
 }
 
-// ⭐ CLEANED: Function to load only real projects from localStorage and Supabase
-const loadAllProjects = () => {
-  const magazineProjects = JSON.parse(localStorage.getItem('magazine_projects') || '[]')
-  const folioProjects = JSON.parse(localStorage.getItem('folio_projects') || '[]')
-  const newsletterProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
-  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
+// ⭐ CLEANED: Function to load only real projects from backend API
+const loadAllProjects = async () => {
+  try {
+    console.log('🔍 Fetching all projects from backend API...')
+    
+    const response = await projectsAPI.getAll()
+    const apiProjects = response.data
 
-  // ✅ NO DEFAULT PROJECTS - Only user-created projects
-  const allProjects = [
-    ...magazineProjects.map((p) => ({ ...p, type: 'Magazine' })),
-    ...folioProjects.map((p) => ({ ...p, type: 'Folio' })),
-    ...newsletterProjects.map((p) => ({ ...p, type: 'Newsletter' })),
-    ...otherProjects.map((p) => ({ ...p, type: 'Social Media' })),
-  ]
+    console.log('📊 API Projects:', apiProjects.length)
 
-  // Remove duplicates based on title and id
-  const uniqueProjects = allProjects.reduce((acc, project) => {
-    const existing = acc.find((p) => p.id === project.id || p.title === project.title)
-    if (!existing) {
-      acc.push({
-        ...project,
-        user: project.user || {
-          full_name: project.sectionHead || '',
-          email: `${(project.sectionHead || '').toLowerCase().replace(/\s+/g, '.')}@campus.edu`,
-        },
-      })
-    }
-    return acc
-  }, [])
+    // Map to display format
+    const mappedProjects = apiProjects.map(project => ({
+      id: project.id,
+      title: project.title,
+      type: project.project_type ? project.project_type.charAt(0).toUpperCase() + project.project_type.slice(1) : 'Other',
+      status: project.status || 'draft',
+      department: project.department || 'N/A',
+      created_at: project.created_at,
+      updated_at: project.updated_at,
+      user: {
+        full_name: project.created_by || 'Unknown',
+        email: project.created_by_email || 'N/A'
+      }
+    }))
 
-  return uniqueProjects.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    console.log('✅ Projects loaded from API:', mappedProjects.length)
+    return mappedProjects
+  } catch (error) {
+    console.error('❌ Error loading projects from API:', error)
+    return []
+  }
 }
 
-// ⭐ CLEANED: Function to load only real submissions (empty for now)
-const loadSubmissions = () => {
-  // ✅ NO DEFAULT SUBMISSIONS - Only real submissions from Supabase
-  return []
+// ⭐ CLEANED: Function to load only real submissions from backend API
+const loadSubmissions = async () => {
+  try {
+    // Get projects with 'submitted' or 'under_review' status
+    const response = await projectsAPI.getAll({ status: 'submitted' })
+    return response.data.slice(0, 5).map(project => ({
+      id: project.id,
+      title: project.title,
+      type: project.project_type,
+      submittedAt: project.updated_at,
+      submittedBy: project.created_by || 'Unknown'
+    }))
+  } catch (error) {
+    console.error('❌ Error loading submissions:', error)
+    return []
+  }
 }
 
 // Admin emails to hide from user management
@@ -142,25 +154,18 @@ const ADMIN_EMAILS = [
   'altheaguila.gorres@carsu.edu.ph',
 ]
 
-// Fetch real users from Supabase profiles table
+// Fetch real users from backend API
 const fetchRealUsers = async () => {
   try {
-    console.log('🔍 Fetching users from users table...')
+    console.log('🔍 Fetching users from backend API...')
 
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const response = await profilesAPI.getAll()
+    const data = response.data
 
-    console.log('📊 Users query result:', { data, error })
-
-    if (error) {
-      console.error('❌ Error fetching users:', error)
-      return []
-    }
+    console.log('📊 Users API result:', data)
 
     if (!data || data.length === 0) {
-      console.warn('⚠️ No users found in users table')
+      console.warn('⚠️ No users found')
       return []
     }
 
@@ -188,63 +193,10 @@ const fetchRealUsers = async () => {
 // Load data on mount
 onMounted(async () => {
   try {
-    console.log('Starting to fetch admin data...')
+    console.log('Starting to fetch admin data from backend API...')
     loading.value = true
 
-    // Load projects from localStorage (no defaults)
-    const allProjects = loadAllProjects()
-
-    // Fetch projects from Supabase and merge
-    const fetchProjectsFromSupabase = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('projects')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (error) {
-          console.error('Error fetching projects from Supabase', error)
-          return []
-        }
-
-        return (data || []).map((p) => ({
-          id: p.id,
-          title: p.title,
-          sectionHead: p.section_head,
-          dueDate: p.due_date || '',
-          status: p.status || '',
-          type: p.project_type
-            ? String(p.project_type).charAt(0).toUpperCase() + String(p.project_type).slice(1)
-            : 'Magazine',
-          created_at: p.created_at,
-          user: {
-            full_name: p.section_head || '',
-            email: p.section_head
-              ? `${(p.section_head || '').toLowerCase().replace(/\s+/g, '.')}@campus.edu`
-              : '',
-          },
-          _raw: p,
-        }))
-      } catch (err) {
-        console.error('Error fetching projects from Supabase', err)
-        return []
-      }
-    }
-
-    const supaProjects = await fetchProjectsFromSupabase()
-
-    // Merge Supabase projects
-    supaProjects.forEach((sp) => {
-      const exists = allProjects.find((p) => String(p.id) === String(sp.id) || p.title === sp.title)
-      if (!exists) allProjects.push(sp)
-    })
-
-    projects.value = allProjects.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-
-    // Load submissions (empty - no defaults)
-    const allSubmissions = loadSubmissions()
-
-    // Fetch REAL users from profiles table
+    // Fetch REAL users from backend API
     const realUsers = await fetchRealUsers()
 
     if (realUsers.length > 0) {
@@ -263,23 +215,32 @@ onMounted(async () => {
       ]
     }
 
+    // Load projects from backend API (with localStorage fallback)
+    const allProjects = await loadAllProjects()
+    projects.value = allProjects
+
+    // Load submissions from backend API
+    const allSubmissions = await loadSubmissions()
+
     // Update statistics
     statistics.value = {
       totalUsers: users.value.length,
       activeUsers: users.value.filter((u) => u.status === 'active').length,
       totalProjects: allProjects.length,
+      activeProjects: allProjects.filter((p) => p.status === 'in_progress' || p.status === 'under_review').length,
+      publishedWorks: allProjects.filter((p) => p.status === 'published').length,
       totalSubmissions: allSubmissions.length,
-      recentProjects: allProjects,
+      recentProjects: allProjects.slice(0, 5),
       recentSubmissions: allSubmissions,
     }
 
-    console.log('All data loaded successfully:', {
+    console.log('✅ All data loaded successfully from backend API:', {
       users: users.value.length,
       projects: allProjects.length,
       submissions: allSubmissions.length,
     })
   } catch (err) {
-    console.error('Error in onMounted:', err)
+    console.error('❌ Error in onMounted:', err)
     error.value = `Failed to load dashboard data: ${err.message}`
   } finally {
     loading.value = false

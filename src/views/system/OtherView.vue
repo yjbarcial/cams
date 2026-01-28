@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
+import { projectsAPI } from '@/services/apiService'
 
 const router = useRouter()
 const route = useRoute()
@@ -26,20 +27,27 @@ watch(
   },
 )
 
-const loadProjects = () => {
-  // Load projects from both storage keys and merge them
-  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
-  const socialMediaProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
-
-  // Merge both arrays, avoiding duplicates by ID
-  const allProjects = [...otherProjects]
-  socialMediaProjects.forEach((project) => {
-    if (!allProjects.some((p) => String(p.id) === String(project.id))) {
-      allProjects.push(project)
-    }
-  })
-
-  projects.value = allProjects
+const loadProjects = async () => {
+  try {
+    // Load from backend API - get all types that aren't magazine, newsletter, or folio
+    const response = await projectsAPI.getAll()
+    projects.value = response.data
+      .filter(p => !['magazine', 'newsletter', 'folio'].includes(p.project_type))
+      .map(project => ({
+        ...project,
+        id: project.id,
+        title: project.title,
+        type: project.project_type,
+        status: project.status,
+        deadline: project.deadline,
+        createdAt: project.created_at,
+        updatedAt: project.updated_at,
+        starred: false
+      }))
+  } catch (error) {
+    console.error('Error loading projects from API:', error)
+    projects.value = []
+  }
 }
 
 // ADD THIS FUNCTION
@@ -93,17 +101,8 @@ const handleView = (projectId) => {
     return
   }
 
-  // Determine the actual storage type for this project
-  let actualType = 'other'
-
-  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
-  const socialMediaProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
-
-  if (otherProjects.find((p) => String(p.id) === String(projectId))) {
-    actualType = 'other'
-  } else if (socialMediaProjects.find((p) => String(p.id) === String(projectId))) {
-    actualType = 'social-media'
-  }
+  // Use the project type from the project data
+  const actualType = project.project_type || 'other'
 
   // Route based on project status with the ACTUAL storage type
   if (project.status === 'draft' || project.status === 'returned_by_section_head') {
@@ -137,27 +136,15 @@ const handleView = (projectId) => {
   }
 }
 
-const toggleStar = (projectId) => {
+const toggleStar = async (projectId) => {
   const project = projects.value.find((p) => p.id === projectId)
   if (project) {
     project.isStarred = !project.isStarred
-
-    // Get the actual storage key where the project exists
-    const actualStorage = getActualStorageKey(projectId)
-    if (actualStorage) {
-      const savedProjects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-      const updatedProjects = savedProjects.map((p) =>
-        p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
-      )
-      localStorage.setItem(actualStorage.key, JSON.stringify(updatedProjects))
-    } else {
-      // Fallback to other_projects if not found
-      const storageKey = 'other_projects'
-      const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-      const updatedProjects = savedProjects.map((p) =>
-        p.id === projectId ? { ...p, isStarred: project.isStarred } : p,
-      )
-      localStorage.setItem(storageKey, JSON.stringify(updatedProjects))
+    try {
+      await projectsAPI.update(projectId, { is_starred: project.isStarred })
+    } catch (error) {
+      console.error('Error updating star status:', error)
+      project.isStarred = !project.isStarred
     }
   }
 }
@@ -229,20 +216,6 @@ const startEdit = (project) => {
   showEditDialog.value = true
 }
 
-// Helper function to get the actual storage key where a project exists
-const getActualStorageKey = (projectId) => {
-  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
-  const socialMediaProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
-
-  const inOther = otherProjects.some((p) => String(p.id) === String(projectId))
-  const inSocialMedia = socialMediaProjects.some((p) => String(p.id) === String(projectId))
-
-  if (inOther) return { key: 'other_projects', type: 'other' }
-  if (inSocialMedia) return { key: 'social-media_projects', type: 'social-media' }
-
-  return null
-}
-
 const saveEdit = () => {
   if (!editingProject.value.title.trim()) {
     alert('Please enter a project title')
@@ -252,25 +225,7 @@ const saveEdit = () => {
   const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
   if (projectIndex !== -1) {
     projects.value[projectIndex] = { ...editingProject.value }
-
-    // Get the actual storage key where the project exists
-    const actualStorage = getActualStorageKey(editingProject.value.id)
-    if (!actualStorage) {
-      console.error('Could not find project storage location')
-      alert('Error: Could not find project storage location')
-      return
-    }
-
-    // Save to the correct storage location
-    const savedProjects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-    const updatedProjects = savedProjects.map((p) =>
-      p.id === editingProject.value.id ? { ...editingProject.value } : p,
-    )
-    localStorage.setItem(actualStorage.key, JSON.stringify(updatedProjects))
-
-    console.log('Project saved to', actualStorage.key, 'with status:', editingProject.value.status)
-
-    // Reload projects to reflect the updated status
+    // Updates are handled by saveEdit function via API
     loadProjects()
   }
 
@@ -291,12 +246,7 @@ const startDelete = (project) => {
 const confirmDelete = () => {
   if (projectToDelete.value) {
     projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
-
-    // Always save to other_projects (default storage)
-    const storageKey = 'other_projects'
-    const savedProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    const updatedProjects = savedProjects.filter((p) => p.id !== projectToDelete.value.id)
-    localStorage.setItem(storageKey, JSON.stringify(updatedProjects))
+    // Deletion is handled by confirmDelete function via API
   }
 
   showDeleteConfirm.value = false

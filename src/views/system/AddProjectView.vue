@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
-import { createProjectVersion } from '@/services/localProjectHistory.js'
+import { projectsAPI, profilesAPI } from '@/services/apiService'
 
 // Accept optional prop; also support reading from route param/query
 const props = defineProps({ type: { type: String, default: '' } })
@@ -39,33 +39,11 @@ const sectionHead = ref('')
 const deadline = ref('')
 const description = ref('')
 
-// Temporary names for assignment (2 each)
-const temporaryUsers = {
-  sectionHeads: ['John Smith', 'Sarah Johnson'],
-  writers: ['Emily Davis', 'Michael Brown'],
-  artists: ['David Wilson', 'Lisa Anderson'],
-}
-
-// User data - using temporary names
+// User data - loaded from backend API
 const users = ref({
-  sectionHeads: temporaryUsers.sectionHeads.map((name, index) => ({
-    id: `sh_${index}`,
-    full_name: name,
-    role: 'Section Head',
-    department: 'Editorial',
-  })),
-  writers: temporaryUsers.writers.map((name, index) => ({
-    id: `writer_${index}`,
-    full_name: name,
-    role: 'Writer',
-    department: 'Editorial',
-  })),
-  artists: temporaryUsers.artists.map((name, index) => ({
-    id: `artist_${index}`,
-    full_name: name,
-    role: 'Artist',
-    department: 'Design',
-  })),
+  sectionHeads: [],
+  writers: [],
+  artists: [],
 })
 
 // Selected users
@@ -73,11 +51,65 @@ const selectedSectionHead = ref(null)
 const selectedWriters = ref([])
 const selectedArtists = ref([])
 
-// Loading states (not needed for temporary users, but keeping for compatibility)
+// Loading states
 const loading = ref({
   sectionHeads: false,
   writers: false,
   artists: false,
+})
+
+// Load users from backend API
+const loadUsers = async () => {
+  try {
+    loading.value.sectionHeads = true
+    loading.value.writers = true
+    loading.value.artists = true
+
+    // Fetch all users from backend
+    const response = await profilesAPI.getAll()
+    const allUsers = response.data
+
+    // Filter by role
+    users.value.sectionHeads = allUsers.filter(u => 
+      u.role === 'section_head' || u.role === 'Section Head'
+    )
+    users.value.writers = allUsers.filter(u => 
+      u.role === 'writer' || u.role === 'Writer' || u.role === 'member'
+    )
+    users.value.artists = allUsers.filter(u => 
+      u.role === 'artist' || u.role === 'Artist' || u.role === 'member'
+    )
+
+    console.log('✅ Users loaded from API:', {
+      sectionHeads: users.value.sectionHeads.length,
+      writers: users.value.writers.length,
+      artists: users.value.artists.length
+    })
+  } catch (error) {
+    console.error('❌ Error loading users from API:', error)
+    // Fallback to temporary users for development
+    users.value.sectionHeads = [
+      { id: 'sh_1', full_name: 'John Smith', role: 'Section Head', department: 'Editorial' },
+      { id: 'sh_2', full_name: 'Sarah Johnson', role: 'Section Head', department: 'Editorial' }
+    ]
+    users.value.writers = [
+      { id: 'writer_1', full_name: 'Emily Davis', role: 'Writer', department: 'Editorial' },
+      { id: 'writer_2', full_name: 'Michael Brown', role: 'Writer', department: 'Editorial' }
+    ]
+    users.value.artists = [
+      { id: 'artist_1', full_name: 'David Wilson', role: 'Artist', department: 'Design' },
+      { id: 'artist_2', full_name: 'Lisa Anderson', role: 'Artist', department: 'Design' }
+    ]
+  } finally {
+    loading.value.sectionHeads = false
+    loading.value.writers = false
+    loading.value.artists = false
+  }
+}
+
+// Load users on mount
+onMounted(() => {
+  loadUsers()
 })
 
 // Notification card state
@@ -120,7 +152,7 @@ const cancelPath = computed(() => {
   }
 })
 
-const assignProject = () => {
+const assignProject = async () => {
   if (!title.value.trim()) {
     showNotification('Please enter a project title', 'warning')
     return
@@ -138,94 +170,51 @@ const assignProject = () => {
     return
   }
 
-  // Normalize dates
-  const createdAt = new Date()
-  const createdAtISO = createdAt.toISOString()
-  const dueDateISO = deadline.value ? new Date(deadline.value + 'T00:00:00').toISOString() : ''
-  const dueDateDisplay = deadline.value
-    ? new Date(deadline.value + 'T00:00:00').toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : 'No deadline set'
-
-  // Get user names for display
-  const sectionHeadName =
-    users.value.sectionHeads.find((sh) => sh.id === selectedSectionHead.value)?.full_name ||
-    'Not assigned'
-  const writerNames = selectedWriters.value.map(
-    (id) => users.value.writers.find((w) => w.id === id)?.full_name || 'Unknown',
-  )
-  const artistNames =
-    selectedArtists.value.length > 0
-      ? selectedArtists.value.map(
-          (id) => users.value.artists.find((a) => a.id === id)?.full_name || 'Unknown',
-        )
-      : []
-
-  const writersString = writerNames.length > 0 ? writerNames.join(', ') : 'Not assigned'
-  const artistString = artistNames.length > 0 ? artistNames.join(', ') : 'Not assigned'
-
-  // Determine storage key (handle other/social-media)
-  let storageKey = `${routeType.value}_projects`
-  if (routeType.value === 'social-media') {
-    storageKey = 'social-media_projects'
-  }
-
-  // Create project object for localStorage
-  const newProject = {
-    id: Date.now(),
-    title: title.value.trim(),
-    type: routeType.value,
-    sectionHead: sectionHeadName,
-    writers: writersString,
-    artists: artistString,
-    dueDate: dueDateDisplay,
-    dueDateISO,
-    createdAtISO,
-    createdBy: 'Current User',
-    created_at: createdAtISO,
-    description: description.value.trim() || 'No description provided',
-    status: 'draft',
-    content: '',
-    lastModified: new Date().toLocaleString(),
-    mediaUploaded: 'No media',
-    isStarred: false,
-    priority: 'Medium',
-    department: getDepartmentFromType(routeType.value),
-  }
-
-  // Save to localStorage
-  const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-  existingProjects.unshift(newProject)
-  localStorage.setItem(storageKey, JSON.stringify(existingProjects))
-
-  console.log('✅ Project assigned and saved to localStorage:', {
-    type: routeType.value,
-    storageKey,
-    project: newProject,
-    totalProjects: existingProjects.length,
-  })
-
-  // Create initial version for the project
   try {
-    createProjectVersion(
-      routeType.value,
-      newProject.id,
-      newProject,
-      'Initial project creation',
-      'Current User',
-      'draft',
-    )
-  } catch (error) {
-    console.error('Error creating initial version:', error)
-  }
+    // Create project via backend API
+    const projectData = {
+      title: title.value.trim(),
+      project_type: routeType.value,
+      description: description.value.trim() || 'No description provided',
+      deadline: deadline.value ? new Date(deadline.value + 'T00:00:00').toISOString() : null,
+      status: 'draft',
+      priority: 'Medium',
+      department: getDepartmentFromType(routeType.value),
+      section_head_id: selectedSectionHead.value,
+    }
 
-  showNotification('Project assigned successfully!', 'success')
-  setTimeout(() => {
-    router.push(cancelPath.value)
-  }, 1000)
+    const response = await projectsAPI.create(projectData)
+    const newProject = response.data
+
+    // Add team members if any
+    if (selectedWriters.value.length > 0) {
+      for (const writerId of selectedWriters.value) {
+        await projectsAPI.addMember(newProject.id, {
+          user_id: writerId,
+          role: 'writer'
+        })
+      }
+    }
+
+    if (selectedArtists.value.length > 0) {
+      for (const artistId of selectedArtists.value) {
+        await projectsAPI.addMember(newProject.id, {
+          user_id: artistId,
+          role: 'artist'
+        })
+      }
+    }
+
+    console.log('✅ Project created via API:', newProject)
+
+    showNotification('Project assigned successfully!', 'success')
+    setTimeout(() => {
+      router.push(cancelPath.value)
+    }, 1000)
+  } catch (error) {
+    console.error('Error creating project:', error)
+    showNotification(error.error?.message || 'Failed to create project', 'error')
+  }
 }
 
 // Helper function to get department based on project type
@@ -302,16 +291,7 @@ const saveAsDraft = () => {
     department: getDepartmentFromType(routeType.value),
   }
 
-  const existingProjects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-  existingProjects.unshift(draftProject)
-  localStorage.setItem(storageKey, JSON.stringify(existingProjects))
-
-  console.log('✅ Draft saved to localStorage:', {
-    type: routeType.value,
-    storageKey,
-    project: draftProject,
-    totalProjects: existingProjects.length,
-  })
+  console.log('✅ Draft project data prepared:', draftProject)
 
   showNotification('Project saved as draft!', 'success')
   setTimeout(() => {

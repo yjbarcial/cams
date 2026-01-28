@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
+import { projectsAPI } from '@/services/apiService'
 
 const router = useRouter()
 
@@ -15,9 +16,24 @@ onMounted(() => {
   loadProjects()
 })
 
-const loadProjects = () => {
-  const savedProjects = JSON.parse(localStorage.getItem('newsletter_projects') || '[]')
-  projects.value = savedProjects
+const loadProjects = async () => {
+  try {
+    // Load from backend API
+    const response = await projectsAPI.getAll({ project_type: 'newsletter' })
+    projects.value = response.data.map(project => ({
+      ...project,
+      id: project.id,
+      title: project.title,
+      status: project.status,
+      deadline: project.deadline,
+      createdAt: project.created_at,
+      updatedAt: project.updated_at,
+      starred: false
+    }))
+  } catch (error) {
+    console.error('Error loading projects from API:', error)
+    projects.value = []
+  }
 }
 
 // ADD THIS FUNCTION
@@ -103,11 +119,16 @@ const handleView = (projectId) => {
   }
 }
 
-const toggleStar = (projectId) => {
+const toggleStar = async (projectId) => {
   const project = projects.value.find((p) => p.id === projectId)
   if (project) {
     project.isStarred = !project.isStarred
-    localStorage.setItem('newsletter_projects', JSON.stringify(projects.value))
+    try {
+      await projectsAPI.update(projectId, { is_starred: project.isStarred })
+    } catch (error) {
+      console.error('Error updating star status:', error)
+      project.isStarred = !project.isStarred
+    }
   }
 }
 
@@ -183,20 +204,30 @@ const startEdit = (project) => {
   showEditDialog.value = true
 }
 
-const saveEdit = () => {
+const saveEdit = async () => {
   if (!editingProject.value.title.trim()) {
     alert('Please enter a project title')
     return
   }
 
-  const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
-  if (projectIndex !== -1) {
-    projects.value[projectIndex] = { ...editingProject.value }
-    localStorage.setItem('newsletter_projects', JSON.stringify(projects.value))
-  }
+  try {
+    await projectsAPI.update(editingProject.value.id, {
+      title: editingProject.value.title,
+      description: editingProject.value.description,
+      deadline: editingProject.value.deadline
+    })
 
-  editingProject.value = null
-  showEditDialog.value = false
+    const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
+    if (projectIndex !== -1) {
+      projects.value[projectIndex] = { ...editingProject.value }
+    }
+
+    editingProject.value = null
+    showEditDialog.value = false
+  } catch (error) {
+    console.error('Error updating project:', error)
+    alert('Failed to update project')
+  }
 }
 
 const cancelEdit = () => {
@@ -210,10 +241,15 @@ const startDelete = (project) => {
   showDeleteConfirm.value = true
 }
 
-const confirmDelete = () => {
+const confirmDelete = async () => {
   if (projectToDelete.value) {
-    projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
-    localStorage.setItem('newsletter_projects', JSON.stringify(projects.value))
+    try {
+      await projectsAPI.delete(projectToDelete.value.id)
+      projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
+    } catch (error) {
+      console.error('Error deleting project:', error)
+      alert('Failed to delete project')
+    }
   }
 
   showDeleteConfirm.value = false

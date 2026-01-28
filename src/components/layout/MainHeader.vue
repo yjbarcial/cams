@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getUnreadCount } from '@/services/notificationsService.js'
+import { getUnreadCount } from '@/services/notificationsServiceAPI.js'
 
 const router = useRouter()
 const showAccountMenu = ref(false)

@@ -1,20 +1,14 @@
-import { supabase } from '@/utils/supabase'
+import { profilesAPI } from './apiService'
 
 /**
  * Fetch users by role
- * @param {string} role - The role to filter by (e.g., 'writer', 'artist', 'section_head')
+ * @param {string} role - The role to filter by (e.g., 'admin', 'editor', 'section_head', 'member')
  * @returns {Promise<Array>} - Array of user objects
  */
 export const getUsersByRole = async (role) => {
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, email, user_role, department_id')
-      .eq('user_role', role)
-      .order('email', { ascending: true })
-
-    if (error) throw error
-    return data || []
+    const response = await profilesAPI.getAll({ role })
+    return response.data || []
   } catch (error) {
     console.error(`Error fetching ${role}s:`, error)
     return []
@@ -27,13 +21,8 @@ export const getUsersByRole = async (role) => {
  */
 export const getAllUsers = async () => {
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, email, user_role, department_id')
-      .order('email', { ascending: true })
-
-    if (error) throw error
-    return data || []
+    const response = await profilesAPI.getAll()
+    return response.data || []
   } catch (error) {
     console.error('Error fetching users:', error)
     return []
@@ -46,12 +35,60 @@ export const getAllUsers = async () => {
  */
 export const getCurrentUserId = async () => {
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    return user?.id || null
+    // First try from localStorage
+    const userId = localStorage.getItem('userId')
+    if (userId) return userId
+
+    // Otherwise fetch from API
+    const response = await profilesAPI.getCurrent()
+    return response.data?.id || null
   } catch (error) {
     console.error('Error getting current user:', error)
+    return null
+  }
+}
+
+/**
+ * Get current user profile
+ * @returns {Promise<Object|null>} - Current user's profile or null
+ */
+export const getCurrentUser = async () => {
+  try {
+    const response = await profilesAPI.getCurrent()
+    return response.data || null
+  } catch (error) {
+    console.error('Error getting current user profile:', error)
+    return null
+  }
+}
+
+/**
+ * Get user by ID
+ * @param {number} userId - User ID
+ * @returns {Promise<Object|null>} - User profile or null
+ */
+export const getUserById = async (userId) => {
+  try {
+    const response = await profilesAPI.getById(userId)
+    return response.data || null
+  } catch (error) {
+    console.error('Error getting user by ID:', error)
+    return null
+  }
+}
+
+/**
+ * Update user profile
+ * @param {number} userId - User ID
+ * @param {Object} profileData - Profile data to update
+ * @returns {Promise<Object|null>} - Updated profile or null
+ */
+export const updateUserProfile = async (userId, profileData) => {
+  try {
+    const response = await profilesAPI.update(userId, profileData)
+    return response.data || null
+  } catch (error) {
+    console.error('Error updating user profile:', error)
     return null
   }
 }

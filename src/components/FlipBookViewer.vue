@@ -313,6 +313,7 @@ onBeforeUnmount(() => {
 
 .viewer-title {
   /* Color and text-shadow are now applied dynamically via :style */
+  font-size: 1rem;
 }
 
 .page-indicator {

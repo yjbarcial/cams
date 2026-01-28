@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
+import { projectsAPI, tasksAPI } from '@/services/apiService'
 import {
   getProjectComments,
   addProjectComment,
@@ -203,61 +204,22 @@ const getBackButtonText = computed(() => {
   return `Back to ${typeNames[projectType.value] || 'Projects'}`
 })
 
-// Helper function to get the actual storage key where a project exists
-const getActualStorageKey = (projectId) => {
-  // For other/social-media types, check both storage keys
-  const otherProjects = JSON.parse(localStorage.getItem('other_projects') || '[]')
-  const socialMediaProjects = JSON.parse(localStorage.getItem('social-media_projects') || '[]')
-
-  const inOther = otherProjects.some((p) => String(p.id) === String(projectId))
-  const inSocialMedia = socialMediaProjects.some((p) => String(p.id) === String(projectId))
-
-  if (inOther) return { key: 'other_projects', type: 'other' }
-  if (inSocialMedia) return { key: 'social-media_projects', type: 'social-media' }
-
-  // For other types, check their specific storage
-  const projectTypes = ['magazine', 'newsletter', 'folio']
-  for (const type of projectTypes) {
-    const storageKey = `${type}_projects`
-    const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    if (projects.some((p) => String(p.id) === String(projectId))) {
-      return { key: storageKey, type: type }
-    }
-  }
-
-  return null
-}
-
 const saveContentChanges = async () => {
   try {
-    // Get the actual storage key where the project exists
-    const actualStorage = getActualStorageKey(projectId)
-    if (!actualStorage) {
-      console.error('Could not find project storage location')
-      showNotification('Error: Project storage location not found', 'error')
-      return
-    }
+    // Save to backend API
+    await projectsAPI.update(projectId, {
+      content: editorContent.value,
+      updated_at: new Date().toISOString()
+    })
 
-    const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-    const projectIndex = projects.findIndex((p) => p.id == projectId)
+    console.log('✅ Content saved to API')
 
-    if (projectIndex !== -1) {
-      projects[projectIndex].content = editorContent.value
-      projects[projectIndex].lastModified = new Date().toLocaleString()
-      // Preserve status when saving content
-      if (project.value.status) {
-        projects[projectIndex].status = project.value.status
-      }
-      localStorage.setItem(actualStorage.key, JSON.stringify(projects))
-
-      project.value.content = editorContent.value
-      project.value.lastModified = new Date().toLocaleString()
-
-      updateLastSaveTime()
-      hasUnsavedChanges.value = false
-    }
+    project.value.content = editorContent.value
+    project.value.lastModified = new Date().toLocaleString()
+    updateLastSaveTime()
+    hasUnsavedChanges.value = false
   } catch (error) {
-    console.error('Error saving content:', error)
+    console.error('❌ Error saving content:', error)
     showNotification('Error saving content', 'error')
   }
 }
@@ -293,118 +255,73 @@ const submitApproval = async () => {
       await saveContentChanges()
     }
 
-    // Get the actual storage key where the project exists
-    const actualStorage = getActualStorageKey(projectId)
-    if (!actualStorage) {
-      console.error('Could not find project storage location')
-      showNotification('Error: Project storage location not found', 'error')
+    // Update status via backend API
+    await projectsAPI.update(projectId, {
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+      section_head_approved_by: action === 'approve' ? currentUser.value : undefined,
+      section_head_approved_date: action === 'approve' ? new Date().toISOString() : undefined,
+      section_head_comments: action === 'approve' ? approvalComments.value : undefined,
+      priority: action === 'approve' ? approvalPriority.value : undefined
+    })
+
+    console.log('✅ Project status updated via API')
+
+    project.value.status = newStatus
+
+    // Create notification based on action
+    if (action === 'approve') {
+      const hasWriter =
+        project.value?.writers &&
+        project.value.writers !== 'Not assigned' &&
+        project.value.writers.trim() !== ''
+      const hasArtist =
+        project.value?.artists &&
+        project.value.artists !== 'Not assigned' &&
+        project.value.artists.trim() !== ''
+      const isCreativeDirector = hasArtist && !hasWriter
+      createStatusChangeNotification({
+        projectId: projectId,
+        projectType: projectType.value,
+        projectTitle: project.value.title,
+        oldStatus: 'to_section_head',
+        newStatus: isCreativeDirector ? 'to_creative_director' : 'to_technical_editor',
+        actionBy: currentUser.value,
+        recipient: isCreativeDirector ? 'Creative Director' : 'Technical Editor',
+        comments: approvalComments.value,
+      })
+    } else if (action === 'return') {
+      createStatusChangeNotification({
+        projectId: projectId,
+        projectType: projectType.value,
+        projectTitle: project.value.title,
+        oldStatus: 'to_section_head',
+        newStatus: 'returned_by_section_head',
+        actionBy: currentUser.value,
+        recipient: 'Writer',
+        comments: approvalComments.value,
+      })
+    }
+
+    showApprovalDialog.value = false
+    approvalAction.value = ''
+    approvalComments.value = ''
+    approvalPriority.value = 'Medium'
+
+    if (action === 'approve') {
+      showNotification('Project approved and sent to Technical Editor!', 'success')
+      setTimeout(() => {
+        // Route based on project type
+        const routePath =
+          projectType.value === 'other' || projectType.value === 'social-media'
+            ? '/other'
+            : `/${projectType.value}`
+        router.push(routePath)
+      }, 600)
       return
     }
 
-    const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-    const projectIndex = projects.findIndex((p) => p.id == projectId)
-
-    if (projectIndex !== -1) {
-      projects[projectIndex].status = newStatus
-      projects[projectIndex].lastModified = new Date().toLocaleString()
-
-      if (action === 'approve') {
-        projects[projectIndex].sectionHeadApprovedBy = currentUser.value
-        projects[projectIndex].sectionHeadApprovedDate = new Date().toISOString()
-        projects[projectIndex].sectionHeadComments = approvalComments.value
-        projects[projectIndex].priority = approvalPriority.value
-      }
-
-      localStorage.setItem(actualStorage.key, JSON.stringify(projects))
-      project.value.status = newStatus
-
-      // Update projectType to match actual storage
-      projectType.value = actualStorage.type
-
-      // Create notification based on action
-      if (action === 'approve') {
-        const hasWriter =
-          project.value?.writers &&
-          project.value.writers !== 'Not assigned' &&
-          project.value.writers.trim() !== ''
-        const hasArtist =
-          project.value?.artists &&
-          project.value.artists !== 'Not assigned' &&
-          project.value.artists.trim() !== ''
-        const isCreativeDirector = hasArtist && !hasWriter
-        createStatusChangeNotification({
-          projectId: projectId,
-          projectType: actualStorage.type,
-          projectTitle: project.value.title,
-          oldStatus: 'to_section_head',
-          newStatus: isCreativeDirector ? 'to_creative_director' : 'to_technical_editor',
-          actionBy: currentUser.value,
-          recipient: isCreativeDirector ? 'Creative Director' : 'Technical Editor',
-          comments: approvalComments.value,
-        })
-      } else if (action === 'return') {
-        createStatusChangeNotification({
-          projectId: projectId,
-          projectType: actualStorage.type,
-          projectTitle: project.value.title,
-          oldStatus: 'to_section_head',
-          newStatus: 'returned_by_section_head',
-          actionBy: currentUser.value,
-          recipient: 'Writer',
-          comments: approvalComments.value,
-        })
-      }
-
-      try {
-        await createProjectVersionSupabase(
-          actualStorage.type,
-          null,
-          {
-            ...projects[projectIndex],
-            status: newStatus,
-            content: editorContent.value || '',
-          },
-          action === 'approve' ? 'Approved by Section Head' : 'Returned by Section Head for edits',
-          currentUser.value,
-          action === 'approve' ? 'approved' : 'returned',
-        )
-        console.log('Project saved to Supabase successfully')
-      } catch (err) {
-        console.warn('Failed to save project to Supabase:', err)
-      }
-
-      const historyKey = `approval_history_${projectId}`
-      const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]')
-      existingHistory.push({
-        action,
-        approver: currentUser.value,
-        role: 'Section Head',
-        comments: approvalComments.value,
-        timestamp: new Date().toISOString(),
-        priority: approvalPriority.value,
-      })
-      localStorage.setItem(historyKey, JSON.stringify(existingHistory))
-
-      showApprovalDialog.value = false
-      approvalAction.value = ''
-      approvalComments.value = ''
-      approvalPriority.value = 'Medium'
-
-      if (action === 'approve') {
-        showNotification('Project approved and sent to Technical Editor!', 'success')
-        setTimeout(() => {
-          // For other/social-media types, route to /other
-          const routePath =
-            actualStorage.type === 'other' || actualStorage.type === 'social-media'
-              ? '/other'
-              : `/${actualStorage.type}`
-          router.push(routePath)
-        }, 600)
-        return
-      }
-
-      showNotification('Project updated successfully!', 'success')
-    }
+    showNotification('Project updated successfully!', 'success')
   } catch (error) {
     console.error('Error processing approval:', error)
     showNotification('Error processing approval', 'error')
@@ -421,152 +338,71 @@ const goBack = () => {
   if (isEditorEditable.value && hasUnsavedChanges.value) {
     saveContentChanges()
   }
-  // Route back to the project type view
-  // Get actual storage to determine correct route
-  const actualStorage = getActualStorageKey(projectId)
-  if (actualStorage) {
-    // For other/social-media types, route to /other
-    const routePath =
-      actualStorage.type === 'other' || actualStorage.type === 'social-media'
-        ? '/other'
-        : `/${actualStorage.type}`
-    router.push(routePath)
-  } else {
-    // Fallback to projectType.value if we can't find actual storage
-    const routePath =
-      projectType.value === 'other' || projectType.value === 'social-media'
-        ? '/other'
-        : `/${projectType.value}`
-    router.push(routePath)
-  }
+  // Route back to the project type view based on loaded project data
+  const routePath =
+    projectType.value === 'other' || projectType.value === 'social-media'
+      ? '/other'
+      : `/${projectType.value}`
+  router.push(routePath)
 }
 
-const loadProjectComments = () => {
+const loadProjectComments = async () => {
   try {
-    comments.value = getProjectComments(projectType.value, projectId)
+    comments.value = await getProjectComments(projectType.value, projectId)
   } catch (error) {
     console.error('Error loading comments:', error)
     comments.value = []
   }
 }
 
-const loadProjectData = () => {
+const loadProjectData = async () => {
   try {
-    // First, try to get type from query parameter
-    const queryType = route.query.type
+    console.log('🔍 Loading project from backend API:', projectId)
 
-    if (queryType) {
-      console.log('Trying to load project from type:', queryType)
+    // Load from backend API
+    const response = await projectsAPI.getById(projectId)
+    const foundProject = response.data
 
-      // For other/social-media types, check both storage keys to find where project actually exists
-      if (queryType === 'other' || queryType === 'social-media') {
-        const actualStorage = getActualStorageKey(projectId)
+    console.log('✅ Project loaded from API:', foundProject)
 
-        if (actualStorage) {
-          const projects = JSON.parse(localStorage.getItem(actualStorage.key) || '[]')
-          const foundProject = projects.find((p) => String(p.id) === String(projectId))
-
-          if (foundProject) {
-            console.log('✅ Project found in', actualStorage.type, ':', foundProject)
-            project.value = {
-              ...foundProject,
-              id: String(projectId),
-              title: foundProject.title || 'Untitled Project',
-              status: foundProject.status || 'draft',
-              lastModified: foundProject.lastModified || new Date().toLocaleString(),
-              content: foundProject.content || '',
-            }
-
-            projectType.value = actualStorage.type
-            editorContent.value = foundProject.content || ''
-            updateLastSaveTime()
-            loadProjectComments()
-            console.log('✅ Project loaded successfully from', actualStorage.type)
-            return
-          }
-        }
-        console.log('❌ Project not found with ID:', projectId, 'in other or social-media storage')
-      } else {
-        // For other types (magazine, newsletter, folio), use the query type directly
-        const storageKey = `${queryType}_projects`
-        const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-        console.log('Found projects in', storageKey, ':', projects)
-        const foundProject = projects.find((p) => String(p.id) === String(projectId))
-
-        if (foundProject) {
-          console.log('✅ Project found:', foundProject)
-          project.value = {
-            ...foundProject,
-            id: String(projectId),
-            title: foundProject.title || 'Untitled Project',
-            status: foundProject.status || 'draft',
-            lastModified: foundProject.lastModified || new Date().toLocaleString(),
-            content: foundProject.content || '',
-          }
-
-          projectType.value = queryType
-          editorContent.value = foundProject.content || ''
-          updateLastSaveTime()
-          loadProjectComments()
-          console.log('✅ Project loaded successfully')
-          return
-        } else {
-          console.log('❌ Project not found with ID:', projectId, 'in storage:', storageKey)
-        }
-      }
+    project.value = {
+      ...foundProject,
+      id: String(projectId),
+      title: foundProject.title || 'Untitled Project',
+      status: foundProject.status || 'draft',
+      lastModified: foundProject.updated_at
+        ? new Date(foundProject.updated_at).toLocaleString()
+        : new Date().toLocaleString(),
+      content: foundProject.content || '',
+      writers: foundProject.writers || foundProject.assigned_writers || 'Not assigned',
+      artists: foundProject.artists || foundProject.assigned_artists || 'Not assigned',
+      sectionHead: foundProject.section_head || foundProject.created_by || 'Not assigned',
+      description: foundProject.description || '',
+      dueDate: foundProject.due_date || foundProject.deadline || '',
+      department: foundProject.department || '',
+      priority: foundProject.priority || 'Medium',
     }
 
-    // If not found with query type, search all project types INCLUDING social-media
-    console.log('🔍 Project not found with query type, searching all types...')
-    const projectTypes = ['magazine', 'newsletter', 'folio', 'other', 'social-media']
+    projectType.value = foundProject.project_type || route.query.type || 'magazine'
+    editorContent.value = foundProject.content || ''
+    updateLastSaveTime()
+    loadProjectComments()
 
-    for (const type of projectTypes) {
-      const storageKey = `${type}_projects`
-      const projects = JSON.parse(localStorage.getItem(storageKey) || '[]')
-      console.log(`Searching in ${storageKey}:`, projects)
-      const foundProject = projects.find((p) => String(p.id) === String(projectId))
-
-      if (foundProject) {
-        console.log('✅ Project found in', type, ':', foundProject)
-        project.value = {
-          ...foundProject,
-          id: String(projectId),
-          title: foundProject.title || 'Untitled Project',
-          status: foundProject.status || 'draft',
-          lastModified: foundProject.lastModified || new Date().toLocaleString(),
-          content: foundProject.content || '',
-        }
-
-        projectType.value = type
-        editorContent.value = foundProject.content || ''
-        updateLastSaveTime()
-        loadProjectComments()
-        console.log('✅ Project loaded successfully from', type)
-        return
-      }
-    }
-
-    console.error('❌ Project not found in any storage. Project ID:', projectId)
-    console.error(
-      'Available storage keys:',
-      Object.keys(localStorage).filter((k) => k.includes('_projects')),
-    )
-
+    console.log('✅ Project loaded successfully from API')
+  } catch (error) {
+    console.error('❌ Error loading project:', error)
     showNotification('Project not found. Redirecting...', 'error')
 
     setTimeout(() => {
       router.push('/other')
     }, 2000)
-  } catch (error) {
-    console.error('❌ Error loading project:', error)
-    showNotification('Error loading project data.', 'error')
   }
 }
 
-const addComment = () => {
+const addComment = async () => {
   if (newComment.value.trim()) {
     try {
-      const comment = addProjectComment(
+      const comment = await addProjectComment(
         projectType.value,
         projectId,
         newComment.value.trim(),
@@ -591,10 +427,10 @@ const filteredComments = computed(() => {
   )
 })
 
-const deleteComment = (commentId) => {
+const deleteComment = async (commentId) => {
   // Delete immediately - no alerts, just delete and show notification card
   try {
-    const success = deleteProjectComment(projectType.value, projectId, commentId)
+    const success = await deleteProjectComment(projectType.value, projectId, commentId)
     if (success) {
       comments.value = comments.value.filter((c) => c.id !== commentId)
       showCommentNotification('Comment deleted successfully', 'success')
@@ -697,8 +533,8 @@ onUnmounted(() => {
   }
 })
 
-onMounted(() => {
-  loadProjectData()
+onMounted(async () => {
+  await loadProjectData()
 })
 </script>
 

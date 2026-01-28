@@ -19,18 +19,30 @@ import {
   isEmptyArray,
   isObject,
 } from '@/utils/validators'
-import { supabase } from '@/utils/supabase.js'
-import { addUserToProfiles } from '@/utils/autoAddUser.js'
+import { supabase } from '@/utils/supabase'
+import { addUserToProfiles } from '@/utils/autoAddUser'
 import libBg from '/images/lib-hd.jpg'
 
 const router = useRouter()
 
+// Check session and redirect immediately
+;(async () => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session) {
+    localStorage.setItem('isLoggedIn', 'true')
+    localStorage.setItem('userEmail', session.user.email)
+    await addUserToProfiles(session.user)
+    window.location.href = '/dashboard'
+  }
+})()
+
 const email = ref('')
 const password = ref('')
 const showPassword = ref(false)
-const loading = ref(false)
+const loading = ref(true) // Start with true to prevent form interaction
 const errorMessage = ref('')
 const showDomainPopup = ref(false)
+const redirecting = ref(false)
 
 // Valid CARSU emails for the system
 const carsuEmails = [
@@ -86,20 +98,54 @@ const preventUnauthorizedNavigation = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // Check for active session FIRST
+  const { data: { session } } = await supabase.auth.getSession()
+  
+  if (session) {
+    redirecting.value = true
+    errorMessage.value = 'You are already logged in. Redirecting...'
+    await addUserToProfiles(session.user)
+    localStorage.setItem('isLoggedIn', 'true')
+    localStorage.setItem('userEmail', session.user.email)
+    
+    setTimeout(() => {
+      window.location.href = '/dashboard'
+    }, 500)
+    return
+  }
+
+  // No session - enable the form
+  loading.value = false
+
+  // Handle auth callback from magic link
+  const hashParams = new URLSearchParams(window.location.hash.substring(1))
+  const accessToken = hashParams.get('access_token')
+  
+  if (accessToken) {
+    loading.value = true
+    redirecting.value = true
+    errorMessage.value = 'Login successful! Redirecting...'
+    const { data: { session: newSession } } = await supabase.auth.getSession()
+    if (newSession) {
+      await addUserToProfiles(newSession.user)
+      localStorage.setItem('isLoggedIn', 'true')
+      localStorage.setItem('userEmail', newSession.user.email)
+      
+      setTimeout(() => {
+        window.location.href = '/dashboard'
+      }, 500)
+      return
+    }
+  }
+
   const urlParams = new URLSearchParams(window.location.search)
   const fromLogout = urlParams.get('logout')
 
   if (fromLogout === 'true') {
     window.history.replaceState(null, '', window.location.pathname)
-    console.log('Successfully logged out')
-  }
-
-  const isLoggedIn = localStorage.getItem('isLoggedIn')
-  if (!isLoggedIn || isLoggedIn === 'false') {
-    localStorage.removeItem('userEmail')
-    localStorage.removeItem('user')
     localStorage.setItem('isLoggedIn', 'false')
+    await supabase.auth.signOut()
   }
 
   preventUnauthorizedNavigation()
@@ -116,7 +162,6 @@ async function submit() {
   const { valid } = await form.value.validate()
   if (!valid) return
 
-  // ⭐ Check CARSU email domain
   if (!email.value.endsWith('@carsu.edu.ph')) {
     showDomainPopup.value = true
     errorMessage.value = ''
@@ -127,97 +172,25 @@ async function submit() {
   errorMessage.value = ''
 
   try {
-    // Step 1: Sign in with Supabase (creates auth session)
-    console.log('🚀 Authenticating with Supabase:', email.value)
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    // Simple Supabase magic link auth
+    const { error } = await supabase.auth.signInWithOtp({
       email: email.value,
-      password: password.value,
+      options: {
+        shouldCreateUser: true,
+      }
     })
 
-    console.log('📊 Auth response:', { authData, authError })
+    if (error) throw error
 
-    if (authError) {
-      // If user doesn't exist in Supabase auth, sign them up
-      if (authError.message.includes('Invalid login credentials')) {
-        console.log('👤 User not found in auth, attempting to sign up...')
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: email.value,
-          password: password.value,
-        })
+    // Auto-add user to profiles
+    await addUserToProfiles({ email: email.value })
 
-        console.log('📊 Sign up response:', { signUpData, signUpError })
-
-        if (signUpError) {
-          throw new Error(`Sign up failed: ${signUpError.message}`)
-        }
-
-        console.log('✅ Sign up successful')
-        console.log(
-          '⚠️  Session:',
-          signUpData?.session ? 'Created' : 'Not created (check if email confirmation needed)',
-        )
-      } else {
-        throw new Error(authError.message)
-      }
-    } else {
-      console.log('✅ Authentication successful')
-      console.log('📊 Session:', authData?.session ? 'Available' : 'Not available')
-    }
-
-    // Step 1b: Check current session status
-    console.log('🔍 Checking session status...')
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-    console.log('📊 Current session:', { hasSession: !!sessionData?.session, error: sessionError })
-
-    // Step 2: Add/update user in profiles table
-    console.log('🚀 Creating user profile for:', email.value)
-    const mockUser = {
-      email: email.value,
-      user_metadata: {
-        full_name: email.value
-          .split('@')[0]
-          .replace(/\./g, ' ')
-          .replace(/\b\w/g, (l) => l.toUpperCase()),
-        department: 'N/A',
-        role: 'User',
-      },
-    }
-
-    console.log('📝 Mock user object:', mockUser)
-    console.log('⏳ Calling addUserToProfiles...')
-    await addUserToProfiles(mockUser)
-    console.log('✅ addUserToProfiles completed')
-
-    // Step 3: Verify session is established before storing anything
-    console.log('⏳ Verifying session is established...')
-    const {
-      data: { user },
-      error: verifyError,
-    } = await supabase.auth.getUser()
-
-    if (verifyError || !user) {
-      console.error('❌ Verification error:', verifyError)
-      throw new Error('Session verification failed - user not authenticated')
-    }
-
-    console.log('✅ Session verified for user:', user.id, user.email)
-
-    // Step 4: Store user session
-    localStorage.setItem('userEmail', email.value)
+    // Set localStorage
     localStorage.setItem('isLoggedIn', 'true')
-    localStorage.setItem(
-      'user',
-      JSON.stringify({
-        email: email.value,
-        loginTime: new Date().toISOString(),
-      }),
-    )
+    localStorage.setItem('userEmail', email.value)
 
-    console.log('✅ Login successful for:', email.value)
-    console.log('📍 Navigating to dashboard...')
-
-    window.history.replaceState(null, '', '/dashboard')
-    await router.push('/dashboard')
+    // Show success message
+    alert('✅ Check your email! Click the magic link to complete sign in.')
   } catch (error) {
     errorMessage.value = error.message || 'Login failed. Please try again.'
     console.error('❌ Login error:', error)
