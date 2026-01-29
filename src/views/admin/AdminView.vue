@@ -1,7 +1,8 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { profilesAPI, projectsAPI } from '@/services/apiService'
+import { projectsService, profilesService } from '@/services/supabaseService'
+import { supabase } from '@/utils/supabase'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import UploadView from '@/views/system/UploadView.vue'
@@ -96,15 +97,14 @@ const getStatusColor = (status) => {
   return statusColors[status] || 'default'
 }
 
-// ⭐ CLEANED: Function to load only real projects from backend API
+// ⭐ CLEANED: Function to load only real projects from Supabase
 const loadAllProjects = async () => {
   try {
-    console.log('🔍 Fetching all projects from backend API...')
+    console.log('🔍 Fetching all projects from Supabase...')
     
-    const response = await projectsAPI.getAll()
-    const apiProjects = response.data
+    const apiProjects = await projectsService.getAll()
 
-    console.log('📊 API Projects:', apiProjects.length)
+    console.log('📊 Supabase Projects:', apiProjects.length)
 
     // Map to display format
     const mappedProjects = apiProjects.map(project => ({
@@ -121,20 +121,20 @@ const loadAllProjects = async () => {
       }
     }))
 
-    console.log('✅ Projects loaded from API:', mappedProjects.length)
+    console.log('✅ Projects loaded from Supabase:', mappedProjects.length)
     return mappedProjects
   } catch (error) {
-    console.error('❌ Error loading projects from API:', error)
+    console.error('❌ Error loading projects from Supabase:', error)
     return []
   }
 }
 
-// ⭐ CLEANED: Function to load only real submissions from backend API
+// ⭐ CLEANED: Function to load only real submissions from Supabase
 const loadSubmissions = async () => {
   try {
     // Get projects with 'submitted' or 'under_review' status
-    const response = await projectsAPI.getAll({ status: 'submitted' })
-    return response.data.slice(0, 5).map(project => ({
+    const projects = await projectsService.getAll({ status: 'submitted' })
+    return projects.slice(0, 5).map(project => ({
       id: project.id,
       title: project.title,
       type: project.project_type,
@@ -154,15 +154,14 @@ const ADMIN_EMAILS = [
   'altheaguila.gorres@carsu.edu.ph',
 ]
 
-// Fetch real users from backend API
+// Fetch real users from Supabase
 const fetchRealUsers = async () => {
   try {
-    console.log('🔍 Fetching users from backend API...')
+    console.log('🔍 Fetching users from Supabase...')
 
-    const response = await profilesAPI.getAll()
-    const data = response.data
+    const data = await profilesService.getAll()
 
-    console.log('📊 Users API result:', data)
+    console.log('📊 Users Supabase result:', data)
 
     if (!data || data.length === 0) {
       console.warn('⚠️ No users found')
@@ -193,10 +192,10 @@ const fetchRealUsers = async () => {
 // Load data on mount
 onMounted(async () => {
   try {
-    console.log('Starting to fetch admin data from backend API...')
+    console.log('Starting to fetch admin data from Supabase...')
     loading.value = true
 
-    // Fetch REAL users from backend API
+    // Fetch REAL users from Supabase
     const realUsers = await fetchRealUsers()
 
     if (realUsers.length > 0) {
@@ -215,11 +214,11 @@ onMounted(async () => {
       ]
     }
 
-    // Load projects from backend API (with localStorage fallback)
+    // Load projects from Supabase (with localStorage fallback)
     const allProjects = await loadAllProjects()
     projects.value = allProjects
 
-    // Load submissions from backend API
+    // Load submissions from Supabase
     const allSubmissions = await loadSubmissions()
 
     // Update statistics
@@ -234,7 +233,7 @@ onMounted(async () => {
       recentSubmissions: allSubmissions,
     }
 
-    console.log('✅ All data loaded successfully from backend API:', {
+    console.log('✅ All data loaded successfully from Supabase:', {
       users: users.value.length,
       projects: allProjects.length,
       submissions: allSubmissions.length,

@@ -1,7 +1,8 @@
 <script setup>
 import { ref } from 'vue'
 const emit = defineEmits(['close'])
-import { archivesAPI, mediaFilesAPI } from '@/services/apiService'
+import { archivesService } from '@/services/supabaseService'
+import { supabase } from '@/utils/supabase'
 
 const uploadDialog = ref(false)
 const selectedFiles = ref([])
@@ -33,16 +34,28 @@ const uploadFiles = async () => {
   uploading.value = true
   try {
     for (const file of selectedFiles.value) {
-      // Create FormData for file upload
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('title', title.value)
-      formData.append('category', category.value.toLowerCase())
-      formData.append('publication_date', publishedAt.value)
-      formData.append('description', `Publication: ${title.value}`)
+      // Upload file to Supabase Storage
+      const fileName = `${Date.now()}-${file.name}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('archives')
+        .upload(fileName, file)
 
-      // Upload archive via backend API
-      await archivesAPI.create(formData)
+      if (uploadError) throw uploadError
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('archives')
+        .getPublicUrl(fileName)
+
+      // Create archive record via Supabase
+      await archivesService.create({
+        title: title.value,
+        category: category.value.toLowerCase(),
+        publication_date: publishedAt.value,
+        description: `Publication: ${title.value}`,
+        file_url: publicUrl,
+        file_name: file.name
+      })
     }
 
     // Clear form and close

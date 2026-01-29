@@ -1,7 +1,8 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getUnreadCount } from '@/services/notificationsServiceAPI.js'
+import { getUnreadCount } from '@/services/notificationsService.js'
+import { supabase } from '@/utils/supabase'
 
 const router = useRouter()
 const showAccountMenu = ref(false)
@@ -24,10 +25,10 @@ const handleNotificationUpdate = () => {
 onMounted(() => {
   updateUnreadCount()
 
-  // Check for new notifications every 2 seconds
+  // Check for new notifications every 30 seconds (reduced from 2s to avoid spam)
   notificationCheckInterval = setInterval(() => {
     updateUnreadCount()
-  }, 2000)
+  }, 30000)
 
   // Listen for storage changes (when notifications are added/updated in other tabs)
   window.addEventListener('storage', handleStorageChange)
@@ -75,8 +76,8 @@ const handleLogout = async () => {
   try {
     console.log('Logout clicked')
 
-    // Simulate logout delay (replace with actual API call if needed)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Sign out from Supabase
+    await supabase.auth.signOut()
 
     // Clear any stored authentication data
     localStorage.removeItem('userEmail')
@@ -85,8 +86,8 @@ const handleLogout = async () => {
     localStorage.removeItem('token')
     sessionStorage.clear()
 
-    // Navigate to login page
-    router.push('/login')
+    // Navigate to login page with logout flag
+    router.push('/login?logout=true')
     showAccountMenu.value = false
   } catch (error) {
     console.error('Logout error:', error)

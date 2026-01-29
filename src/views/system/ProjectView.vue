@@ -6,7 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
-import { projectsAPI, tasksAPI } from '@/services/apiService'
+import { projectsService } from '@/services/supabaseService'
 import { autoCreateVersionOnEdit } from '@/services/localProjectHistory.js'
 import {
   getProjectComments,
@@ -125,14 +125,14 @@ const saveTitleEdit = async () => {
     project.value.title = tempTitle.value.trim()
     isEditingTitle.value = false
 
-    // Save to backend API
+    // Save to Supabase
     try {
-      await projectsAPI.update(projectId, {
+      await projectsService.update(projectId, {
         title: tempTitle.value.trim(),
         updated_at: new Date().toISOString()
       })
 
-      console.log('✅ Title updated via API:', project.value.title)
+      console.log('✅ Title updated via Supabase:', project.value.title)
       showNotification('Title updated successfully')
       updateLastSaveTime()
     } catch (error) {
@@ -176,14 +176,14 @@ const saveContent = async (showNotif = false) => {
     editorContent.value = content
     project.value.content = content
 
-    // Save to backend API
+    // Save to Supabase
     try {
-      await projectsAPI.update(projectId, {
+      await projectsService.update(projectId, {
         content: content,
         updated_at: new Date().toISOString()
       })
 
-      console.log('✅ Content saved to API')
+      console.log('✅ Content saved to Supabase')
 
       // Update previous content for next comparison
       previousContent.value = content
@@ -279,8 +279,8 @@ const submitForApproval = () => {
 
 const confirmSubmitForApproval = async () => {
   try {
-    // Update via backend API
-    await projectsAPI.update(projectId, {
+    // Update via Supabase
+    await projectsService.update(projectId, {
       status: 'to_section_head',
       priority: submitPriority.value,
       submitted_by: 'Current User',
@@ -289,7 +289,7 @@ const confirmSubmitForApproval = async () => {
       updated_at: new Date().toISOString()
     })
 
-    console.log('✅ Project submitted via API')
+    console.log('✅ Project submitted via Supabase')
 
     project.value.status = 'to_section_head'
     hasUnsavedChanges.value = false
@@ -413,16 +413,15 @@ const loadProjectComments = async () => {
   }
 }
 
-// Load project data from backend API
+// Load project data from Supabase
 const loadProjectData = async () => {
   try {
-    console.log('🔍 Loading project from backend API:', projectId)
+    console.log('🔍 Loading project from Supabase:', projectId)
 
-    // Try to load from backend API first
-    const response = await projectsAPI.getById(projectId)
-    const foundProject = response.data
+    // Load from Supabase
+    const foundProject = await projectsService.getById(projectId)
 
-    console.log('✅ Project loaded from API:', foundProject)
+    console.log('✅ Project loaded from Supabase:', foundProject)
 
     // Normalize status for draft projects
     let normalizedStatus = foundProject.status || 'draft'
@@ -470,7 +469,7 @@ const loadProjectData = async () => {
       highlightComments.value = storedComments
     }
 
-    console.log('✅ Project loaded successfully from API')
+    console.log('✅ Project loaded successfully from Supabase')
   } catch (error) {
     console.error('❌ Error loading project:', error)
     showNotification('Project not found. Please check the project ID.', 'error')

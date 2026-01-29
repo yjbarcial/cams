@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
-import { projectsAPI, profilesAPI } from '@/services/apiService'
+import { projectsService, profilesService } from '@/services/supabaseService'
 
 // Accept optional prop; also support reading from route param/query
 const props = defineProps({ type: { type: String, default: '' } })
@@ -58,35 +58,34 @@ const loading = ref({
   artists: false,
 })
 
-// Load users from backend API
+// Load users from Supabase
 const loadUsers = async () => {
   try {
     loading.value.sectionHeads = true
     loading.value.writers = true
     loading.value.artists = true
 
-    // Fetch all users from backend
-    const response = await profilesAPI.getAll()
-    const allUsers = response.data
+    // Fetch all users from Supabase
+    const allUsers = await profilesService.getAll()
 
     // Filter by role
     users.value.sectionHeads = allUsers.filter(u => 
       u.role === 'section_head' || u.role === 'Section Head'
     )
     users.value.writers = allUsers.filter(u => 
-      u.role === 'writer' || u.role === 'Writer' || u.role === 'member'
+      u.role === 'writer' || u.role === 'Writer' || u.role === 'contributor'
     )
     users.value.artists = allUsers.filter(u => 
-      u.role === 'artist' || u.role === 'Artist' || u.role === 'member'
+      u.role === 'artist' || u.role === 'Artist' || u.role === 'contributor'
     )
 
-    console.log('✅ Users loaded from API:', {
+    console.log('✅ Users loaded from Supabase:', {
       sectionHeads: users.value.sectionHeads.length,
       writers: users.value.writers.length,
       artists: users.value.artists.length
     })
   } catch (error) {
-    console.error('❌ Error loading users from API:', error)
+    console.error('❌ Error loading users from Supabase:', error)
     // Fallback to temporary users for development
     users.value.sectionHeads = [
       { id: 'sh_1', full_name: 'John Smith', role: 'Section Head', department: 'Editorial' },
@@ -171,25 +170,22 @@ const assignProject = async () => {
   }
 
   try {
-    // Create project via backend API
+    // Create project via Supabase
     const projectData = {
       title: title.value.trim(),
       project_type: routeType.value,
       description: description.value.trim() || 'No description provided',
-      deadline: deadline.value ? new Date(deadline.value + 'T00:00:00').toISOString() : null,
+      due_date: deadline.value || null,
       status: 'draft',
-      priority: 'Medium',
-      department: getDepartmentFromType(routeType.value),
-      section_head_id: selectedSectionHead.value,
+      section_head: selectedSectionHead.value ? String(selectedSectionHead.value) : null,
     }
 
-    const response = await projectsAPI.create(projectData)
-    const newProject = response.data
+    const newProject = await projectsService.create(projectData)
 
     // Add team members if any
     if (selectedWriters.value.length > 0) {
       for (const writerId of selectedWriters.value) {
-        await projectsAPI.addMember(newProject.id, {
+        await projectsService.addMember(newProject.id, {
           user_id: writerId,
           role: 'writer'
         })
@@ -198,14 +194,14 @@ const assignProject = async () => {
 
     if (selectedArtists.value.length > 0) {
       for (const artistId of selectedArtists.value) {
-        await projectsAPI.addMember(newProject.id, {
+        await projectsService.addMember(newProject.id, {
           user_id: artistId,
           role: 'artist'
         })
       }
     }
 
-    console.log('✅ Project created via API:', newProject)
+    console.log('✅ Project created via Supabase:', newProject)
 
     showNotification('Project assigned successfully!', 'success')
     setTimeout(() => {

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { supabase } from '@/utils/supabase';
 
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
@@ -12,12 +13,13 @@ const apiClient = axios.create({
   timeout: 30000,
 });
 
-// Request interceptor - Add auth token
+// Request interceptor - Add Supabase auth token
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  async (config) => {
+    // Get current session from Supabase
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
     }
     return config;
   },
@@ -36,10 +38,9 @@ apiClient.interceptors.response.use(
       // Handle specific error codes
       switch (error.response.status) {
         case 401:
-          // Unauthorized - clear token and redirect to login
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('isLoggedIn');
-          window.location.href = '/login';
+          // Unauthorized - just log, don't redirect (let the app handle auth state)
+          // This prevents redirect loops when API auth differs from Supabase auth
+          console.warn('API 401: Unauthorized request');
           break;
         case 403:
           console.error('Forbidden:', error.response.data.error?.message);
@@ -48,7 +49,11 @@ apiClient.interceptors.response.use(
           console.error('Not found:', error.response.data.error?.message);
           break;
         case 500:
-          console.error('Server error:', error.response.data.error?.message);
+          // Only log if not the expected "not logged in" case
+          const msg = error.response.data.error?.message;
+          if (msg && !msg.includes('Tenant or user not found')) {
+            console.error('Server error:', msg);
+          }
           break;
       }
       return Promise.reject(error.response.data);

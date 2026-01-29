@@ -4,7 +4,8 @@ import { useRouter, useRoute } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
-import { projectsAPI } from '@/services/apiService'
+import { supabase } from '@/utils/supabase'
+import { projectsService } from '@/services/supabaseService'
 
 const router = useRouter()
 const route = useRoute()
@@ -29,23 +30,28 @@ watch(
 
 const loadProjects = async () => {
   try {
-    // Load from backend API - get all types that aren't magazine, newsletter, or folio
-    const response = await projectsAPI.getAll()
-    projects.value = response.data
-      .filter(p => !['magazine', 'newsletter', 'folio'].includes(p.project_type))
-      .map(project => ({
-        ...project,
-        id: project.id,
-        title: project.title,
-        type: project.project_type,
-        status: project.status,
-        deadline: project.deadline,
-        createdAt: project.created_at,
-        updatedAt: project.updated_at,
-        starred: false
-      }))
+    // Load from Supabase directly - get 'other' type projects
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('project_type', 'other')
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    
+    projects.value = (data || []).map(project => ({
+      ...project,
+      id: project.id,
+      title: project.title,
+      type: project.project_type,
+      status: project.status,
+      deadline: project.due_date,
+      createdAt: project.created_at,
+      updatedAt: project.updated_at,
+      starred: false
+    }))
   } catch (error) {
-    console.error('Error loading projects from API:', error)
+    console.error('Error loading projects from Supabase:', error)
     projects.value = []
   }
 }
@@ -141,7 +147,7 @@ const toggleStar = async (projectId) => {
   if (project) {
     project.isStarred = !project.isStarred
     try {
-      await projectsAPI.update(projectId, { is_starred: project.isStarred })
+      await projectsService.update(projectId, { is_starred: project.isStarred })
     } catch (error) {
       console.error('Error updating star status:', error)
       project.isStarred = !project.isStarred

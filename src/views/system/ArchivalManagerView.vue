@@ -6,7 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
-import { projectsAPI, archivesAPI } from '@/services/apiService'
+import { projectsService, archivesService } from '@/services/supabaseService'
 import {
   getProjectComments,
   addProjectComment,
@@ -182,7 +182,7 @@ const submitApproval = async () => {
   const newStatus = getNextStatus(action)
 
   try {
-    // Update via backend API
+    // Update via Supabase
     const updateData = {
       status: newStatus,
       updated_at: new Date().toISOString()
@@ -195,9 +195,9 @@ const submitApproval = async () => {
       updateData.publish_notes = approvalComments.value
     }
 
-    await projectsAPI.update(projectId, updateData)
+    await projectsService.update(projectId, updateData)
 
-    console.log('✅ Project published via API')
+    console.log('✅ Project published via Supabase')
 
     project.value.status = newStatus
 
@@ -279,12 +279,11 @@ const loadProjectComments = async () => {
 
 const loadProjectData = async () => {
   try {
-    console.log('🔍 Loading project from backend API:', projectId)
+    console.log('🔍 Loading project from Supabase:', projectId)
 
-    const response = await projectsAPI.getById(projectId)
-    const foundProject = response.data
+    const foundProject = await projectsService.getById(projectId)
 
-    console.log('✅ Project loaded from API:', foundProject)
+    console.log('✅ Project loaded from Supabase:', foundProject)
 
     project.value = {
       ...foundProject,
@@ -300,7 +299,7 @@ const loadProjectData = async () => {
     updateLastSaveTime()
     loadProjectComments()
 
-    console.log('✅ Project loaded from API')
+    console.log('✅ Project loaded from Supabase')
   } catch (error) {
     console.error('❌ Error loading project:', error)
     showNotification('Project not found. Redirecting...', 'error')

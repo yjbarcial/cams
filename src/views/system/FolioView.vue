@@ -4,7 +4,8 @@ import { useRouter, useRoute } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
-import { projectsAPI } from '@/services/apiService'
+import { supabase } from '@/utils/supabase'
+import { projectsService } from '@/services/supabaseService'
 
 const router = useRouter()
 const route = useRoute()
@@ -29,20 +30,27 @@ watch(
 
 const loadProjects = async () => {
   try {
-    // Load from backend API
-    const response = await projectsAPI.getAll({ project_type: 'folio' })
-    projects.value = response.data.map(project => ({
+    // Load from Supabase directly
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('project_type', 'folio')
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    
+    projects.value = (data || []).map(project => ({
       ...project,
       id: project.id,
       title: project.title,
       status: project.status,
-      deadline: project.deadline,
+      deadline: project.due_date,
       createdAt: project.created_at,
       updatedAt: project.updated_at,
       starred: false
     }))
   } catch (error) {
-    console.error('Error loading projects from API:', error)
+    console.error('Error loading projects from Supabase:', error)
     projects.value = []
   }
 }
@@ -135,7 +143,7 @@ const toggleStar = async (projectId) => {
   if (project) {
     project.isStarred = !project.isStarred
     try {
-      await projectsAPI.update(projectId, { is_starred: project.isStarred })
+      await projectsService.update(projectId, { is_starred: project.isStarred })
     } catch (error) {
       console.error('Error updating star status:', error)
       project.isStarred = !project.isStarred
@@ -217,7 +225,7 @@ const saveEdit = async () => {
   }
 
   try {
-    await projectsAPI.update(editingProject.value.id, {
+    await projectsService.update(editingProject.value.id, {
       title: editingProject.value.title,
       description: editingProject.value.description,
       deadline: editingProject.value.deadline
@@ -249,7 +257,7 @@ const startDelete = (project) => {
 const confirmDelete = async () => {
   if (projectToDelete.value) {
     try {
-      await projectsAPI.delete(projectToDelete.value.id)
+      await projectsService.delete(projectToDelete.value.id)
       projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
     } catch (error) {
       console.error('Error deleting project:', error)

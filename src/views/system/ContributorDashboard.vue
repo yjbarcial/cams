@@ -9,16 +9,13 @@ const router = useRouter()
 // Prevent back navigation to login page
 const preventBackToLogin = () => {
   // Add a new history entry to prevent going back
-  window.history.pushState(null, '', window.location.href)
+  window.history.pushState(history.state, '', window.location.href)
 }
 
 // Handle browser back button
 const handlePopState = (event) => {
   // Push the current state again to prevent going back
-  window.history.pushState(null, '', window.location.href)
-
-  // Optional: Show a message or do nothing
-  console.log('Back navigation prevented. Please use the logout button to exit.')
+  window.history.pushState(history.state, '', window.location.href)
 }
 
 onMounted(() => {
@@ -29,7 +26,7 @@ onMounted(() => {
   window.addEventListener('popstate', handlePopState)
 
   // Replace the current history entry to remove login page from history
-  window.history.replaceState(null, '', window.location.href)
+  window.history.replaceState(history.state, '', window.location.href)
 })
 
 onUnmounted(() => {

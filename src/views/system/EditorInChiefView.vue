@@ -6,7 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
-import { projectsAPI, tasksAPI } from '@/services/apiService'
+import { projectsService } from '@/services/supabaseService'
 import {
   getProjectComments,
   addProjectComment,
@@ -185,13 +185,13 @@ const getBackButtonText = computed(() => {
 
 const saveContentChanges = async () => {
   try {
-    // Save to backend API
-    await projectsAPI.update(projectId, {
+    // Save to Supabase
+    await projectsService.update(projectId, {
       content: editorContent.value,
       updated_at: new Date().toISOString()
     })
 
-    console.log('✅ Content saved to API')
+    console.log('✅ Content saved to Supabase')
 
     project.value.content = editorContent.value
     project.value.lastModified = new Date().toLocaleString()
@@ -220,7 +220,7 @@ const submitApproval = async () => {
       await saveContentChanges()
     }
 
-    // Update via backend API
+    // Update via Supabase
     const updateData = {
       status: newStatus,
       updated_at: new Date().toISOString()
@@ -238,9 +238,9 @@ const submitApproval = async () => {
       updateData.priority = approvalPriority.value
     }
 
-    await projectsAPI.update(projectId, updateData)
+    await projectsService.update(projectId, updateData)
 
-    console.log('✅ Project status updated via API')
+    console.log('✅ Project status updated via Supabase')
 
     project.value.status = newStatus
 
@@ -334,12 +334,11 @@ const loadProjectComments = async () => {
 
 const loadProjectData = async () => {
   try {
-    console.log('🔍 Loading project from backend API:', projectId)
+    console.log('🔍 Loading project from Supabase:', projectId)
 
-    const response = await projectsAPI.getById(projectId)
-    const foundProject = response.data
+    const foundProject = await projectsService.getById(projectId)
 
-    console.log('✅ Project loaded from API:', foundProject)
+    console.log('✅ Project loaded from Supabase:', foundProject)
 
     project.value = {
       ...foundProject,
@@ -364,7 +363,7 @@ const loadProjectData = async () => {
     updateLastSaveTime()
     loadProjectComments()
 
-    console.log('✅ Project loaded successfully from API')
+    console.log('✅ Project loaded successfully from Supabase')
   } catch (error) {
     console.error('❌ Error loading project:', error)
     showNotification('Project not found. Redirecting...', 'error')

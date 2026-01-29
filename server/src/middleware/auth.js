@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import ProfileModel from '../models/profile.model.js';
+import { supabaseAdmin } from '../config/supabase.js';
 
 export const authenticate = async (req, res, next) => {
   try {
@@ -15,6 +16,41 @@ export const authenticate = async (req, res, next) => {
     const token = authHeader.substring(7);
 
     try {
+      // Try to verify with Supabase first
+      if (supabaseAdmin) {
+        const { data: { user: supabaseUser }, error } = await supabaseAdmin.auth.getUser(token);
+        
+        if (!error && supabaseUser) {
+          // Get or create user profile
+          let user = await ProfileModel.findByEmail(supabaseUser.email);
+          
+          if (!user) {
+            // Auto-create profile for Supabase user
+            user = await ProfileModel.create({
+              email: supabaseUser.email,
+              role: 'contributor',
+              status: 'active'
+            });
+          }
+
+          if (user.status !== 'active') {
+            return res.status(403).json({ 
+              success: false, 
+              error: { message: 'Account is not active' } 
+            });
+          }
+
+          // Attach user to request
+          req.user = user;
+          
+          // Update last active
+          await ProfileModel.updateLastActive(user.id);
+
+          return next();
+        }
+      }
+
+      // Fallback: try local JWT verification
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       // Get user profile

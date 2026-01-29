@@ -8,8 +8,8 @@ import {
   markAsRead,
   deleteNotification,
   markAllAsRead,
-} from '@/services/notificationsServiceAPI.js'
-import * as projectsAPI from '@/services/api.js'
+} from '@/services/notificationsService.js'
+import { projectsService } from '@/services/supabaseService'
 
 const router = useRouter()
 
@@ -83,11 +83,10 @@ const handleNotificationClick = async (notification) => {
     notification.isRead = true
   }
 
-  // Check if project exists via API
+  // Check if project exists via Supabase
   if (notification.projectId && notification.projectType) {
     try {
-      const response = await projectsAPI.getById(notification.projectId)
-      const project = response.data
+      const project = await projectsService.getById(notification.projectId)
 
       if (project) {
         // If project is published, show in archive viewer

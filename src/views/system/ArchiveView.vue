@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ArchiveHeader from '@/components/layout/ArchiveHeader.vue'
-import { archivesAPI } from '@/services/apiService'
+import { supabase } from '@/utils/supabase'
 import FlipBookViewer from '@/components/FlipBookViewer.vue'
 
 // router is already initialized above
@@ -88,16 +88,13 @@ const extractFirstImage = (htmlContent) => {
 // Prevent back navigation to dashboard
 const preventBackToDashboard = () => {
   // Add a new history entry to prevent going back
-  window.history.pushState(null, '', window.location.href)
+  window.history.pushState(history.state, '', window.location.href)
 }
 
 // Handle browser back button
 const handlePopState = (event) => {
   // Push the current state again to prevent going back
-  window.history.pushState(null, '', window.location.href)
-
-  // Optional: Show a message or do nothing
-  console.log('Back navigation prevented. Please use the navigation menu to exit.')
+  window.history.pushState(history.state, '', window.location.href)
 }
 
 onMounted(() => {
@@ -108,13 +105,17 @@ onMounted(() => {
   window.addEventListener('popstate', handlePopState)
 
   // Replace the current history entry to remove previous page from history
-  window.history.replaceState(null, '', window.location.href)
+  window.history.replaceState(history.state, '', window.location.href)
 
-  // Fetch archives from backend API
+  // Fetch archives from Supabase directly
   ;(async () => {
     try {
-      const response = await archivesAPI.getAll()
-      const data = response.data
+      const { data, error } = await supabase
+        .from('archives')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
 
       if (data && data.length) {
         const mapped = data.map((archive) => ({
@@ -140,7 +141,7 @@ onMounted(() => {
         articles.value = mapped
       }
     } catch (err) {
-      console.error('Error loading archives from API:', err)
+      console.error('Error loading archives from Supabase:', err)
       // Fallback: articles remain empty array
     }
   })()
