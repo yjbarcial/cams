@@ -43,7 +43,18 @@ const newUser = ref({
 })
 
 // Departments for filtering
-const departments = ['News', 'Sports', 'Arts', 'Opinion', 'Features']
+const departments = ['Creatives', 'Scribes']
+
+const roles = [
+  'Artist',
+  'Writer',
+  'Section Head',
+  'Technical Editor',
+  'Creative Director',
+  'Editor-in-Chief',
+  'Chief Adviser',
+  'Archival Manager',
+]
 
 const activeTab = ref('users')
 
@@ -101,24 +112,26 @@ const getStatusColor = (status) => {
 const loadAllProjects = async () => {
   try {
     console.log('🔍 Fetching all projects from Supabase...')
-    
+
     const apiProjects = await projectsService.getAll()
 
     console.log('📊 Supabase Projects:', apiProjects.length)
 
     // Map to display format
-    const mappedProjects = apiProjects.map(project => ({
+    const mappedProjects = apiProjects.map((project) => ({
       id: project.id,
       title: project.title,
-      type: project.project_type ? project.project_type.charAt(0).toUpperCase() + project.project_type.slice(1) : 'Other',
+      type: project.project_type
+        ? project.project_type.charAt(0).toUpperCase() + project.project_type.slice(1)
+        : 'Other',
       status: project.status || 'draft',
       department: project.department || 'N/A',
       created_at: project.created_at,
       updated_at: project.updated_at,
       user: {
         full_name: project.created_by || 'Unknown',
-        email: project.created_by_email || 'N/A'
-      }
+        email: project.created_by_email || 'N/A',
+      },
     }))
 
     console.log('✅ Projects loaded from Supabase:', mappedProjects.length)
@@ -134,12 +147,12 @@ const loadSubmissions = async () => {
   try {
     // Get projects with 'submitted' or 'under_review' status
     const projects = await projectsService.getAll({ status: 'submitted' })
-    return projects.slice(0, 5).map(project => ({
+    return projects.slice(0, 5).map((project) => ({
       id: project.id,
       title: project.title,
       type: project.project_type,
       submittedAt: project.updated_at,
-      submittedBy: project.created_by || 'Unknown'
+      submittedBy: project.created_by || 'Unknown',
     }))
   } catch (error) {
     console.error('❌ Error loading submissions:', error)
@@ -226,7 +239,9 @@ onMounted(async () => {
       totalUsers: users.value.length,
       activeUsers: users.value.filter((u) => u.status === 'active').length,
       totalProjects: allProjects.length,
-      activeProjects: allProjects.filter((p) => p.status === 'in_progress' || p.status === 'under_review').length,
+      activeProjects: allProjects.filter(
+        (p) => p.status === 'in_progress' || p.status === 'under_review',
+      ).length,
       publishedWorks: allProjects.filter((p) => p.status === 'published').length,
       totalSubmissions: allSubmissions.length,
       recentProjects: allProjects.slice(0, 5),
@@ -826,12 +841,12 @@ const performClearClientData = async () => {
                             variant="outlined"
                             class="mb-3"
                           ></v-select>
-                          <v-text-field
+                          <v-select
                             v-model="newUser.role"
                             label="Role"
+                            :items="roles"
                             variant="outlined"
-                            placeholder="e.g., Writer, Editor, Section Head"
-                          ></v-text-field>
+                          ></v-select>
                         </v-card-text>
                         <v-card-actions>
                           <v-spacer></v-spacer>
