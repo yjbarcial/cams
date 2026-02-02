@@ -1,10 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import ArchiveHeader from '@/components/layout/ArchiveHeader.vue'
 import { supabase } from '@/utils/supabase'
-import FlipBookViewer from '@/components/FlipBookViewer.vue'
 
-// router is already initialized above
+const router = useRouter()
 
 const searchQuery = ref('')
 const activeCategory = ref('All')
@@ -22,50 +22,9 @@ const filteredArticles = computed(() => {
   })
 })
 
-// Viewer state: show content like Facebook posts
-const viewerVisible = ref(false)
-const viewerPages = ref([])
-const viewerTitle = ref('')
-const viewerCategory = ref('Magazine')
-const viewerContent = ref('')
-const viewerMedia = ref('')
-const viewerAuthor = ref('')
-const viewerDate = ref('')
-
 function openDeliverable(item, event) {
-  // Prevent navigation to route that may trigger auth checks. Open in-page viewer instead.
   event && event.preventDefault && event.preventDefault()
-  viewerTitle.value = item.title
-  viewerCategory.value = item.category || 'Magazine'
-  viewerContent.value = item.content || ''
-
-  // Don't show separate media if content already has images (from Quill editor)
-  const hasContentImages = item.content && item.content.includes('<img')
-  viewerMedia.value = hasContentImages ? '' : item.cover || item.mediaUploaded || ''
-
-  viewerAuthor.value = item.writers || item.artists || 'The Gold Panicles'
-  viewerDate.value = item.publishedAt || new Date().toISOString()
-
-  // If article has explicit pages, use them; otherwise generate simple pages from cover
-  if (Array.isArray(item.pages) && item.pages.length) {
-    viewerPages.value = item.pages
-  } else if (typeof item.pages === 'string' && item.pages.toLowerCase().endsWith('.pdf')) {
-    viewerPages.value = item.pages // FlipBookViewer will detect PDF string
-  } else {
-    viewerPages.value = item.cover ? [item.cover] : []
-  }
-  viewerVisible.value = true
-}
-
-function closeViewer() {
-  viewerVisible.value = false
-  viewerPages.value = []
-  viewerTitle.value = ''
-  viewerContent.value = ''
-  viewerMedia.value = ''
-  viewerAuthor.value = ''
-  viewerDate.value = ''
-  viewerCategory.value = 'Magazine'
+  router.push({ name: 'publication', params: { id: item.id } })
 }
 
 // Extract first image from HTML content (including base64 images from Quill editor)
@@ -114,7 +73,7 @@ onMounted(() => {
         .from('archives')
         .select('*')
         .order('created_at', { ascending: false })
-      
+
       if (error) throw error
 
       if (data && data.length) {
@@ -140,6 +99,52 @@ onMounted(() => {
 
         articles.value = mapped
       }
+
+      // Add test publication with text content
+      articles.value.unshift({
+        id: 'test-publication-1',
+        title: 'Test Publication: The Art of Digital Publishing',
+        category: 'Magazine',
+        cover: '/images/lib-hd.jpg',
+        publishedAt: new Date().toISOString(),
+        content: `
+          <h2>Welcome to Our Test Publication</h2>
+          <p>This is a comprehensive test article designed to showcase the capabilities of our digital publishing platform. The content you're reading demonstrates how text, formatting, and various elements come together to create an engaging reading experience.</p>
+          
+          <h3>Why Digital Publishing Matters</h3>
+          <p>In today's fast-paced world, digital publishing has revolutionized the way we consume and share information. It offers unprecedented accessibility, allowing readers to access content from anywhere in the world at any time. This democratization of knowledge has transformed education, journalism, and creative writing.</p>
+          
+          <h3>The Power of Typography</h3>
+          <p>Typography is more than just choosing fonts—it's about creating a visual hierarchy that guides readers through your content. Good typography enhances readability, establishes mood, and reinforces your brand identity. Every font choice, line height, and spacing decision contributes to the overall reading experience.</p>
+          
+          <blockquote>
+            "Design is not just what it looks like and feels like. Design is how it works." - Steve Jobs
+          </blockquote>
+          
+          <h3>Key Features of Modern Publishing</h3>
+          <ul>
+            <li><strong>Responsive Design:</strong> Content adapts seamlessly across all devices</li>
+            <li><strong>Interactive Elements:</strong> Engaging multimedia enriches the narrative</li>
+            <li><strong>Accessibility:</strong> Inclusive design ensures everyone can access content</li>
+            <li><strong>Analytics:</strong> Data-driven insights help improve future publications</li>
+            <li><strong>Search Optimization:</strong> Smart indexing makes content discoverable</li>
+          </ul>
+          
+          <h3>Looking Ahead</h3>
+          <p>As we continue to evolve in this digital age, the future of publishing looks bright. Emerging technologies like artificial intelligence, augmented reality, and voice interfaces are opening new possibilities for storytelling and content delivery. The key is to embrace these innovations while maintaining the core values of quality, accuracy, and reader engagement.</p>
+          
+          <p>This test publication serves as a foundation for exploring these possibilities. Whether you're a writer, editor, designer, or reader, understanding the mechanics of digital publishing empowers you to create and consume content more effectively.</p>
+          
+          <h3>Final Thoughts</h3>
+          <p>Thank you for taking the time to explore this test publication. We hope it demonstrates the potential of our platform and inspires you to create your own compelling content. The journey of digital publishing is just beginning, and we're excited to be part of it with you.</p>
+        `,
+        mediaUploaded: '',
+        writers: 'The Gold Panicles Editorial Team',
+        artists: 'The Gold Panicles',
+        pages: null,
+        volumeIssue: 'Test Issue Vol. 1',
+        tags: ['test', 'digital-publishing', 'typography'],
+      })
     } catch (err) {
       console.error('Error loading archives from Supabase:', err)
       // Fallback: articles remain empty array
@@ -256,40 +261,34 @@ function scrollToPublications() {
                 :aria-label="`View details for ${a.title}`"
                 style="text-decoration: none; display: block"
               >
-                <v-card class="card" hover>
-                  <v-img
-                    :src="a.cover || a.mediaUploaded || '/images/lib-hd.jpg'"
-                    :alt="`${a.title} cover`"
-                    class="cover"
-                    aspect-ratio="1.2"
-                    cover
-                  >
-                    <template v-slot:error>
-                      <div class="cover-placeholder">
-                        <v-icon size="64" color="grey-lighten-2">mdi-image-outline</v-icon>
-                      </div>
-                    </template>
-                  </v-img>
-                  <v-card-text class="meta">
-                    <v-chip
-                      :class="['category', a.category.toLowerCase()]"
-                      size="x-small"
-                      variant="flat"
-                      >{{ a.category }}</v-chip
-                    >
-                    <v-card-title>
-                      <span class="article-title">{{ a.title }}</span>
-                    </v-card-title>
-                    <v-card-text v-if="a.volumeIssue" class="volume-issue">
-                      {{ a.volumeIssue }}
-                    </v-card-text>
-                    <v-card-text class="date">
+                <div class="book-wrapper">
+                  <div class="book-card">
+                    <div class="book-spine"></div>
+                    <div class="book-front">
+                      <v-img
+                        :src="a.cover || a.mediaUploaded || '/images/lib-hd.jpg'"
+                        :alt="`${a.title} cover`"
+                        class="book-cover"
+                        aspect-ratio="0.7"
+                        cover
+                      >
+                        <template v-slot:error>
+                          <div class="cover-placeholder">
+                            <v-icon size="48" color="grey-lighten-2">mdi-book-outline</v-icon>
+                          </div>
+                        </template>
+                      </v-img>
+                    </div>
+                  </div>
+                  <div class="book-info-text">
+                    <div class="book-title">{{ a.title }}</div>
+                    <div class="book-date">
                       <time :datetime="a.publishedAt">
                         {{ new Date(a.publishedAt).toLocaleDateString() }}
                       </time>
-                    </v-card-text>
-                  </v-card-text>
-                </v-card>
+                    </div>
+                  </div>
+                </div>
               </div>
             </v-col>
           </v-row>
@@ -384,190 +383,10 @@ function scrollToPublications() {
         </v-row>
       </v-container>
     </v-sheet>
-
-    <!-- Content Viewer Dialog (Facebook-style post viewer) -->
-    <v-dialog v-model="viewerVisible" max-width="900px" scrollable>
-      <v-card class="content-viewer">
-        <v-card-title class="viewer-header">
-          <div class="header-content">
-            <v-chip
-              :color="
-                viewerCategory === 'Magazine'
-                  ? '#f5c52b'
-                  : viewerCategory === 'Folio'
-                    ? '#39acff'
-                    : '#353535'
-              "
-              class="category-chip"
-            >
-              {{ viewerCategory }}
-            </v-chip>
-            <v-spacer></v-spacer>
-            <v-btn icon @click="closeViewer" variant="text">
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
-          </div>
-        </v-card-title>
-
-        <v-divider></v-divider>
-
-        <v-card-text class="viewer-body">
-          <!-- Post Header -->
-          <div class="post-header">
-            <div class="post-author">
-              <v-avatar color="primary" size="48">
-                <v-icon color="white">mdi-account</v-icon>
-              </v-avatar>
-              <div class="author-info">
-                <div class="author-name">{{ viewerAuthor }}</div>
-                <div class="post-date">
-                  {{
-                    new Date(viewerDate).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })
-                  }}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Post Title -->
-          <h2 class="post-title">{{ viewerTitle }}</h2>
-
-          <!-- Post Media -->
-          <div v-if="viewerMedia" class="post-media">
-            <v-img :src="viewerMedia" :alt="viewerTitle" cover class="media-image"></v-img>
-          </div>
-
-          <!-- Post Content -->
-          <div class="post-content" v-html="viewerContent"></div>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
   </v-app>
 </template>
 
 <style scoped>
-/* Content Viewer Styles */
-.content-viewer {
-  border-radius: 12px !important;
-  overflow: hidden;
-}
-
-.viewer-header {
-  padding: 16px 20px !important;
-  background: #f8f9fa;
-}
-
-.header-content {
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.category-chip {
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.viewer-body {
-  padding: 0 !important;
-  background: white;
-}
-
-.post-header {
-  padding: 20px 24px 16px;
-  background: white;
-}
-
-.post-author {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.author-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.author-name {
-  font-weight: 600;
-  font-size: 15px;
-  color: #1f2937;
-}
-
-.post-date {
-  font-size: 13px;
-  color: #6b7280;
-}
-
-.post-title {
-  padding: 0 24px 16px;
-  font-size: 24px;
-  font-weight: 700;
-  color: #111827;
-  line-height: 1.3;
-  margin: 0;
-}
-
-.post-media {
-  width: 100%;
-  max-height: 500px;
-  overflow: hidden;
-  background: #f3f4f6;
-}
-
-.media-image {
-  width: 100%;
-  object-fit: contain;
-}
-
-.post-content {
-  padding: 24px;
-  font-size: 15px;
-  line-height: 1.7;
-  color: #374151;
-}
-
-.post-content :deep(p) {
-  margin-bottom: 16px;
-}
-
-.post-content :deep(img) {
-  max-width: 100%;
-  height: auto;
-  border-radius: 8px;
-  margin: 16px 0;
-}
-
-.post-content :deep(h1),
-.post-content :deep(h2),
-.post-content :deep(h3) {
-  font-weight: 700;
-  margin-top: 24px;
-  margin-bottom: 12px;
-  color: #1f2937;
-}
-
-.post-content :deep(ul),
-.post-content :deep(ol) {
-  padding-left: 24px;
-  margin-bottom: 16px;
-}
-
-.post-content :deep(blockquote) {
-  border-left: 4px solid #f5c52b;
-  padding-left: 16px;
-  margin: 16px 0;
-  font-style: italic;
-  color: #6b7280;
-}
-
 .hero {
   padding: 32px 12px 20px !important;
   text-align: center;
@@ -668,33 +487,62 @@ function scrollToPublications() {
 }
 
 .grid-item {
-  padding: 8px !important;
+  padding: 10px !important;
 }
 
-.card {
-  border: none !important;
-  border-radius: 12px !important;
-  overflow: hidden !important;
-  background: #fff !important;
-  display: flex !important;
-  flex-direction: column !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
-  height: 100% !important;
-  transition: all 0.3s ease !important;
-}
-
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12) !important;
-}
-
-.cover {
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  background: #fafafa;
+/* Book Wrapper */
+.book-wrapper {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.book-info-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+/* Book Card Styles */
+.book-card {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.book-card:hover {
+  transform: translateY(-6px);
+}
+
+.book-spine {
+  width: 12px;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.25) 0%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.25) 100%
+  );
+  border-radius: 3px 0 0 3px;
+  box-shadow: inset -1px 0 3px rgba(0, 0, 0, 0.2);
+}
+
+.book-front {
+  flex: 1;
+  background: white;
+  border-radius: 0 3px 3px 0;
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.book-cover {
+  width: 100%;
+  height: 100%;
+  background: #f8f9fa;
 }
 
 .cover-placeholder {
@@ -703,26 +551,39 @@ function scrollToPublications() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f4f6;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e3e7ed 100%);
 }
 
-.meta {
-  padding: 10px 12px 12px !important;
-  flex-grow: 1 !important;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.book-title {
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #2c3e50;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding: 0 4px;
+}
+
+.book-date {
+  font-size: 11px;
+  color: #7f8c8d;
+  font-weight: 500;
+  text-align: center;
 }
 
 .category {
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  font-size: 11px !important;
+  font-size: 10px !important;
   font-weight: 600 !important;
-  padding: 6px 12px !important;
+  padding: 4px 10px !important;
   margin-bottom: 0 !important;
-  border-radius: 16px !important;
+  border-radius: 12px !important;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   width: fit-content;
@@ -744,58 +605,37 @@ function scrollToPublications() {
   color: #fff !important;
 }
 
-.article-title {
-  margin: 0;
-  font-size: 15px !important;
-  line-height: 1.3 !important;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  color: #2c3e50;
-  font-weight: 600;
+/* Responsive adjustments */
+@media (max-width: 960px) {
+  .book-spine {
+    width: 10px;
+  }
 }
 
-/* Flip overlay styles */
-.flip-overlay {
-  pointer-events: none;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-  border-radius: 8px;
-  overflow: hidden;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-}
-.flip-inner {
-  width: 100%;
-  height: 100%;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  transform-origin: center center;
-  transition: transform 650ms ease-in-out;
-}
-.flip-inner.animating {
-  transform: rotateY(180deg);
-}
-.flip-cover {
-  width: 100%;
-  height: 60%;
-  object-fit: cover;
-}
-.flip-caption {
-  padding: 12px;
-}
-.flip-caption h3 {
-  margin: 0;
-  font-size: 18px;
-}
-.flip-caption .flip-category {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #666;
+@media (max-width: 640px) {
+  .grid-item {
+    padding: 8px !important;
+  }
+
+  .book-spine {
+    width: 8px;
+  }
+
+  .book-title {
+    font-size: 11px;
+  }
+
+  .book-date {
+    font-size: 10px;
+  }
+
+  .book-wrapper {
+    gap: 6px;
+  }
+
+  .book-info-text {
+    gap: 3px;
+  }
 }
 
 .date {
