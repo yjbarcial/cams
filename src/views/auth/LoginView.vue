@@ -36,20 +36,40 @@ const isFirstTimeUser = ref(false)
 const magicLinkSent = ref(false)
 const checkingUser = ref(false)
 
-// Valid CARSU emails for the system
-const carsuEmails = [
+// AUTHORIZED USERS ONLY - Complete whitelist
+const AUTHORIZED_USERS = [
+  // Admins
   'yssahjulianah.barcial@carsu.edu.ph',
   'lovellhudson.clavel@carsu.edu.ph',
   'altheaguila.gorres@carsu.edu.ph',
+  // Artists & Writers
+  'lexzyrrehdevonnaire.abellanosa@carsu.edu.ph',
+  'teejay.abello@carsu.edu.ph',
+  'nissi.abes@carsu.edu.ph',
+  'belleblanchekyle.abiol@carsu.edu.ph',
+  'jessahmei.allard@carsu.edu.ph',
 ]
 
-// CARSU email validator using your existing validators
+// Check if email is authorized
+function isAuthorizedUser(emailToCheck) {
+  return AUTHORIZED_USERS.includes(emailToCheck.toLowerCase().trim())
+}
+
+// CARSU email validator with authorization check
 const carsuEmailValidator = (value) => {
   const requiredValidation = requiredValidator(value)
   if (requiredValidation !== true) return requiredValidation
 
   const emailValidation = emailValidator(value)
   if (emailValidation !== true) return emailValidation
+
+  if (!value.endsWith('@carsu.edu.ph')) {
+    return 'Must be a CARSU email address'
+  }
+
+  if (!isAuthorizedUser(value)) {
+    return 'This email is not authorized to access the system'
+  }
 
   return true
 }
@@ -92,9 +112,20 @@ const preventUnauthorizedNavigation = () => {
 
 onMounted(async () => {
   // Check for active session FIRST
-  const { data: { session } } = await supabase.auth.getSession()
-  
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
   if (session) {
+    // Verify user is authorized
+    if (!isAuthorizedUser(session.user.email)) {
+      await supabase.auth.signOut()
+      localStorage.setItem('isLoggedIn', 'false')
+      errorMessage.value = 'Your account is not authorized to access this system.'
+      loading.value = false
+      return
+    }
+
     // Already logged in - redirect immediately
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem('userEmail', session.user.email)
@@ -110,10 +141,21 @@ onMounted(async () => {
   // Handle auth callback from magic link (legacy support)
   const hashParams = new URLSearchParams(window.location.hash.substring(1))
   const accessToken = hashParams.get('access_token')
-  
+
   if (accessToken) {
-    const { data: { session: newSession } } = await supabase.auth.getSession()
+    const {
+      data: { session: newSession },
+    } = await supabase.auth.getSession()
     if (newSession) {
+      // Verify user is authorized
+      if (!isAuthorizedUser(newSession.user.email)) {
+        await supabase.auth.signOut()
+        localStorage.setItem('isLoggedIn', 'false')
+        errorMessage.value = 'Your account is not authorized to access this system.'
+        loading.value = false
+        return
+      }
+
       localStorage.setItem('isLoggedIn', 'true')
       localStorage.setItem('userEmail', newSession.user.email)
       addUserToProfiles(newSession.user) // Don't await
@@ -141,56 +183,34 @@ onUnmounted(() => {
 
 const needsPasswordSetup = ref(false)
 
-// Check if user already exists in Supabase Auth
-// We'll use signUp to check - if user exists, it returns a specific error
-async function checkAuthUserExists(emailToCheck) {
-  try {
-    // Try to sign up with a dummy - if user exists, Supabase returns specific response
-    const { data, error } = await supabase.auth.signUp({
-      email: emailToCheck,
-      password: 'temp_check_' + Date.now() + '_' + Math.random().toString(36),
-      options: {
-        // Don't send confirmation email - we're just checking
-        emailRedirectTo: undefined,
-      }
-    })
+// Debounce timer for login attempts to prevent rate limiting
+const loginAttemptTimestamps = ref({})
+const RATE_LIMIT_DELAY = 1000 // 1 second between attempts per email
 
-    // If we get here without error and data.user exists but data.user.identities is empty,
-    // it means user already exists (Supabase returns fake user with no identities)
-    if (data?.user && data.user.identities && data.user.identities.length === 0) {
-      console.log('✅ User already exists in Auth (empty identities)')
-      return true
-    }
+// Check if user is rate-limited locally
+function isLocallyRateLimited(emailToCheck) {
+  const lastAttempt = loginAttemptTimestamps.value[emailToCheck] || 0
+  const now = Date.now()
 
-    // If user was actually created (new user), we need to clean up
-    // The user was created with a dummy password, but since email confirmation is required,
-    // they can't login with it anyway. The magic link will let them in.
-    if (data?.user && data.user.identities && data.user.identities.length > 0) {
-      console.log('🆕 New user detected in Auth')
-      return false
-    }
-
-    // Check for specific error messages
-    if (error) {
-      if (error.message?.includes('already registered') || 
-          error.message?.includes('already exists')) {
-        console.log('✅ User already exists (error message)')
-        return true
-      }
-      console.error('Auth check error:', error.message)
-    }
-
-    return false
-  } catch (err) {
-    console.error('Error checking auth user existence:', err)
-    return false
+  if (now - lastAttempt < RATE_LIMIT_DELAY) {
+    return true
   }
+
+  loginAttemptTimestamps.value[emailToCheck] = now
+  return false
 }
 
 // Send magic link for first-time users
 async function sendMagicLink() {
   loading.value = true
   errorMessage.value = ''
+
+  // Double-check authorization before sending magic link
+  if (!isAuthorizedUser(email.value)) {
+    errorMessage.value = 'This email is not authorized to access the system.'
+    loading.value = false
+    return
+  }
 
   try {
     const { error } = await supabase.auth.signInWithOtp({
@@ -224,9 +244,26 @@ async function submit() {
   const { valid } = await form.value.validate()
   if (!valid) return
 
+  // Check if email is CARSU domain
   if (!email.value.endsWith('@carsu.edu.ph')) {
     showDomainPopup.value = true
-    errorMessage.value = ''
+    errorMessage.value = 'Only CARSU email addresses (@carsu.edu.ph) are allowed.'
+    return
+  }
+
+  // Check if user is authorized BEFORE doing anything else
+  if (!isAuthorizedUser(email.value)) {
+    errorMessage.value =
+      'This email is not authorized to access the system. Please contact an administrator.'
+    // Reset the needsPasswordSetup flag to prevent button from showing
+    needsPasswordSetup.value = false
+    isFirstTimeUser.value = false
+    return
+  }
+
+  // Check local rate limiting
+  if (isLocallyRateLimited(email.value)) {
+    errorMessage.value = 'Please wait a moment before trying again.'
     return
   }
 
@@ -235,51 +272,60 @@ async function submit() {
   errorMessage.value = ''
 
   try {
-    // Check if user exists in Supabase Auth (not just profiles table)
-    const userExistsInAuth = await checkAuthUserExists(email.value)
-    checkingUser.value = false
-
-    if (!userExistsInAuth) {
-      // First-time user - send magic link
-      console.log('📧 First-time user, sending magic link...')
-      isFirstTimeUser.value = true
-      await sendMagicLink()
-      return
-    }
-
-    // User exists in Auth - proceed with password login
-    console.log('🔐 Existing user, proceeding with password login...')
-    isFirstTimeUser.value = false
-
-    // Try password-based login
-    const { data, error } = await supabase.auth.signInWithPassword({
+    // First attempt: Try password login (works for existing users with passwords)
+    console.log('🔐 Attempting password-based login...')
+    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
       email: email.value,
       password: password.value,
     })
 
-    if (error) {
-      // "Invalid login credentials" can mean: wrong password OR user has no password (magic link user)
-      if (error.message?.includes('Invalid login credentials')) {
-        // Show option to set password if they're a magic link user
-        needsPasswordSetup.value = true
-        errorMessage.value = 'Invalid credentials. If you signed up with magic link, click "Set Password" below.'
-      } else if (error.message?.includes('Email not confirmed')) {
-        errorMessage.value = 'Please check your email and confirm your account first.'
-      } else {
-        throw error
-      }
+    // If password login succeeds, we're done
+    if (loginData?.session) {
+      console.log('✅ Password login successful')
+      localStorage.setItem('isLoggedIn', 'true')
+      localStorage.setItem('userEmail', loginData.session.user.email)
+      addUserToProfiles(loginData.session.user) // Don't await
+      router.replace('/dashboard')
       return
     }
 
-    // Success - user logged in
-    if (data?.session) {
-      localStorage.setItem('isLoggedIn', 'true')
-      localStorage.setItem('userEmail', data.session.user.email)
-      addUserToProfiles(data.session.user) // Don't await
-      
-      // Redirect to dashboard
-      router.replace('/dashboard')
+    // Handle specific login errors
+    if (loginError) {
+      if (loginError.message?.includes('Invalid login credentials')) {
+        // ONLY show password setup for AUTHORIZED users
+        if (isAuthorizedUser(email.value)) {
+          console.log('📧 No password found, offering magic link option...')
+          needsPasswordSetup.value = true
+          errorMessage.value = 'Use magic link to sign in: click "Set Password" below.'
+        } else {
+          errorMessage.value = 'This email is not authorized to access the system.'
+          needsPasswordSetup.value = false
+        }
+        return
+      } else if (loginError.message?.includes('Email not confirmed')) {
+        errorMessage.value = 'Please check your email and confirm your account first.'
+        return
+      } else if (loginError.message?.includes('rate limit')) {
+        throw loginError
+      } else {
+        // For other errors, check authorization before trying magic link
+        if (!isAuthorizedUser(email.value)) {
+          errorMessage.value = 'This email is not authorized to access the system.'
+          return
+        }
+        console.log('Password login failed, trying magic link...')
+      }
     }
+
+    // Fallback: Send magic link ONLY for authorized users
+    if (isAuthorizedUser(email.value)) {
+      console.log('📧 Sending magic link...')
+      isFirstTimeUser.value = true
+      await sendMagicLink()
+    } else {
+      errorMessage.value = 'This email is not authorized to access the system.'
+    }
+    return
   } catch (error) {
     // Handle rate limit error with user-friendly message
     if (error.message?.includes('rate limit')) {
@@ -300,6 +346,11 @@ async function submit() {
 async function sendPasswordResetEmail() {
   if (!email.value || !email.value.endsWith('@carsu.edu.ph')) {
     errorMessage.value = 'Please enter your CARSU email first.'
+    return
+  }
+
+  if (!isAuthorizedUser(email.value)) {
+    errorMessage.value = 'This email is not authorized to access the system.'
     return
   }
 
@@ -361,7 +412,11 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
             {{ magicLinkSent ? 'Check Your Email!' : 'Welcome!' }}
           </v-card-title>
           <v-card-subtitle class="subtext pa-0">
-            {{ magicLinkSent ? 'We sent a magic link to your email' : 'Enter your CARSU email to continue' }}
+            {{
+              magicLinkSent
+                ? 'We sent a magic link to your email'
+                : 'Enter your CARSU email to continue'
+            }}
           </v-card-subtitle>
 
           <v-card-text class="pa-0">
@@ -376,8 +431,11 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
               <div class="d-flex align-center">
                 <v-icon start>mdi-email-check-outline</v-icon>
                 <div>
-                  <strong>Magic link sent!</strong><br>
-                  <small>Check your inbox at <strong>{{ email }}</strong> and click the link to sign in.</small>
+                  <strong>Magic link sent!</strong><br />
+                  <small
+                    >Check your inbox at <strong>{{ email }}</strong> and click the link to sign
+                    in.</small
+                  >
                 </div>
               </div>
             </v-alert>
@@ -442,7 +500,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 block
               >
                 <v-icon start>mdi-key</v-icon>
-                Set Password (for magic link users)
+                Set Password
               </v-btn>
 
               <!-- CARSU Domain Info -->
@@ -459,7 +517,14 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
               <v-btn
                 variant="text"
                 color="primary"
-                @click="magicLinkSent = false; isFirstTimeUser = false; errorMessage = ''"
+                @click="
+                  () => {
+                    magicLinkSent = false
+                    isFirstTimeUser = false
+                    errorMessage = ''
+                    loginAttemptTimestamps = {}
+                  }
+                "
               >
                 <v-icon start>mdi-arrow-left</v-icon>
                 Try a different email
