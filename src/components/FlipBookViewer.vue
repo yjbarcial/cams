@@ -1,5 +1,7 @@
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
+import Flipbook from 'flipbook-vue'
+
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
   pages: { type: Array, default: () => [] },
@@ -41,18 +43,19 @@ const headerColors = computed(() => {
   }
 })
 
-const current = ref(0)
-const animating = ref(false)
-const direction = ref('next')
-const localPages = ref([]) // resolved image data URLs or original image URLs
+const currentPage = ref(1) // flipbook-vue uses 1-based indexing
+const flipbookRef = ref(null)
+const localPages = ref([null]) // Start with null at index 0 for 1-based indexing
+const totalPages = ref(0)
 let pdfDoc = null
 let pdfLib = null
+const renderQueue = new Set()
 
 watch(
   () => props.modelValue,
   (v) => {
     if (v) {
-      current.value = 0
+      currentPage.value = 1
     }
   },
 )
@@ -60,14 +63,12 @@ watch(
 watch(
   () => props.pages,
   (p) => {
-    // when pages prop changes, prepare localPages
     preparePages(p)
   },
   { immediate: true },
 )
 
 async function preparePages(p) {
-  // p may be an array of image urls or a single pdf url string
   try {
     // cleanup previous pdf
     if (pdfDoc) {
@@ -76,46 +77,56 @@ async function preparePages(p) {
     }
     pdfDoc = null
     pdfLib = null
-    localPages.value = []
+    localPages.value = [null] // Start with null at index 0
+    totalPages.value = 0
 
     if (!p) return
-    // handle case where p is a string (pdf url)
-    if (typeof p === 'string' && p.toLowerCase().endsWith('.pdf')) {
-      await loadPdf(p)
-      // initialize placeholders - add null check
+
+    // Handle PDF URL (string or array with PDF)
+    const pdfUrl =
+      typeof p === 'string' && p.toLowerCase().endsWith('.pdf')
+        ? p
+        : Array.isArray(p) &&
+            p.length > 0 &&
+            typeof p[0] === 'string' &&
+            p[0].toLowerCase().endsWith('.pdf')
+          ? p[0]
+          : null
+
+    if (pdfUrl) {
+      await loadPdf(pdfUrl)
       if (pdfDoc && pdfDoc.numPages) {
-        localPages.value = Array.from({ length: pdfDoc.numPages }).map(() => '')
-        // render first page
-        renderPdfPage(0)
+        totalPages.value = pdfDoc.numPages
+        localPages.value = Array(pdfDoc.numPages + 1).fill(null)
+
+        // Render first 3 pages immediately
+        for (let i = 0; i < Math.min(3, pdfDoc.numPages); i++) {
+          await renderPdfPage(i)
+        }
+
+        // Render remaining pages progressively without blocking
+        requestAnimationFrame(() => {
+          renderRemainingPages(3)
+        })
       }
-    } else if (
-      Array.isArray(p) &&
-      p.length > 0 &&
-      typeof p[0] === 'string' &&
-      p[0].toLowerCase().endsWith('.pdf')
-    ) {
-      await loadPdf(p[0])
-      if (pdfDoc && pdfDoc.numPages) {
-        localPages.value = Array.from({ length: pdfDoc.numPages }).map(() => '')
-        renderPdfPage(0)
-      }
-    } else if (Array.isArray(p)) {
-      localPages.value = p.slice()
+    } else if (Array.isArray(p) && p.length > 0) {
+      // Handle image array - convert to 1-based indexing
+      totalPages.value = p.length
+      localPages.value = [null, ...p]
     }
   } catch (err) {
     console.error('Error preparing pages:', err)
-    localPages.value = Array.isArray(p) ? p.slice() : []
+    localPages.value = [null]
+    totalPages.value = 0
   }
 }
 
 async function loadPdf(url) {
   try {
-    // dynamic import of pdfjs-dist
     pdfLib = await import('pdfjs-dist')
-    // configure worker
     if (pdfLib.GlobalWorkerOptions) {
       pdfLib.GlobalWorkerOptions.workerSrc =
-        'https://unpkg.com/pdfjs-dist@3.5.141/build/pdf.worker.min.js'
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
     }
     const loadingTask = pdfLib.getDocument(url)
     pdfDoc = await loadingTask.promise
@@ -125,25 +136,48 @@ async function loadPdf(url) {
   }
 }
 
+async function renderRemainingPages(startIndex) {
+  if (!pdfDoc) return
+  for (let i = startIndex; i < pdfDoc.numPages; i++) {
+    if (!renderQueue.has(i)) {
+      await renderPdfPage(i)
+      // Give browser time to breathe
+      if (i % 2 === 0) await new Promise((r) => setTimeout(r, 10))
+    }
+  }
+}
+
 async function renderPdfPage(index) {
+  if (renderQueue.has(index)) return
+  renderQueue.add(index)
+
   try {
     if (!pdfDoc || !pdfDoc.numPages) return
     if (index < 0 || index >= pdfDoc.numPages) return
-    if (localPages.value[index]) return // already rendered
+
+    const arrayIndex = index + 1
+    if (localPages.value[arrayIndex]) return
+
     const page = await pdfDoc.getPage(index + 1)
-    const viewport = page.getViewport({ scale: 1.5 })
+    const viewport = page.getViewport({ scale: 0.8 })
     const canvas = document.createElement('canvas')
-    const context = canvas.getContext('2d')
-    canvas.width = Math.floor(viewport.width)
-    canvas.height = Math.floor(viewport.height)
-    const renderContext = { canvasContext: context, viewport }
-    await page.render(renderContext).promise
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
-    localPages.value[index] = dataUrl
-    // pre-render next page
-    if (index + 1 < pdfDoc.numPages) renderPdfPage(index + 1)
+    const context = canvas.getContext('2d', {
+      alpha: false,
+      willReadFrequently: false,
+    })
+    canvas.width = viewport.width
+    canvas.height = viewport.height
+
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+    }).promise
+
+    localPages.value[arrayIndex] = canvas.toDataURL('image/jpeg', 0.6)
   } catch (err) {
     console.error('Error rendering pdf page:', err)
+  } finally {
+    renderQueue.delete(index)
   }
 }
 
@@ -152,48 +186,16 @@ function close() {
 }
 
 function prevPage() {
-  if (animating.value) return
-  if (current.value === 0) return
-  direction.value = 'prev'
-  flipTo(current.value - 1)
+  if (currentPage.value > 1) {
+    currentPage.value--
+  }
 }
 
 function nextPage() {
-  if (animating.value) return
-  if (current.value >= (localPages.value.length || props.pages.length) - 1) return
-  direction.value = 'next'
-  flipTo(current.value + 1)
-}
-
-function flipTo(targetIndex) {
-  animating.value = true
-  // simple timing to simulate page flip: animate out, swap, animate in
-  const outClass = direction.value === 'next' ? 'flip-out-next' : 'flip-out-prev'
-  const inClass = direction.value === 'next' ? 'flip-in-next' : 'flip-in-prev'
-
-  const container = document.querySelector('.flipbook-container')
-  if (!container) {
-    current.value = targetIndex
-    animating.value = false
-    return
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
   }
-
-  container.classList.add(outClass)
-  setTimeout(() => {
-    container.classList.remove(outClass)
-    current.value = targetIndex
-    container.classList.add(inClass)
-    setTimeout(() => {
-      container.classList.remove(inClass)
-      animating.value = false
-      // after page flip, if page is placeholder and pdf present, render it
-      const idx = current.value
-      if (localPages.value[idx] === '' && pdfDoc) renderPdfPage(idx)
-    }, 450)
-  }, 300)
 }
-
-onMounted(() => {})
 
 onBeforeUnmount(() => {
   // cleanup pdf resources
@@ -210,105 +212,127 @@ onBeforeUnmount(() => {
     width="900"
     max-width="85vw"
     persistent
+    scrim="rgba(0,0,0,0.7)"
+    content-class="transparent-dialog"
     @update:model-value="(val) => emit('update:modelValue', val)"
   >
-    <v-card class="viewer-card elevation-24">
-      <v-card-title
-        class="viewer-header d-flex justify-space-between align-center pa-4"
-        :style="{
-          background: headerColors.gradient,
-          boxShadow: `0 2px 8px ${headerColors.shadow}`,
-        }"
-      >
-        <div>
-          <div
-            class="text-h6 font-weight-bold viewer-title"
-            :style="{ color: headerColors.textColor, textShadow: headerColors.textShadow }"
+    <!-- Separate Topbar (Outside viewer container) -->
+    <div
+      class="viewer-header d-flex justify-space-between align-center pa-4"
+      :style="{
+        background: headerColors.gradient,
+        boxShadow: `0 2px 8px ${headerColors.shadow}`,
+      }"
+    >
+      <div>
+        <div
+          class="text-h6 font-weight-bold viewer-title"
+          :style="{ color: headerColors.textColor, textShadow: headerColors.textShadow }"
+        >
+          {{ title }}
+        </div>
+        <div class="text-caption page-indicator mt-1" :style="{ color: headerColors.textColor }">
+          <v-icon size="small" class="mr-1" :color="headerColors.textColor"
+            >mdi-book-open-page-variant</v-icon
           >
-            {{ title }}
-          </div>
-          <div class="text-caption page-indicator mt-1" :style="{ color: headerColors.textColor }">
-            <v-icon size="small" class="mr-1" :color="headerColors.textColor"
-              >mdi-book-open-page-variant</v-icon
-            >
-            Page {{ current + 1 }} of {{ localPages.length || pages.length }}
-          </div>
+          Page {{ currentPage }} of {{ totalPages }}
         </div>
-        <v-btn icon size="default" variant="text" class="close-btn" @click="close">
-          <v-icon :color="headerColors.textColor">mdi-close</v-icon>
-        </v-btn>
-      </v-card-title>
-      <v-card-text class="pa-5">
-        <div class="flipbook-wrap">
-          <div class="flipbook-container">
-            <div class="page-frame">
-              <img v-if="localPages[current]" :src="localPages[current]" class="flipbook-page" />
-              <div v-else class="flipbook-placeholder">
-                <v-progress-circular
-                  indeterminate
-                  color="primary"
-                  size="48"
-                  width="3"
-                ></v-progress-circular>
-                <div class="placeholder-inner mt-3">Loading page…</div>
-              </div>
-            </div>
-          </div>
+      </div>
+      <v-btn
+        icon="mdi-arrow-left"
+        size="default"
+        variant="elevated"
+        color="white"
+        class="return-btn"
+        @click="close"
+      ></v-btn>
+    </div>
+
+    <!-- Viewer Container -->
+    <v-card class="viewer-card elevation-24">
+      <div class="flipbook-wrap">
+        <Flipbook
+          v-if="localPages.length > 1"
+          ref="flipbookRef"
+          class="flipbook"
+          :pages="localPages"
+          v-model:page="currentPage"
+          :startPage="1"
+          :zooms="null"
+          :clickToZoom="false"
+          :singlePage="false"
+          :flipDuration="300"
+          :perspective="1200"
+          :nPolygons="3"
+          :ambient="0.8"
+          :gloss="0.1"
+          :swipeMin="20"
+        />
+        <div v-else class="flipbook-loading">
+          <v-progress-circular
+            indeterminate
+            color="primary"
+            size="64"
+            width="4"
+          ></v-progress-circular>
+          <div class="mt-4 text-h6">Loading pages...</div>
         </div>
-      </v-card-text>
-      <v-card-actions class="action-bar pa-4 d-flex justify-space-between align-center">
+      </div>
+
+      <!-- Viewer Controls at Bottom -->
+      <div class="viewer-controls-bar">
         <v-btn
-          variant="tonal"
-          size="default"
-          class="nav-btn prev-btn"
+          icon="mdi-chevron-left"
+          size="small"
+          variant="text"
+          class="control-btn-bar"
           @click="prevPage"
-          :disabled="current === 0 || animating"
-          prepend-icon="mdi-chevron-left"
-        >
-          Previous
-        </v-btn>
-        <div class="page-dots">
-          <span
-            v-for="i in Math.min(localPages.length || pages.length, 10)"
-            :key="i"
-            :class="['dot', { active: i === current + 1 }]"
-            :style="
-              i === current + 1
-                ? {
-                    background: headerColors.dotGradient,
-                    boxShadow: `0 2px 6px ${headerColors.dotShadow}`,
-                  }
-                : {}
-            "
-          ></span>
-        </div>
+          :disabled="currentPage <= 1"
+        ></v-btn>
+
+        <div class="page-info-bar">{{ currentPage }} / {{ totalPages }}</div>
+
         <v-btn
-          variant="flat"
-          size="default"
-          color="primary"
-          class="nav-btn next-btn"
-          :style="{ background: headerColors.gradient + ' !important' }"
+          icon="mdi-chevron-right"
+          size="small"
+          variant="text"
+          class="control-btn-bar"
           @click="nextPage"
-          :disabled="current >= (localPages.length || pages.length) - 1 || animating"
-          append-icon="mdi-chevron-right"
-        >
-          Next
-        </v-btn>
-      </v-card-actions>
+          :disabled="currentPage >= totalPages"
+        ></v-btn>
+      </div>
     </v-card>
   </v-dialog>
 </template>
 
 <style scoped>
-.viewer-card {
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+:deep(.transparent-dialog) {
+  background: transparent !important;
+  box-shadow: none !important;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .viewer-header {
-  border-bottom: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
   /* Background and box-shadow are now applied dynamically via :style */
+}
+
+.viewer-card {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+}
+
+.viewer-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
 }
 
 .viewer-title {
@@ -337,165 +361,117 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 55vh;
-  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
-  border-radius: 12px;
-  padding: 20px;
-  position: relative;
-  overflow: hidden;
+  min-height: 60vh;
+  background: #f5f5f5;
+  padding: 40px 20px;
 }
 
-.flipbook-wrap::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: radial-gradient(circle at 50% 50%, rgba(245, 197, 43, 0.05) 0%, transparent 70%);
-  pointer-events: none;
+/* Viewer Controls Bar (Issuu style) */
+.viewer-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.85);
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
 }
 
-.flipbook-container {
-  width: 80%;
-  max-width: 700px;
-  perspective: 1600px;
-  position: relative;
-  z-index: 1;
+.control-btn-bar {
+  color: white !important;
+  opacity: 0.9;
+  transition: all 0.2s ease;
 }
 
-.page-frame {
-  position: relative;
-  padding: 12px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.2);
+.control-btn-bar:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
-.flipbook-page {
+.control-btn-bar:disabled {
+  opacity: 0.3;
+}
+
+.page-info-bar {
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  min-width: 80px;
+  text-align: center;
+  user-select: none;
+}
+
+.flipbook {
+  width: 100% !important;
+  max-width: 1000px !important;
+  height: 600px !important;
+  margin: 0 auto !important;
+  transform-style: preserve-3d !important;
+}
+
+:deep(.flipbook .viewport) {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: visible !important;
+  perspective: 1200px !important;
+  perspective-origin: center !important;
+  transform-style: preserve-3d !important;
+}
+
+:deep(.flipbook .bounding-box) {
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+  transform-style: preserve-3d !important;
+  transition: transform 0.3s ease-out;
+}
+
+:deep(.flipbook .page) {
+  background: #ffffff;
+  box-shadow: none;
+  backface-visibility: hidden !important;
+  transform-style: preserve-3d !important;
+  transition: transform 0.3s ease-out;
+}
+
+:deep(.flipbook .page img) {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
   display: block;
-  backface-visibility: hidden;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform-origin: center center;
-  transition:
-    transform 450ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 350ms ease-in-out,
-    box-shadow 0.3s ease;
-  background: white;
+  pointer-events: auto;
+  user-select: none;
 }
 
-.flipbook-page:hover {
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-}
-
-.flipbook-placeholder {
-  width: 100%;
-  height: 50vh;
+.flipbook-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #ffffff 0%, #f8f8f8 100%);
+  min-height: 400px;
+  color: #666;
+  background: #fafafa;
+  width: 100%;
   border-radius: 8px;
-  border: 2px dashed #d0d0d0;
 }
 
-.placeholder-inner {
-  color: #888;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.flip-out-next .flipbook-page {
-  transform: rotateY(-80deg) translateZ(-20px);
-  opacity: 0.2;
-}
-
-.flip-in-next .flipbook-page {
-  animation: flipInNext 450ms forwards;
-}
-
-.flip-out-prev .flipbook-page {
-  transform: rotateY(80deg) translateZ(-20px);
-  opacity: 0.2;
-}
-
-.flip-in-prev .flipbook-page {
-  animation: flipInPrev 450ms forwards;
-}
-
-@keyframes flipInNext {
-  from {
-    transform: rotateY(80deg) translateZ(-20px);
-    opacity: 0.2;
-  }
-  to {
-    transform: rotateY(0deg) translateZ(0);
-    opacity: 1;
-  }
-}
-
-@keyframes flipInPrev {
-  from {
-    transform: rotateY(-80deg) translateZ(-20px);
-    opacity: 0.2;
-  }
-  to {
-    transform: rotateY(0deg) translateZ(0);
-    opacity: 1;
-  }
-}
-
-.action-bar {
-  background: linear-gradient(135deg, #f8f8f8 0%, #ffffff 100%);
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.03);
-}
-
-.nav-btn {
-  min-width: 140px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+.return-btn {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   transition: all 0.3s ease;
 }
 
-.nav-btn:not(:disabled):hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.next-btn {
-  /* Background is now applied dynamically via :style */
-  color: #2c2c2c !important;
-}
-
-.page-dots {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #d0d0d0;
-  transition: all 0.3s ease;
-}
-
-.dot.active {
-  width: 24px;
-  border-radius: 4px;
-  /* Background and box-shadow are now applied dynamically via :style */
+.return-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 /* Responsive */
 @media (max-width: 960px) {
-  .flipbook-container {
-    width: 85%;
+  .flipbook {
+    max-width: 800px !important;
+    height: 500px !important;
   }
 
   .flipbook-wrap {
@@ -503,40 +479,14 @@ onBeforeUnmount(() => {
     padding: 15px;
   }
 
-  .page-frame {
-    padding: 10px;
+  .viewer-controls-bar {
+    padding: 10px 16px;
+    gap: 16px;
   }
 
-  .page-dots {
-    display: none;
-  }
-
-  .nav-btn {
-    min-width: 110px;
-  }
-}
-
-@media (max-width: 600px) {
-  .flipbook-container {
-    width: 90%;
-  }
-
-  .flipbook-wrap {
-    min-height: 45vh;
-    padding: 12px;
-  }
-
-  .flipbook-placeholder {
-    height: 45vh;
-  }
-
-  .page-frame {
-    padding: 8px;
-  }
-
-  .nav-btn {
-    min-width: 95px;
-    font-size: 0.875rem;
+  .page-info-bar {
+    font-size: 0.75rem;
+    min-width: 60px;
   }
 
   .viewer-header {

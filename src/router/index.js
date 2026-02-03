@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ArchiveView from '@/views/system/ArchiveView.vue'
+import PublicationView from '@/views/system/PublicationView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
 import ContributorDashboard from '@/views/system/ContributorDashboard.vue'
 import NotificationsView from '@/views/system/NotificationsView.vue'
@@ -69,6 +70,11 @@ const router = createRouter({
       path: '/archive',
       name: 'archive',
       component: ArchiveView,
+    },
+    {
+      path: '/publication/:id',
+      name: 'publication',
+      component: PublicationView,
     },
 
     // Authenticated Routes
