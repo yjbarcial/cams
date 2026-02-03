@@ -6,7 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
-import { projectsService } from '@/services/supabaseService'
+import { projectsService, profilesService } from '@/services/supabaseService'
 import {
   getProjectComments,
   addProjectComment,
@@ -65,10 +65,8 @@ const project = ref({
 // Rich text editor state
 const editorContent = ref('')
 const quillEditorRef = ref(null)
-// Editor editability based on role:
-// - Technical Editor: CAN edit text (true)
-// - Creative Director: CANNOT edit text (false) - can only upload images
-const isEditorEditable = computed(() => currentUserRole.value === 'Technical Editor')
+// Editor editability - starts as true for Technical Editor, can be toggled
+const isEditorEditable = ref(true)
 
 // Auto-save state
 const lastSaveTime = ref(null)
@@ -212,7 +210,7 @@ const saveContentChanges = async () => {
     // Save to Supabase
     await projectsService.update(projectId, {
       content: editorContent.value,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     })
 
     console.log('✅ Content saved to Supabase')
@@ -261,7 +259,7 @@ const submitApproval = async () => {
       status: nextStatus,
       technical_editor_comments: approvalComments.value || '',
       priority: approvalPriority.value,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     })
 
     console.log('✅ Project status updated via Supabase')
@@ -334,27 +332,12 @@ const goBack = () => {
   // Save before going back
   saveContentChanges()
 
-  // Get actual storage to determine correct route
-  const actualStorage = getActualStorageKey(projectId)
-  if (actualStorage) {
-    // For other/social-media types, route to /other
-    const routePath =
-      actualStorage.type === 'other' || actualStorage.type === 'social-media'
-        ? '/other'
-        : `/${actualStorage.type}`
-    router.push(routePath)
-  } else {
-    // Fallback to projectType.value if we can't find actual storage
-    if (projectType.value === 'newsletter') {
-      router.push('/newsletter')
-    } else if (projectType.value === 'folio') {
-      router.push('/folio')
-    } else if (projectType.value === 'other' || projectType.value === 'social-media') {
-      router.push('/other')
-    } else {
-      router.push('/magazine')
-    }
-  }
+  // Route based on project type
+  const routePath =
+    projectType.value === 'other' || projectType.value === 'social-media'
+      ? '/other'
+      : `/${projectType.value}`
+  router.push(routePath)
 }
 
 const loadProjectComments = async () => {
@@ -374,16 +357,54 @@ const loadProjectData = async () => {
 
     console.log('✅ Project loaded from Supabase:', foundProject)
 
+    // Load project members with their profile info
+    const members = await projectsService.getMembers(projectId)
+    console.log('✅ Project members loaded:', members)
+
+    // Get section head name from section_head_id
+    let sectionHeadName = 'Not assigned'
+    if (foundProject.section_head_id) {
+      try {
+        const sectionHeadProfile = await profilesService.getById(foundProject.section_head_id)
+        if (sectionHeadProfile) {
+          sectionHeadName =
+            `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim() ||
+            sectionHeadProfile.email
+        }
+      } catch (error) {
+        console.error('Error loading section head profile:', error)
+      }
+    }
+
+    // Get writers and artists from project_members
+    const writers = members
+      .filter((m) => m.role === 'writer')
+      .map((m) => {
+        const profile = m.profiles
+        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+      })
+    const writersText = writers.length > 0 ? writers.join(', ') : 'Not assigned'
+
+    const artists = members
+      .filter((m) => m.role === 'artist')
+      .map((m) => {
+        const profile = m.profiles
+        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+      })
+    const artistsText = artists.length > 0 ? artists.join(', ') : 'Not assigned'
+
     project.value = {
       ...foundProject,
       id: String(projectId),
       title: foundProject.title || 'Untitled Project',
       status: foundProject.status || 'draft',
-      lastModified: foundProject.updated_at ? new Date(foundProject.updated_at).toLocaleString() : new Date().toLocaleString(),
+      lastModified: foundProject.updated_at
+        ? new Date(foundProject.updated_at).toLocaleString()
+        : new Date().toLocaleString(),
       content: foundProject.content || '',
-      writers: foundProject.writers || foundProject.assigned_writers || 'Not assigned',
-      artists: foundProject.artists || foundProject.assigned_artists || 'Not assigned',
-      sectionHead: foundProject.section_head || foundProject.created_by || 'Not assigned',
+      writers: writersText,
+      artists: artistsText,
+      sectionHead: sectionHeadName,
       description: foundProject.description || '',
     }
 

@@ -6,7 +6,8 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
-import { projectsService } from '@/services/supabaseService'
+import { projectsService, profilesService } from '@/services/supabaseService'
+import { supabase } from '@/utils/supabase'
 import { autoCreateVersionOnEdit } from '@/services/localProjectHistory.js'
 import {
   getProjectComments,
@@ -129,7 +130,7 @@ const saveTitleEdit = async () => {
     try {
       await projectsService.update(projectId, {
         title: tempTitle.value.trim(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
 
       console.log('✅ Title updated via Supabase:', project.value.title)
@@ -180,7 +181,7 @@ const saveContent = async (showNotif = false) => {
     try {
       await projectsService.update(projectId, {
         content: content,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
 
       console.log('✅ Content saved to Supabase')
@@ -279,14 +280,24 @@ const submitForApproval = () => {
 
 const confirmSubmitForApproval = async () => {
   try {
+    // Get current user from Supabase Auth
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      showNotification('You must be logged in to submit a project', 'error')
+      return
+    }
+
     // Update via Supabase
     await projectsService.update(projectId, {
       status: 'to_section_head',
-      priority: submitPriority.value,
-      submitted_by: 'Current User',
+      priority_level: submitPriority.value,
+      submitted_by: user.id,
       submitted_date: new Date().toISOString(),
       submission_comments: submitComments.value,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     })
 
     console.log('✅ Project submitted via Supabase')
@@ -301,7 +312,7 @@ const confirmSubmitForApproval = async () => {
       projectTitle: project.value.title,
       oldStatus: 'draft',
       newStatus: 'to_section_head',
-      actionBy: 'Current User',
+      actionBy: user.email || 'Current User',
       recipient: 'Section Head',
       comments: submitComments.value,
     })
@@ -423,6 +434,42 @@ const loadProjectData = async () => {
 
     console.log('✅ Project loaded from Supabase:', foundProject)
 
+    // Load project members with their profile info
+    const members = await projectsService.getMembers(projectId)
+    console.log('✅ Project members loaded:', members)
+
+    // Get section head name from section_head_id
+    let sectionHeadName = 'Not assigned'
+    if (foundProject.section_head_id) {
+      try {
+        const sectionHeadProfile = await profilesService.getById(foundProject.section_head_id)
+        if (sectionHeadProfile) {
+          sectionHeadName =
+            `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim() ||
+            sectionHeadProfile.email
+        }
+      } catch (error) {
+        console.error('Error loading section head profile:', error)
+      }
+    }
+
+    // Get writers and artists from project_members
+    const writers = members
+      .filter((m) => m.role === 'writer')
+      .map((m) => {
+        const profile = m.profiles
+        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+      })
+    const writersText = writers.length > 0 ? writers.join(', ') : 'Not assigned'
+
+    const artists = members
+      .filter((m) => m.role === 'artist')
+      .map((m) => {
+        const profile = m.profiles
+        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+      })
+    const artistsText = artists.length > 0 ? artists.join(', ') : 'Not assigned'
+
     // Normalize status for draft projects
     let normalizedStatus = foundProject.status || 'draft'
     if (normalizedStatus === 'to_technical_editor') {
@@ -438,9 +485,9 @@ const loadProjectData = async () => {
         ? new Date(foundProject.updated_at).toLocaleString()
         : new Date().toLocaleString(),
       content: foundProject.content || '',
-      writers: foundProject.writers || foundProject.assigned_writers || 'Not assigned',
-      artists: foundProject.artists || foundProject.assigned_artists || 'Not assigned',
-      sectionHead: foundProject.section_head || foundProject.created_by || 'Not assigned',
+      writers: writersText,
+      artists: artistsText,
+      sectionHead: sectionHeadName,
       description: foundProject.description || 'No description provided',
       dueDate: foundProject.due_date || foundProject.deadline || '',
       department: foundProject.department || '',
@@ -473,7 +520,7 @@ const loadProjectData = async () => {
   } catch (error) {
     console.error('❌ Error loading project:', error)
     showNotification('Project not found. Please check the project ID.', 'error')
-    
+
     // Redirect to project list after a delay
     setTimeout(() => {
       router.push('/magazine')

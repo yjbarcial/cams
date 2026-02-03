@@ -31,10 +31,7 @@ const showPassword = ref(false)
 const loading = ref(true) // Start with true to prevent form interaction
 const errorMessage = ref('')
 const showDomainPopup = ref(false)
-const redirecting = ref(false)
-const isFirstTimeUser = ref(false)
 const magicLinkSent = ref(false)
-const checkingUser = ref(false)
 
 // AUTHORIZED USERS ONLY - Complete whitelist
 const AUTHORIZED_USERS = [
@@ -74,23 +71,14 @@ const carsuEmailValidator = (value) => {
   return true
 }
 
-// Password validator using your existing required validator
-const carsuPasswordValidator = (value) => {
-  const requiredValidation = requiredValidator(value)
-  if (requiredValidation !== true) return requiredValidation
-
-  if (value.length < 6) {
-    return 'Password must be at least 6 characters'
-  }
-
-  return true
-}
-
 // Validation rules using your validator functions
 const emailRules = [carsuEmailValidator]
-const passwordRules = [carsuPasswordValidator]
 
 const form = ref(null)
+
+function togglePassword() {
+  showPassword.value = !showPassword.value
+}
 
 // Handle back button navigation prevention
 const handlePopState = (event) => {
@@ -181,11 +169,9 @@ onUnmounted(() => {
   window.removeEventListener('popstate', handlePopState)
 })
 
-const needsPasswordSetup = ref(false)
-
 // Debounce timer for login attempts to prevent rate limiting
 const loginAttemptTimestamps = ref({})
-const RATE_LIMIT_DELAY = 1000 // 1 second between attempts per email
+const RATE_LIMIT_DELAY = 60000 // 60 seconds between attempts per email
 
 // Check if user is rate-limited locally
 function isLocallyRateLimited(emailToCheck) {
@@ -193,6 +179,8 @@ function isLocallyRateLimited(emailToCheck) {
   const now = Date.now()
 
   if (now - lastAttempt < RATE_LIMIT_DELAY) {
+    const secondsRemaining = Math.ceil((RATE_LIMIT_DELAY - (now - lastAttempt)) / 1000)
+    errorMessage.value = `Please wait ${secondsRemaining} seconds before requesting another login link.`
     return true
   }
 
@@ -225,7 +213,8 @@ async function sendMagicLink() {
     magicLinkSent.value = true
   } catch (error) {
     if (error.message?.includes('rate limit')) {
-      errorMessage.value = 'Too many requests. Please wait a few minutes.'
+      errorMessage.value =
+        'Too many login requests. Please wait at least 60 seconds before trying again, or check your email for a previous link that may still be valid.'
     } else {
       errorMessage.value = error.message || 'Failed to send magic link.'
     }
@@ -255,130 +244,16 @@ async function submit() {
   if (!isAuthorizedUser(email.value)) {
     errorMessage.value =
       'This email is not authorized to access the system. Please contact an administrator.'
-    // Reset the needsPasswordSetup flag to prevent button from showing
-    needsPasswordSetup.value = false
-    isFirstTimeUser.value = false
     return
   }
 
   // Check local rate limiting
   if (isLocallyRateLimited(email.value)) {
-    errorMessage.value = 'Please wait a moment before trying again.'
     return
   }
 
-  loading.value = true
-  checkingUser.value = true
-  errorMessage.value = ''
-
-  try {
-    // First attempt: Try password login (works for existing users with passwords)
-    console.log('🔐 Attempting password-based login...')
-    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-      email: email.value,
-      password: password.value,
-    })
-
-    // If password login succeeds, we're done
-    if (loginData?.session) {
-      console.log('✅ Password login successful')
-      localStorage.setItem('isLoggedIn', 'true')
-      localStorage.setItem('userEmail', loginData.session.user.email)
-      addUserToProfiles(loginData.session.user) // Don't await
-      router.replace('/dashboard')
-      return
-    }
-
-    // Handle specific login errors
-    if (loginError) {
-      if (loginError.message?.includes('Invalid login credentials')) {
-        // ONLY show password setup for AUTHORIZED users
-        if (isAuthorizedUser(email.value)) {
-          console.log('📧 No password found, offering magic link option...')
-          needsPasswordSetup.value = true
-          errorMessage.value = 'Use magic link to sign in: click "Set Password" below.'
-        } else {
-          errorMessage.value = 'This email is not authorized to access the system.'
-          needsPasswordSetup.value = false
-        }
-        return
-      } else if (loginError.message?.includes('Email not confirmed')) {
-        errorMessage.value = 'Please check your email and confirm your account first.'
-        return
-      } else if (loginError.message?.includes('rate limit')) {
-        throw loginError
-      } else {
-        // For other errors, check authorization before trying magic link
-        if (!isAuthorizedUser(email.value)) {
-          errorMessage.value = 'This email is not authorized to access the system.'
-          return
-        }
-        console.log('Password login failed, trying magic link...')
-      }
-    }
-
-    // Fallback: Send magic link ONLY for authorized users
-    if (isAuthorizedUser(email.value)) {
-      console.log('📧 Sending magic link...')
-      isFirstTimeUser.value = true
-      await sendMagicLink()
-    } else {
-      errorMessage.value = 'This email is not authorized to access the system.'
-    }
-    return
-  } catch (error) {
-    // Handle rate limit error with user-friendly message
-    if (error.message?.includes('rate limit')) {
-      errorMessage.value = 'Too many login attempts. Please wait a few minutes and try again.'
-    } else {
-      errorMessage.value = error.message || 'Login failed. Please try again.'
-    }
-    // Only log in development
-    if (import.meta.env.DEV) {
-      console.error('❌ Login error:', error)
-    }
-  } finally {
-    loading.value = false
-    checkingUser.value = false
-  }
-}
-
-async function sendPasswordResetEmail() {
-  if (!email.value || !email.value.endsWith('@carsu.edu.ph')) {
-    errorMessage.value = 'Please enter your CARSU email first.'
-    return
-  }
-
-  if (!isAuthorizedUser(email.value)) {
-    errorMessage.value = 'This email is not authorized to access the system.'
-    return
-  }
-
-  loading.value = true
-  errorMessage.value = ''
-
-  try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.value, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
-
-    if (error) throw error
-
-    alert('✅ Password reset email sent! Check your inbox to set your password.')
-    needsPasswordSetup.value = false
-  } catch (error) {
-    if (error.message?.includes('rate limit')) {
-      errorMessage.value = 'Too many requests. Please wait a few minutes.'
-    } else {
-      errorMessage.value = error.message || 'Failed to send reset email.'
-    }
-  } finally {
-    loading.value = false
-  }
-}
-
-function togglePassword() {
-  showPassword.value = !showPassword.value
+  // Send magic link
+  await sendMagicLink()
 }
 
 const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
@@ -436,6 +311,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                     >Check your inbox at <strong>{{ email }}</strong> and click the link to sign
                     in.</small
                   >
+                  >
                 </div>
               </div>
             </v-alert>
@@ -465,42 +341,22 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 :disabled="loading"
               />
 
-              <!-- Only show password field for existing users (not first-time) -->
               <v-text-field
-                v-if="!isFirstTimeUser"
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
-                placeholder="Password"
+                placeholder="Password (optional)"
                 prepend-inner-icon="mdi-lock-outline"
                 :append-inner-icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
                 @click:append-inner="togglePassword"
                 variant="outlined"
                 class="input-group"
                 density="compact"
-                :rules="passwordRules"
-                required
                 :disabled="loading"
               />
 
               <v-btn type="submit" class="primary-btn" :loading="loading" :disabled="loading">
-                <span v-if="checkingUser">Checking account...</span>
-                <span v-else-if="!loading">CONTINUE</span>
-                <span v-else>Authenticating...</span>
-              </v-btn>
-
-              <!-- Set Password button for magic link users -->
-              <v-btn
-                v-if="needsPasswordSetup"
-                variant="text"
-                color="primary"
-                class="mt-2"
-                :loading="loading"
-                :disabled="loading"
-                @click="sendPasswordResetEmail"
-                block
-              >
-                <v-icon start>mdi-key</v-icon>
-                Set Password
+                <span v-if="!loading">CONTINUE</span>
+                <span v-else>Sending...</span>
               </v-btn>
 
               <!-- CARSU Domain Info -->
@@ -520,7 +376,6 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 @click="
                   () => {
                     magicLinkSent = false
-                    isFirstTimeUser = false
                     errorMessage = ''
                     loginAttemptTimestamps = {}
                   }

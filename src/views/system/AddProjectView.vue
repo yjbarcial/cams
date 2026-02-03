@@ -68,36 +68,41 @@ const loadUsers = async () => {
     // Fetch all users from Supabase
     const allUsers = await profilesService.getAll()
 
-    // Filter by role
-    users.value.sectionHeads = allUsers.filter(u => 
-      u.role === 'section_head' || u.role === 'Section Head'
+    // Filter by positions_label (Writer/Artist) and role (section_head)
+    users.value.sectionHeads = allUsers.filter(
+      (u) =>
+        u.role === 'section_head' ||
+        u.role === 'Section Head' ||
+        (u.designation_label && u.designation_label.toLowerCase().includes('editor-in-chief')) ||
+        (u.designation_label && u.designation_label.toLowerCase().includes('managing editor')),
     )
-    users.value.writers = allUsers.filter(u => 
-      u.role === 'writer' || u.role === 'Writer' || u.role === 'contributor'
+    users.value.writers = allUsers.filter(
+      (u) => u.positions_label === 'Writer' || u.role === 'writer' || u.role === 'Writer',
     )
-    users.value.artists = allUsers.filter(u => 
-      u.role === 'artist' || u.role === 'Artist' || u.role === 'contributor'
+    users.value.artists = allUsers.filter(
+      (u) => u.positions_label === 'Artist' || u.role === 'artist' || u.role === 'Artist',
     )
 
     console.log('✅ Users loaded from Supabase:', {
       sectionHeads: users.value.sectionHeads.length,
       writers: users.value.writers.length,
-      artists: users.value.artists.length
+      artists: users.value.artists.length,
+      allUsersCount: allUsers.length,
     })
   } catch (error) {
     console.error('❌ Error loading users from Supabase:', error)
     // Fallback to temporary users for development
     users.value.sectionHeads = [
       { id: 'sh_1', full_name: 'John Smith', role: 'Section Head', department: 'Editorial' },
-      { id: 'sh_2', full_name: 'Sarah Johnson', role: 'Section Head', department: 'Editorial' }
+      { id: 'sh_2', full_name: 'Sarah Johnson', role: 'Section Head', department: 'Editorial' },
     ]
     users.value.writers = [
       { id: 'writer_1', full_name: 'Emily Davis', role: 'Writer', department: 'Editorial' },
-      { id: 'writer_2', full_name: 'Michael Brown', role: 'Writer', department: 'Editorial' }
+      { id: 'writer_2', full_name: 'Michael Brown', role: 'Writer', department: 'Editorial' },
     ]
     users.value.artists = [
       { id: 'artist_1', full_name: 'David Wilson', role: 'Artist', department: 'Design' },
-      { id: 'artist_2', full_name: 'Lisa Anderson', role: 'Artist', department: 'Design' }
+      { id: 'artist_2', full_name: 'Lisa Anderson', role: 'Artist', department: 'Design' },
     ]
   } finally {
     loading.value.sectionHeads = false
@@ -177,7 +182,7 @@ const assignProject = async () => {
       description: description.value.trim() || 'No description provided',
       due_date: deadline.value || null,
       status: 'draft',
-      section_head: selectedSectionHead.value ? String(selectedSectionHead.value) : null,
+      section_head_id: selectedSectionHead.value ? parseInt(selectedSectionHead.value) : null,
     }
 
     const newProject = await projectsService.create(projectData)
@@ -187,7 +192,7 @@ const assignProject = async () => {
       for (const writerId of selectedWriters.value) {
         await projectsService.addMember(newProject.id, {
           user_id: writerId,
-          role: 'writer'
+          role: 'writer',
         })
       }
     }
@@ -196,7 +201,7 @@ const assignProject = async () => {
       for (const artistId of selectedArtists.value) {
         await projectsService.addMember(newProject.id, {
           user_id: artistId,
-          role: 'artist'
+          role: 'artist',
         })
       }
     }

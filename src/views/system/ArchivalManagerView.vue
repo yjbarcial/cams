@@ -7,6 +7,7 @@ import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
 import { projectsService, archivesService } from '@/services/supabaseService'
+import { supabase } from '@/utils/supabase'
 import {
   getProjectComments,
   addProjectComment,
@@ -25,7 +26,7 @@ const projectType = ref('magazine')
 
 // User role - ARCHIVAL MANAGER ONLY
 const currentUserRole = ref('Archival Manager')
-const currentUser = ref('Archival Manager User')
+const currentUser = ref(null)
 
 // Project data
 const project = ref({
@@ -182,14 +183,23 @@ const submitApproval = async () => {
   const newStatus = getNextStatus(action)
 
   try {
+    // Get actual authenticated user
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      showNotification('Authentication error. Please login again.', 'error')
+      return
+    }
+
     // Update via Supabase
     const updateData = {
       status: newStatus,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }
 
     if (action === 'publish') {
-      updateData.published_by = currentUser.value
+      updateData.published_by = user.id
       updateData.published_date = publishData.value.publishDate
       updateData.publish_platform = publishData.value.publishPlatform
       updateData.publish_notes = approvalComments.value
@@ -208,7 +218,7 @@ const submitApproval = async () => {
       projectTitle: project.value.title,
       oldStatus: 'For Publish',
       newStatus: 'Published',
-      actionBy: currentUser.value,
+      actionBy: user.id,
       recipient: 'All',
       comments: approvalComments.value,
     })
@@ -220,8 +230,8 @@ const submitApproval = async () => {
           projectType.value,
           projectId,
           project.value,
-          `Published by ${currentUser.value}`,
-          currentUser.value,
+          `Published by Archival Manager`,
+          user.id,
           newStatus,
         )
         console.log('Project version saved to Supabase successfully')
@@ -290,7 +300,9 @@ const loadProjectData = async () => {
       id: String(projectId),
       title: foundProject.title || 'Untitled Project',
       status: foundProject.status || 'archived',
-      lastModified: foundProject.updated_at ? new Date(foundProject.updated_at).toLocaleString() : new Date().toLocaleString(),
+      lastModified: foundProject.updated_at
+        ? new Date(foundProject.updated_at).toLocaleString()
+        : new Date().toLocaleString(),
       content: foundProject.content || '',
     }
 

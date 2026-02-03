@@ -182,7 +182,9 @@ const fetchRealUsers = async () => {
     }
 
     // ⭐ Filter out admin emails
-    const regularUsers = data.filter((user) => !ADMIN_EMAILS.includes(user.email.toLowerCase()))
+    const regularUsers = data.filter(
+      (user) => user.email && !ADMIN_EMAILS.includes(user.email.toLowerCase()),
+    )
 
     console.log('✅ Found users:', regularUsers.length, '(excluding admins)')
 

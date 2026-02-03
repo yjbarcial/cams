@@ -6,7 +6,8 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
-import { projectsService } from '@/services/supabaseService'
+import { projectsService, profilesService } from '@/services/supabaseService'
+import { supabase } from '@/utils/supabase'
 import {
   getProjectComments,
   addProjectComment,
@@ -157,7 +158,7 @@ const approvalActions = computed(() => {
 // EDITOR-IN-CHIEF - Status mapping
 const getNextStatus = (action) => {
   if (action === 'approve') return 'EIC Approved'
-  if (action === 'forward') return 'To Chief Adviser'
+  if (action === 'forward') return 'to_chief_adviser'
   return project.value.status
 }
 
@@ -188,7 +189,7 @@ const saveContentChanges = async () => {
     // Save to Supabase
     await projectsService.update(projectId, {
       content: editorContent.value,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     })
 
     console.log('✅ Content saved to Supabase')
@@ -220,19 +221,28 @@ const submitApproval = async () => {
       await saveContentChanges()
     }
 
+    // Get actual user UUID from Supabase Auth
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      showNotification('User not authenticated', 'error')
+      return
+    }
+
     // Update via Supabase
     const updateData = {
       status: newStatus,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }
 
     if (action === 'approve') {
-      updateData.eic_approved_by = currentUser.value
+      updateData.eic_approved_by = user.id
       updateData.eic_approved_date = new Date().toISOString()
       updateData.eic_comments = approvalComments.value
       updateData.priority = approvalPriority.value
     } else if (action === 'forward') {
-      updateData.forwarded_to_adviser_by = currentUser.value
+      updateData.forwarded_to_adviser_by = user.id
       updateData.forwarded_to_adviser_date = new Date().toISOString()
       updateData.forward_notes = approvalComments.value
       updateData.priority = approvalPriority.value
@@ -244,30 +254,30 @@ const submitApproval = async () => {
 
     project.value.status = newStatus
 
-      // Create notification based on action
-      if (action === 'approve') {
-        createStatusChangeNotification({
-          projectId: projectId,
-          projectType: actualStorage.type,
-          projectTitle: project.value.title,
-          oldStatus: 'to_editor_in_chief',
-          newStatus: 'EIC Approved',
-          actionBy: currentUser.value,
-          recipient: 'All',
-          comments: approvalComments.value,
-        })
-      } else if (action === 'forward') {
-        createStatusChangeNotification({
-          projectId: projectId,
-          projectType: actualStorage.type,
-          projectTitle: project.value.title,
-          oldStatus: 'to_editor_in_chief',
-          newStatus: 'To Chief Adviser',
-          actionBy: currentUser.value,
-          recipient: 'Chief Adviser',
-          comments: approvalComments.value,
-        })
-      }
+    // Create notification based on action
+    if (action === 'approve') {
+      createStatusChangeNotification({
+        projectId: projectId,
+        projectType: project.value.type,
+        projectTitle: project.value.title,
+        oldStatus: 'to_editor_in_chief',
+        newStatus: 'EIC Approved',
+        actionBy: currentUser.value,
+        recipient: 'All',
+        comments: approvalComments.value,
+      })
+    } else if (action === 'forward') {
+      createStatusChangeNotification({
+        projectId: projectId,
+        projectType: project.value.type,
+        projectTitle: project.value.title,
+        oldStatus: 'to_editor_in_chief',
+        newStatus: 'To Chief Adviser',
+        actionBy: currentUser.value,
+        recipient: 'Chief Adviser',
+        comments: approvalComments.value,
+      })
+    }
 
     showApprovalDialog.value = false
     approvalAction.value = ''
@@ -276,18 +286,21 @@ const submitApproval = async () => {
 
     if (action === 'approve') {
       showNotification('Project approved successfully!', 'success')
+      setTimeout(() => {
+        // Route based on project type
+        const routePath =
+          projectType.value === 'other' || projectType.value === 'social-media'
+            ? '/other'
+            : `/${projectType.value}`
+        router.push(routePath)
+      }, 600)
     } else if (action === 'forward') {
       showNotification('Project forwarded to Chief Adviser!', 'success')
+      setTimeout(() => {
+        // Go to Chief Adviser view for this project
+        router.push(`/chief-adviser/${projectId}?type=${projectType.value}`)
+      }, 600)
     }
-
-    setTimeout(() => {
-      // Route based on project type
-      const routePath =
-        projectType.value === 'other' || projectType.value === 'social-media'
-          ? '/other'
-          : `/${projectType.value}`
-      router.push(routePath)
-    }, 600)
   } catch (error) {
     console.error('Error processing approval:', error)
     showNotification('Error processing approval.', 'error')
@@ -340,6 +353,42 @@ const loadProjectData = async () => {
 
     console.log('✅ Project loaded from Supabase:', foundProject)
 
+    // Load project members with their profile info
+    const members = await projectsService.getMembers(projectId)
+    console.log('✅ Project members loaded:', members)
+
+    // Get section head name from section_head_id
+    let sectionHeadName = 'Not assigned'
+    if (foundProject.section_head_id) {
+      try {
+        const sectionHeadProfile = await profilesService.getById(foundProject.section_head_id)
+        if (sectionHeadProfile) {
+          sectionHeadName =
+            `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim() ||
+            sectionHeadProfile.email
+        }
+      } catch (error) {
+        console.error('Error loading section head profile:', error)
+      }
+    }
+
+    // Get writers and artists from project_members
+    const writers = members
+      .filter((m) => m.role === 'writer')
+      .map((m) => {
+        const profile = m.profiles
+        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+      })
+    const writersText = writers.length > 0 ? writers.join(', ') : 'Not assigned'
+
+    const artists = members
+      .filter((m) => m.role === 'artist')
+      .map((m) => {
+        const profile = m.profiles
+        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+      })
+    const artistsText = artists.length > 0 ? artists.join(', ') : 'Not assigned'
+
     project.value = {
       ...foundProject,
       id: String(projectId),
@@ -349,9 +398,9 @@ const loadProjectData = async () => {
         ? new Date(foundProject.updated_at).toLocaleString()
         : new Date().toLocaleString(),
       content: foundProject.content || '',
-      writers: foundProject.writers || foundProject.assigned_writers || 'Not assigned',
-      artists: foundProject.artists || foundProject.assigned_artists || 'Not assigned',
-      sectionHead: foundProject.section_head || foundProject.created_by || 'Not assigned',
+      writers: writersText,
+      artists: artistsText,
+      sectionHead: sectionHeadName,
       description: foundProject.description || '',
       dueDate: foundProject.due_date || foundProject.deadline || '',
       department: foundProject.department || '',

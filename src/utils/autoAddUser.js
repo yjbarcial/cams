@@ -42,9 +42,8 @@ export async function addUserToProfiles(user) {
       return
     }
 
-    // ⭐ Determine user role - try 'contributor' as default (check your Supabase user_role enum)
-    // Common values: 'admin', 'editor', 'contributor', 'viewer', 'member', 'user'
-    const userRole = isAdminEmail(user.email) ? 'admin' : 'contributor'
+    // ⭐ Determine user role - using 'member' as default (valid values: admin, editor, section_head, member, viewer)
+    const userRole = isAdminEmail(user.email) ? 'admin' : 'member'
     console.log(`👤 Role assigned: ${userRole}`)
 
     if (existingUser) {

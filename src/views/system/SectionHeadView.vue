@@ -6,7 +6,8 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
-import { projectsService } from '@/services/supabaseService'
+import { projectsService, profilesService } from '@/services/supabaseService'
+import { supabase } from '@/utils/supabase'
 import {
   getProjectComments,
   addProjectComment,
@@ -209,7 +210,7 @@ const saveContentChanges = async () => {
     // Save to Supabase
     await projectsService.update(projectId, {
       content: editorContent.value,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     })
 
     console.log('✅ Content saved to Supabase')
@@ -251,6 +252,16 @@ const submitApproval = async () => {
   const newStatus = getNextStatus(action)
 
   try {
+    // Get current user from Supabase Auth
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      showNotification('You must be logged in to approve', 'error')
+      return
+    }
+
     if (isEditorEditable.value) {
       await saveContentChanges()
     }
@@ -259,10 +270,10 @@ const submitApproval = async () => {
     await projectsService.update(projectId, {
       status: newStatus,
       updated_at: new Date().toISOString(),
-      section_head_approved_by: action === 'approve' ? currentUser.value : undefined,
+      section_head_approved_by: action === 'approve' ? user.id : undefined,
       section_head_approved_date: action === 'approve' ? new Date().toISOString() : undefined,
       section_head_comments: action === 'approve' ? approvalComments.value : undefined,
-      priority: action === 'approve' ? approvalPriority.value : undefined
+      priority_level: action === 'approve' ? approvalPriority.value : undefined,
     })
 
     console.log('✅ Project status updated via Supabase')
@@ -364,6 +375,42 @@ const loadProjectData = async () => {
 
     console.log('✅ Project loaded from Supabase:', foundProject)
 
+    // Load project members with their profile info
+    const members = await projectsService.getMembers(projectId)
+    console.log('✅ Project members loaded:', members)
+
+    // Get section head name from section_head_id
+    let sectionHeadName = 'Not assigned'
+    if (foundProject.section_head_id) {
+      try {
+        const sectionHeadProfile = await profilesService.getById(foundProject.section_head_id)
+        if (sectionHeadProfile) {
+          sectionHeadName =
+            `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim() ||
+            sectionHeadProfile.email
+        }
+      } catch (error) {
+        console.error('Error loading section head profile:', error)
+      }
+    }
+
+    // Get writers and artists from project_members
+    const writers = members
+      .filter((m) => m.role === 'writer')
+      .map((m) => {
+        const profile = m.profiles
+        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+      })
+    const writersText = writers.length > 0 ? writers.join(', ') : 'Not assigned'
+
+    const artists = members
+      .filter((m) => m.role === 'artist')
+      .map((m) => {
+        const profile = m.profiles
+        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+      })
+    const artistsText = artists.length > 0 ? artists.join(', ') : 'Not assigned'
+
     project.value = {
       ...foundProject,
       id: String(projectId),
@@ -373,9 +420,9 @@ const loadProjectData = async () => {
         ? new Date(foundProject.updated_at).toLocaleString()
         : new Date().toLocaleString(),
       content: foundProject.content || '',
-      writers: foundProject.writers || foundProject.assigned_writers || 'Not assigned',
-      artists: foundProject.artists || foundProject.assigned_artists || 'Not assigned',
-      sectionHead: foundProject.section_head || foundProject.created_by || 'Not assigned',
+      writers: writersText,
+      artists: artistsText,
+      sectionHead: sectionHeadName,
       description: foundProject.description || '',
       dueDate: foundProject.due_date || foundProject.deadline || '',
       department: foundProject.department || '',

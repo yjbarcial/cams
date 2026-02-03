@@ -6,7 +6,8 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
-import { projectsService } from '@/services/supabaseService'
+import { projectsService, profilesService } from '@/services/supabaseService'
+import { supabase } from '@/utils/supabase'
 import {
   getProjectComments,
   addProjectComment,
@@ -196,7 +197,7 @@ const saveContentChanges = async () => {
     // Save to Supabase
     await projectsService.update(projectId, {
       content: editorContent.value,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     })
 
     console.log('✅ Content saved to Supabase')
@@ -237,22 +238,31 @@ const submitApproval = async () => {
       await saveContentChanges()
     }
 
+    // Get actual user UUID from Supabase Auth
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      showNotification('User not authenticated', 'error')
+      return
+    }
+
     // Update via Supabase
     const updateData = {
       status: newStatus,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }
 
     if (action === 'approve') {
-      updateData.adviser_approved_by = currentUser.value
+      updateData.adviser_approved_by = user.id
       updateData.adviser_approved_date = new Date().toISOString()
       updateData.adviser_comments = approvalComments.value
     } else if (action === 'return') {
-      updateData.adviser_returned_by = currentUser.value
+      updateData.adviser_returned_by = user.id
       updateData.adviser_returned_date = new Date().toISOString()
       updateData.adviser_return_comments = approvalComments.value
     } else if (action === 'reject') {
-      updateData.adviser_rejected_by = currentUser.value
+      updateData.adviser_rejected_by = user.id
       updateData.adviser_rejected_date = new Date().toISOString()
       updateData.adviser_reject_comments = approvalComments.value
     }
@@ -263,88 +273,85 @@ const submitApproval = async () => {
 
     project.value.status = newStatus
 
-      // Create notification based on action
-      if (action === 'approve') {
-        createStatusChangeNotification({
-          projectId: projectId,
-          projectType: actualStorage.type,
-          projectTitle: project.value.title,
-          oldStatus: 'To Chief Adviser',
-          newStatus: 'For Publish',
-          actionBy: currentUser.value,
-          recipient: 'Archival Manager',
-          comments: approvalComments.value,
-        })
-      } else if (action === 'return') {
-        createStatusChangeNotification({
-          projectId: projectId,
-          projectType: actualStorage.type,
-          projectTitle: project.value.title,
-          oldStatus: 'To Chief Adviser',
-          newStatus: 'Returned by Chief Adviser',
-          actionBy: currentUser.value,
-          recipient: 'Editor-in-Chief',
-          comments: approvalComments.value,
-        })
-      } else if (action === 'reject') {
-        createStatusChangeNotification({
-          projectId: projectId,
-          projectType: actualStorage.type,
-          projectTitle: project.value.title,
-          oldStatus: 'To Chief Adviser',
-          newStatus: 'Rejected by Chief Adviser',
-          actionBy: currentUser.value,
-          recipient: 'Editor-in-Chief',
-          comments: approvalComments.value,
-        })
-      }
+    // Create notification based on action
+    if (action === 'approve') {
+      createStatusChangeNotification({
+        projectId: projectId,
+        projectType: project.value.type,
+        projectTitle: project.value.title,
+        oldStatus: 'To Chief Adviser',
+        newStatus: 'For Publish',
+        actionBy: currentUser.value,
+        recipient: 'Archival Manager',
+        comments: approvalComments.value,
+      })
+    } else if (action === 'return') {
+      createStatusChangeNotification({
+        projectId: projectId,
+        projectType: project.value.type,
+        projectTitle: project.value.title,
+        oldStatus: 'To Chief Adviser',
+        newStatus: 'Returned by Chief Adviser',
+        actionBy: currentUser.value,
+        recipient: 'Editor-in-Chief',
+        comments: approvalComments.value,
+      })
+    } else if (action === 'reject') {
+      createStatusChangeNotification({
+        projectId: projectId,
+        projectType: project.value.type,
+        projectTitle: project.value.title,
+        oldStatus: 'To Chief Adviser',
+        newStatus: 'Rejected by Chief Adviser',
+        actionBy: currentUser.value,
+        recipient: 'Editor-in-Chief',
+        comments: approvalComments.value,
+      })
+    }
 
-      // Try to save to Supabase (non-blocking)
-      try {
-        // Only call Supabase if project has a valid supabaseId
-        if (project.value.supabaseId) {
-          await createProjectVersionSupabase(
-            project.value.supabaseId,
-            editorContent.value || '',
-            action === 'approve'
-              ? 'Approved by Chief Adviser - Ready for Publishing'
-              : action === 'return'
-                ? 'Returned by Chief Adviser for reconsideration'
-                : 'Rejected by Chief Adviser',
-            currentUser.value,
-          )
-          console.log('Project version saved to Supabase successfully')
-        } else {
-          console.log('Project does not have Supabase ID, skipping sync')
-        }
-      } catch (err) {
-        console.warn('Failed to save project version to Supabase (non-critical):', err)
-        // Don't block the workflow if Supabase fails
-      }
-
-      showApprovalDialog.value = false
-      approvalAction.value = ''
-      approvalComments.value = ''
-
-      if (action === 'approve') {
-        showNotification(
-          'Project approved and ready for publishing by Archival Manager!',
-          'success',
+    // Try to save to Supabase (non-blocking)
+    try {
+      // Only call Supabase if project has a valid supabaseId
+      if (project.value.supabaseId) {
+        await createProjectVersionSupabase(
+          project.value.supabaseId,
+          editorContent.value || '',
+          action === 'approve'
+            ? 'Approved by Chief Adviser - Ready for Publishing'
+            : action === 'return'
+              ? 'Returned by Chief Adviser for reconsideration'
+              : 'Rejected by Chief Adviser',
+          currentUser.value,
         )
-      } else if (action === 'return') {
-        showNotification('Project returned for reconsideration', 'warning')
-      } else if (action === 'reject') {
-        showNotification('Project rejected', 'error')
+        console.log('Project version saved to Supabase successfully')
+      } else {
+        console.log('Project does not have Supabase ID, skipping sync')
       }
+    } catch (err) {
+      console.warn('Failed to save project version to Supabase (non-critical):', err)
+      // Don't block the workflow if Supabase fails
+    }
 
-      setTimeout(() => {
-        // For other/social-media types, route to /other
-        const routePath =
-          actualStorage.type === 'other' || actualStorage.type === 'social-media'
-            ? '/other'
-            : `/${actualStorage.type}`
-        router.push(routePath)
-      }, 600)
+    showApprovalDialog.value = false
+    approvalAction.value = ''
+    approvalComments.value = ''
+
+    if (action === 'approve') {
+      showNotification('Project approved and ready for publishing by Archival Manager!', 'success')
+    } else if (action === 'return') {
+      showNotification('Project returned for reconsideration', 'warning')
+    } else if (action === 'reject') {
+      showNotification('Project rejected', 'error')
+    }
+
+    setTimeout(() => {
+      // For other/social-media types, route to /other
+      const routePath =
+        projectType.value === 'other' || projectType.value === 'social-media'
+          ? '/other'
+          : `/${projectType.value}`
+      router.push(routePath)
+    }, 600)
   } catch (error) {
     console.error('Error processing approval:', error)
     showNotification('Error processing approval', 'error')
@@ -397,16 +404,61 @@ const loadProjectData = async () => {
 
     console.log('✅ Project loaded from Supabase:', foundProject)
 
+    // Load project members to get names
+    const members = await projectsService.getMembers(projectId)
+    console.log('✅ Project members loaded:', members)
+
+    // Load section head profile
+    let sectionHeadName = 'Not assigned'
+    if (foundProject.section_head_id) {
+      const sectionHeadProfile = await profilesService.getById(foundProject.section_head_id)
+      if (sectionHeadProfile) {
+        sectionHeadName =
+          `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim() ||
+          sectionHeadProfile.email ||
+          'Not assigned'
+      }
+    }
+
+    // Get writers and artists from members
+    const writers =
+      members
+        .filter((m) => m.role === 'writer')
+        .map((m) => {
+          const profile = m.profiles
+          if (profile) {
+            const name = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+            return name || profile.email || 'Unknown'
+          }
+          return 'Unknown'
+        })
+        .join(', ') || 'Not assigned'
+
+    const artists =
+      members
+        .filter((m) => m.role === 'artist')
+        .map((m) => {
+          const profile = m.profiles
+          if (profile) {
+            const name = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+            return name || profile.email || 'Unknown'
+          }
+          return 'Unknown'
+        })
+        .join(', ') || 'Not assigned'
+
     project.value = {
       ...foundProject,
       id: String(projectId),
       title: foundProject.title || 'Untitled Project',
       status: foundProject.status || 'draft',
-      lastModified: foundProject.updated_at ? new Date(foundProject.updated_at).toLocaleString() : new Date().toLocaleString(),
+      lastModified: foundProject.updated_at
+        ? new Date(foundProject.updated_at).toLocaleString()
+        : new Date().toLocaleString(),
       content: foundProject.content || '',
-      writers: foundProject.writers || foundProject.assigned_writers || 'Not assigned',
-      artists: foundProject.artists || foundProject.assigned_artists || 'Not assigned',
-      sectionHead: foundProject.section_head || foundProject.created_by || 'Not assigned',
+      writers: writers,
+      artists: artists,
+      sectionHead: sectionHeadName,
       description: foundProject.description || '',
     }
 
@@ -415,7 +467,7 @@ const loadProjectData = async () => {
     updateLastSaveTime()
     loadProjectComments()
 
-    console.log('✅ Project loaded from Supabase')
+    console.log('✅ Project loaded from Supabase with member names')
   } catch (error) {
     console.error('❌ Error loading project:', error)
     showNotification('Project not found. Redirecting...', 'error')
