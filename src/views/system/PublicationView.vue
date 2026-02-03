@@ -93,8 +93,14 @@ async function loadPDF(pdfUrl) {
     console.log('✅ All pages rendered, initializing PageFlip')
 
     // Initialize PageFlip after ALL pages are loaded
+    // Wait for template to render the container element
     await nextTick()
-    initPageFlip()
+    await nextTick() // Double tick to ensure v-else-if renders
+
+    // Give extra time for DOM to be ready
+    setTimeout(() => {
+      initPageFlip()
+    }, 100)
   } catch (error) {
     console.error('❌ Error loading PDF:', error)
     pdfLoading.value = false
@@ -270,7 +276,16 @@ onUnmounted(() => {
 
 // Initialize PageFlip library
 function initPageFlip() {
-  if (!pageFlipContainer.value || pages.value.length <= 1) return
+  if (!pageFlipContainer.value) {
+    console.error('❌ PageFlip container ref is null')
+    return
+  }
+  if (pages.value.length <= 1) {
+    console.error('❌ Not enough pages:', pages.value.length)
+    return
+  }
+
+  console.log('🔧 Initializing PageFlip with', pages.value.length - 1, 'pages')
 
   try {
     pageFlipInstance = new PageFlip(pageFlipContainer.value, {

@@ -24,6 +24,42 @@ const removeFile = (index) => {
   selectedFiles.value.splice(index, 1)
 }
 
+// Generate thumbnail from PDF first page
+const generateThumbnail = async (file) => {
+  try {
+    // Dynamically import PDF.js
+    const pdfjsLib = await import('pdfjs-dist')
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+
+    // Read file as array buffer
+    const arrayBuffer = await file.arrayBuffer()
+    const pdf = await pdfjsLib.getDocument(arrayBuffer).promise
+
+    // Get first page
+    const page = await pdf.getPage(1)
+    const viewport = page.getViewport({ scale: 0.8 }) // Scale for thumbnail
+
+    // Create canvas
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    canvas.width = viewport.width
+    canvas.height = viewport.height
+
+    // Render page to canvas
+    await page.render({ canvasContext: context, viewport }).promise
+
+    // Convert canvas to blob
+    return new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.85)
+    })
+  } catch (error) {
+    console.error('Error generating thumbnail:', error)
+    // Return null if thumbnail generation fails
+    return null
+  }
+}
+
 const uploadFiles = async () => {
   if (selectedFiles.value.length === 0) return
   if (!title.value) {
@@ -43,19 +79,45 @@ const uploadFiles = async () => {
       if (uploadError) throw uploadError
 
       // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('archives')
-        .getPublicUrl(fileName)
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('archives').getPublicUrl(fileName)
+
+      // Generate and upload thumbnail
+      let thumbUrl = null
+      const thumbnailBlob = await generateThumbnail(file)
+
+      if (thumbnailBlob) {
+        const thumbFileName = `thumb-${Date.now()}.jpg`
+
+        const { error: thumbError } = await supabase.storage
+          .from('archives')
+          .upload(thumbFileName, thumbnailBlob)
+
+        if (!thumbError) {
+          const {
+            data: { publicUrl: thumbPublicUrl },
+          } = supabase.storage.from('archives').getPublicUrl(thumbFileName)
+          thumbUrl = thumbPublicUrl
+        }
+      }
 
       // Create archive record via Supabase
-      await archivesService.create({
+      const archiveData = {
         title: title.value,
         category: category.value.toLowerCase(),
         publication_date: publishedAt.value,
         description: `Publication: ${title.value}`,
         file_url: publicUrl,
-        file_name: file.name
-      })
+        file_name: file.name,
+      }
+
+      // Add thumbnail if available
+      if (thumbUrl) {
+        archiveData.cover_image_url = thumbUrl
+      }
+
+      await archivesService.create(archiveData)
     }
 
     // Clear form and close
@@ -64,10 +126,10 @@ const uploadFiles = async () => {
     category.value = 'Magazine'
     publishedAt.value = new Date().toISOString().split('T')[0]
     uploadDialog.value = false
-    
+
     // Notify parent to close (AdminView listens to @close)
     emit('close')
-    
+
     // Notify success
     alert('Upload successful')
   } catch (error) {
