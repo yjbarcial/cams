@@ -1,37 +1,66 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ArchiveHeader from '@/components/layout/ArchiveHeader.vue'
 import { supabase } from '@/utils/supabase'
-import Flipbook from 'flipbook-vue'
 import * as pdfjsLib from 'pdfjs-dist'
+import { PageFlip } from 'page-flip'
 
 const route = useRoute()
 const router = useRouter()
 
 const publication = ref(null)
 const loading = ref(true)
-const currentPage = ref(0)
+const currentPage = ref(1)
 const zoomLevel = ref(1)
 const viewMode = ref('single') // 'single' or 'double'
 const pages = ref([])
 const numPages = ref(null)
 const pdfLoading = ref(false)
-const flipbookRef = ref(null)
+const showKeyboardHint = ref(false)
+const currentZoom = ref(1)
+const pageFlipContainer = ref(null)
+let pdfDocument = null
+let pageFlipInstance = null
+const renderQueue = new Set()
 
 const totalPages = computed(() => {
   return numPages.value || 1
 })
 
-// Watch currentPage changes
+// Watch currentPage changes and preload adjacent pages (debounced)
+let pageChangeTimeout = null
 watch(currentPage, (newVal, oldVal) => {
   console.log('📖 Page changed from', oldVal, 'to', newVal)
+
+  if (!pdfDocument) return
+
+  // Debounce to prevent rapid firing
+  if (pageChangeTimeout) clearTimeout(pageChangeTimeout)
+
+  pageChangeTimeout = setTimeout(() => {
+    // Render adjacent pages if not already rendered
+    // Account for 1-based indexing: newVal is the flipbook page number
+    const pagesToRender = [newVal, newVal + 1, newVal + 2].filter(
+      (pageNum) => pageNum > 0 && pageNum <= numPages.value && !pages.value[pageNum],
+    )
+
+    // Render in background without awaiting
+    pagesToRender.forEach((pageNum) => {
+      const pageIdx = pageNum - 1 // Convert to 0-based for PDF rendering
+      if (!renderQueue.has(pageIdx)) {
+        renderPage(pdfDocument, pageIdx).catch((err) =>
+          console.warn('Background render error:', err),
+        )
+      }
+    })
+  }, 100)
 })
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
 
-// Load PDF and convert pages to images
+// Load PDF with progressive rendering to prevent lag
 async function loadPDF(pdfUrl) {
   try {
     console.log('🔄 Loading PDF:', pdfUrl)
@@ -39,47 +68,91 @@ async function loadPDF(pdfUrl) {
     pages.value = [] // Clear previous pages
 
     const loadingTask = pdfjsLib.getDocument(pdfUrl)
-    const pdf = await loadingTask.promise
-    numPages.value = pdf.numPages
+    pdfDocument = await loadingTask.promise
+    numPages.value = pdfDocument.numPages
     console.log('✅ PDF loaded successfully. Total pages:', numPages.value)
 
-    const pagePromises = []
-    for (let i = 1; i <= pdf.numPages; i++) {
-      pagePromises.push(renderPage(pdf, i))
+    // Initialize pages array with null for flipbook (flipbook uses 1-based indexing)
+    // Add a null at index 0 to align with flipbook's 1-based page numbering
+    pages.value = Array(pdfDocument.numPages + 1).fill(null)
+    pages.value[0] = null // Placeholder for index 0 (flipbook starts at page 1)
+
+    // Render ALL pages before initializing PageFlip
+    for (let i = 0; i < pdfDocument.numPages; i++) {
+      await renderPage(pdfDocument, i)
     }
 
-    const renderedPages = await Promise.all(pagePromises)
-    pages.value = renderedPages
-    console.log('✅ All pages rendered:', pages.value.length)
-    console.log('First page preview:', pages.value[0]?.substring(0, 50))
+    pdfLoading.value = false
+
+    // Show keyboard hints briefly when PDF loads
+    showKeyboardHint.value = true
+    setTimeout(() => {
+      showKeyboardHint.value = false
+    }, 5000)
+
+    console.log('✅ All pages rendered, initializing PageFlip')
+
+    // Initialize PageFlip after ALL pages are loaded
+    await nextTick()
+    initPageFlip()
   } catch (error) {
     console.error('❌ Error loading PDF:', error)
-    alert('Failed to load PDF: ' + error.message)
-  } finally {
     pdfLoading.value = false
-    console.log('PDF loading finished. Pages array:', pages.value.length)
+    alert('Failed to load PDF: ' + error.message)
   }
 }
 
-// Render a single PDF page to canvas and return as data URL
-async function renderPage(pdf, pageNum) {
-  const page = await pdf.getPage(pageNum)
-  const viewport = page.getViewport({ scale: 2 })
+// Render remaining pages progressively without blocking UI
+async function renderRemainingPages(pdf, startIndex) {
+  for (let i = startIndex; i < pdf.numPages; i++) {
+    // Check if page is already being rendered
+    if (renderQueue.has(i) || pages.value[i + 1] !== null) continue
 
-  const canvas = document.createElement('canvas')
-  const context = canvas.getContext('2d')
-  canvas.width = viewport.width
-  canvas.height = viewport.height
+    // Render page
+    await renderPage(pdf, i)
 
-  await page.render({
-    canvasContext: context,
-    viewport: viewport,
-  }).promise
+    // Give browser time to breathe after each page for smoother UI
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  console.log('✅ All pages rendered')
+}
 
-  return canvas.toDataURL()
+// Render a single PDF page to canvas (optimized for performance)
+async function renderPage(pdf, pageIndex) {
+  if (renderQueue.has(pageIndex)) return
+  renderQueue.add(pageIndex)
+
+  try {
+    const page = await pdf.getPage(pageIndex + 1) // PDF pages are 1-indexed
+    const viewport = page.getViewport({ scale: 2.0 }) // Balanced scale for performance and quality
+
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d', {
+      alpha: false,
+      desynchronized: true, // Better performance
+    })
+    canvas.width = Math.floor(viewport.width)
+    canvas.height = Math.floor(viewport.height)
+
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+    }).promise
+
+    // Store rendered page at index+1 to align with flipbook's 1-based indexing
+    pages.value[pageIndex + 1] = canvas.toDataURL('image/jpeg', 0.85)
+    console.log(`✅ Rendered page ${pageIndex + 1} at array index ${pageIndex + 1}`)
+  } catch (error) {
+    console.error(`Error rendering page ${pageIndex + 1}:`, error)
+  } finally {
+    renderQueue.delete(pageIndex)
+  }
 }
 
 onMounted(async () => {
+  // Add keyboard event listener
+  window.addEventListener('keydown', handleKeyPress)
+
   const id = route.params.id
 
   // Handle test publication
@@ -173,36 +246,168 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  // Remove keyboard event listener
+  window.removeEventListener('keydown', handleKeyPress)
+
+  // Cleanup PageFlip instance
+  if (pageFlipInstance) {
+    pageFlipInstance.destroy()
+    pageFlipInstance = null
+  }
+
+  // Cleanup PDF resources
+  if (pdfDocument) {
+    pdfDocument.cleanup?.()
+    pdfDocument.destroy?.()
+    pdfDocument = null
+  }
+
+  // Clear pages to free memory
+  pages.value = []
+  renderQueue.clear()
+})
+
+// Initialize PageFlip library
+function initPageFlip() {
+  if (!pageFlipContainer.value || pages.value.length <= 1) return
+
+  try {
+    pageFlipInstance = new PageFlip(pageFlipContainer.value, {
+      width: 450,
+      height: 600,
+      size: 'fixed',
+      minWidth: 315,
+      maxWidth: 900,
+      minHeight: 420,
+      maxHeight: 1200,
+      maxShadowOpacity: 0,
+      showCover: true,
+      mobileScrollSupport: false,
+      swipeDistance: 50,
+      clickEventForward: false,
+      usePortrait: false,
+      startPage: 0,
+      drawShadow: false,
+      flippingTime: 600,
+      useMouseEvents: true,
+      autoSize: false,
+      showPageCorners: false,
+      disableFlipByClick: true,
+    })
+
+    // Create page elements
+    const pageElements = []
+    for (let i = 1; i < pages.value.length; i++) {
+      if (pages.value[i]) {
+        const pageDiv = document.createElement('div')
+        pageDiv.className = 'page-content'
+        pageDiv.style.backgroundColor = '#ffffff'
+        pageDiv.style.backgroundSize = 'cover'
+
+        const img = document.createElement('img')
+        img.src = pages.value[i]
+        img.style.width = '100%'
+        img.style.height = '100%'
+        img.style.objectFit = 'contain'
+        img.draggable = false
+
+        pageDiv.appendChild(img)
+        pageElements.push(pageDiv)
+      }
+    }
+
+    // Load pages into PageFlip
+    pageFlipInstance.loadFromHTML(pageElements)
+
+    // Listen to page flip events
+    pageFlipInstance.on('flip', (e) => {
+      currentPage.value = e.data + 1
+      console.log('📖 Current page index:', e.data, '| Display page:', currentPage.value)
+    })
+
+    pageFlipInstance.on('changeState', (e) => {
+      console.log('📘 State:', e.data)
+    })
+
+    // Set initial page
+    currentPage.value = 1
+
+    console.log('✅ PageFlip initialized with', pageElements.length, 'pages')
+  } catch (error) {
+    console.error('❌ Error initializing PageFlip:', error)
+  }
+}
+
 function goBack() {
   router.push({ name: 'archive' })
 }
 
 function nextPage() {
-  if (flipbookRef.value) {
-    flipbookRef.value.flipRight()
+  if (!pageFlipInstance) {
+    console.warn('⚠️ PageFlip instance not initialized')
+    return
+  }
+  try {
+    const currentIdx = pageFlipInstance.getCurrentPageIndex()
+    console.log('📖 Next clicked - Current index:', currentIdx, 'Total pages:', numPages.value)
+    // Reset zoom to normal before flipping
+    currentZoom.value = 1
+    pageFlipInstance.flipNext()
+  } catch (err) {
+    console.error('❌ Error flipping next:', err)
   }
 }
 
 function prevPage() {
-  if (flipbookRef.value) {
-    flipbookRef.value.flipLeft()
+  if (!pageFlipInstance) {
+    console.warn('⚠️ PageFlip instance not initialized')
+    return
+  }
+  try {
+    const currentIdx = pageFlipInstance.getCurrentPageIndex()
+    console.log('📖 Prev clicked - Current index:', currentIdx, 'Can flip:', currentIdx > 0)
+    if (currentIdx > 0) {
+      // Reset zoom to normal before flipping
+      currentZoom.value = 1
+      pageFlipInstance.flipPrev()
+    } else {
+      console.log('⚠️ Already at first page')
+    }
+  } catch (err) {
+    console.error('❌ Error flipping prev:', err)
   }
 }
 
 function zoomIn() {
-  if (flipbookRef.value && flipbookRef.value.zoomIn) {
-    flipbookRef.value.zoomIn()
+  if (currentZoom.value < 2) {
+    currentZoom.value = Math.min(currentZoom.value + 0.25, 2)
   }
 }
 
 function zoomOut() {
-  if (flipbookRef.value && flipbookRef.value.zoomOut) {
-    flipbookRef.value.zoomOut()
+  if (currentZoom.value > 0.5) {
+    currentZoom.value = Math.max(currentZoom.value - 0.25, 0.5)
   }
+}
+
+function setZoom(value) {
+  currentZoom.value = Math.max(0.5, Math.min(2, value))
 }
 
 function toggleViewMode() {
   viewMode.value = viewMode.value === 'single' ? 'double' : 'single'
+}
+
+// Handle flip start to preload adjacent pages
+function onFlipStart() {
+  // Preload next 2 pages when flip animation starts
+  if (pdfDocument && currentPage.value < numPages.value - 2) {
+    const nextIdx = currentPage.value + 2
+    if (pages.value[nextIdx] === '' && !renderQueue.has(nextIdx)) {
+      renderPage(pdfDocument, nextIdx).catch((err) => console.warn('Preload error:', err))
+    }
+  }
 }
 
 function fullscreen() {
@@ -216,6 +421,29 @@ function fullscreen() {
 
 function handleImageError(event) {
   event.target.style.display = 'none'
+}
+
+// Keyboard navigation for better user experience
+function handleKeyPress(event) {
+  // Ignore if user is typing in an input
+  if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
+
+  if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    nextPage()
+  } else if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    prevPage()
+  } else if (event.key === '=' || event.key === '+') {
+    event.preventDefault()
+    zoomIn()
+  } else if (event.key === '-' || event.key === '_') {
+    event.preventDefault()
+    zoomOut()
+  } else if (event.key === 'f' || event.key === 'F') {
+    event.preventDefault()
+    fullscreen()
+  }
 }
 </script>
 
@@ -235,79 +463,84 @@ function handleImageError(event) {
 
       <!-- Publication Viewer -->
       <div v-else-if="publication" class="viewer-outer">
-        <div class="viewer-wrapper">
-          <!-- Top Bar -->
-          <div class="viewer-topbar">
-            <v-btn icon variant="text" @click="goBack" class="back-btn">
-              <v-icon>mdi-arrow-left</v-icon>
-            </v-btn>
-            <div class="publication-info">
-              <h2 class="viewer-title">{{ publication.title }}</h2>
-              <span class="viewer-subtitle">by {{ publication.writers }}</span>
-            </div>
+        <!-- Top Bar (Separate from viewer) -->
+        <div class="viewer-topbar">
+          <v-btn icon variant="text" @click="goBack" class="back-btn">
+            <v-icon>mdi-arrow-left</v-icon>
+          </v-btn>
+          <div class="publication-info">
+            <h2 class="viewer-title">{{ publication.title }}</h2>
+            <span class="viewer-subtitle">by {{ publication.writers }}</span>
           </div>
+        </div>
 
+        <div class="viewer-wrapper">
           <!-- Viewer Container (PDF/Flipbook Display) -->
           <div class="viewer-container">
-            <!-- Previous Page Button (Left) -->
+            <!-- Keyboard Shortcuts Hint (Fixed to Container) -->
+            <transition name="fade">
+              <div v-if="showKeyboardHint" class="keyboard-hint">
+                <v-icon class="mr-2">mdi-keyboard</v-icon>
+                <span>Use arrow keys ← → to flip pages, +/- to zoom, F for fullscreen</span>
+              </div>
+            </transition>
+
+            <!-- Previous Page Button -->
             <v-btn
               v-if="pages.length > 0"
               class="flipbook-nav-btn flipbook-nav-prev"
               icon
               size="large"
               variant="text"
-              @click="prevPage"
-              :disabled="currentPage <= 0"
+              @click.stop="prevPage"
+              :disabled="currentPage <= 1"
+              aria-label="Previous page"
             >
               <v-icon size="40">mdi-chevron-left</v-icon>
             </v-btn>
 
-            <div class="viewer-content">
-              <!-- Loading State -->
-              <div v-if="pdfLoading" class="flipbook-loading">
-                <v-progress-circular indeterminate color="primary" size="48"></v-progress-circular>
-                <p class="mt-4">Loading flipbook...</p>
-              </div>
+            <!-- Loading State -->
+            <div v-if="pdfLoading" class="flipbook-loading">
+              <v-progress-circular indeterminate color="primary" size="48"></v-progress-circular>
+              <p class="mt-4">Loading publication...</p>
+              <p class="text-caption text-grey mt-2">Please wait, preparing pages...</p>
+            </div>
 
-              <!-- Flipbook Component -->
-              <div v-else-if="pages.length > 0" class="flipbook-wrapper">
-                <Flipbook
-                  ref="flipbookRef"
-                  class="flipbook"
-                  :pages="pages"
-                  v-model="currentPage"
-                  :startPage="0"
-                  :zooms="[1]"
-                  :clickToZoom="false"
-                  :singlePage="false"
-                  :flipDuration="500"
-                  :perspective="1200"
-                  :nPolygons="5"
-                  :ambient="0.3"
-                  :gloss="0.3"
-                  :swipeMin="3"
-                  :dragToFlip="true"
-                />
-              </div>
-
-              <!-- Debug Info -->
-              <div v-else-if="!pdfLoading" class="pdf-placeholder">
-                <v-icon size="80" color="grey-lighten-1">mdi-file-pdf-box</v-icon>
-                <p class="mt-4 text-grey">No PDF loaded</p>
-                <p class="text-caption">Pages loaded: {{ pages.length }}</p>
-                <p class="text-caption">PDF Loading: {{ pdfLoading }}</p>
+            <!-- Page Flip Book -->
+            <div
+              v-else-if="pages.length > 1 && pages.some((p) => p !== null && p !== undefined)"
+              class="zoom-wrapper"
+            >
+              <div
+                class="page-flip-container"
+                :style="{
+                  transform: `scale(${currentZoom})`,
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.3s ease-out',
+                  minWidth: `${900 * currentZoom}px`,
+                  minHeight: `${600 * currentZoom}px`,
+                }"
+              >
+                <div ref="pageFlipContainer" class="page-flip-book"></div>
               </div>
             </div>
 
-            <!-- Next Page Button (Right) -->
+            <!-- Debug Info -->
+            <div v-else-if="!pdfLoading" class="pdf-placeholder">
+              <v-icon size="80" color="grey-lighten-1">mdi-file-pdf-box</v-icon>
+              <p class="mt-4 text-grey">No PDF loaded</p>
+            </div>
+
+            <!-- Next Page Button -->
             <v-btn
               v-if="pages.length > 0"
               class="flipbook-nav-btn flipbook-nav-next"
               icon
               size="large"
               variant="text"
-              @click="nextPage"
-              :disabled="currentPage >= totalPages - 1"
+              @click.stop="nextPage"
+              :disabled="currentPage >= totalPages"
+              aria-label="Next page"
             >
               <v-icon size="40">mdi-chevron-right</v-icon>
             </v-btn>
@@ -317,17 +550,24 @@ function handleImageError(event) {
           <div class="viewer-controls">
             <div class="controls-left">
               <!-- Page Counter -->
-              <span class="page-counter">{{ currentPage + 1 }} / {{ totalPages }}</span>
+              <span class="page-counter">{{ currentPage }} / {{ totalPages }}</span>
             </div>
 
             <div class="controls-center">
-              <!-- Zoom Controls -->
+              <!-- Zoom Controls (Issuu style) -->
               <v-btn icon size="small" variant="text" @click="zoomOut">
-                <v-icon>mdi-minus</v-icon>
+                <v-icon size="18">mdi-minus</v-icon>
               </v-btn>
-              <span class="zoom-level">Zoom</span>
+              <input
+                type="range"
+                min="50"
+                max="200"
+                :value="currentZoom * 100"
+                @input="setZoom($event.target.value / 100)"
+                class="zoom-slider"
+              />
               <v-btn icon size="small" variant="text" @click="zoomIn">
-                <v-icon>mdi-plus</v-icon>
+                <v-icon size="18">mdi-plus</v-icon>
               </v-btn>
 
               <v-divider vertical class="mx-2"></v-divider>
@@ -372,15 +612,14 @@ function handleImageError(event) {
 
         <!-- Bottom Info Panel (Separate Container) -->
         <div v-if="publication" class="info-panel">
-          <v-container>
-            <v-row>
-              <v-col cols="12" md="8">
-                <h3 class="info-title">About this publication</h3>
-                <div class="info-meta">
-                  <div class="meta-row">
-                    <v-icon size="18">mdi-calendar</v-icon>
+          <v-container class="info-container">
+            <v-row align="center" class="info-row">
+              <v-col cols="12" md="7" class="publication-details">
+                <h2 class="publication-title">{{ publication.title }}</h2>
+                <div class="publication-meta">
+                  <div class="meta-item">
+                    <v-icon size="20" color="#f5c52b">mdi-calendar</v-icon>
                     <span>
-                      Published:
                       {{
                         new Date(publication.publishedAt).toLocaleDateString('en-US', {
                           year: 'numeric',
@@ -390,28 +629,14 @@ function handleImageError(event) {
                       }}
                     </span>
                   </div>
-                  <div class="meta-row">
-                    <v-icon size="18">mdi-tag</v-icon>
-                    <span>{{ publication.category }}</span>
-                  </div>
-                  <div v-if="publication.volumeIssue" class="meta-row">
-                    <v-icon size="18">mdi-book-open-variant</v-icon>
-                    <span>{{ publication.volumeIssue }}</span>
-                  </div>
-                </div>
-
-                <div v-if="publication.tags && publication.tags.length" class="info-tags">
-                  <v-chip v-for="tag in publication.tags" :key="tag" size="small" class="mr-2 mb-2">
-                    {{ tag }}
-                  </v-chip>
                 </div>
               </v-col>
 
-              <v-col cols="12" md="4">
-                <div class="publisher-info">
-                  <h4>Publisher</h4>
-                  <p>{{ publication.writers }}</p>
-                  <p class="text-caption">The Gold Panicles</p>
+              <v-col cols="12" md="5" class="publisher-section">
+                <div class="publisher-card">
+                  <h4 class="publisher-label">Publisher</h4>
+                  <p class="publisher-name">{{ publication.writers }}</p>
+                  <p class="publisher-org">The Gold Panicles</p>
                 </div>
               </v-col>
             </v-row>
@@ -542,9 +767,12 @@ function handleImageError(event) {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   border: 1px solid #d0d0d0;
+  zoom: 1;
+  transform: scale(1);
+  transform-origin: center center;
 }
 
-/* Top Bar */
+/* Top Bar (Separate from viewer) */
 .viewer-topbar {
   background: #ffffff;
   color: #1a1a1a;
@@ -552,7 +780,10 @@ function handleImageError(event) {
   display: flex;
   align-items: center;
   gap: 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  border: 1px solid #e0e0e0;
 }
 
 .back-btn {
@@ -585,96 +816,194 @@ function handleImageError(event) {
   align-items: center;
   justify-content: center;
   padding: 40px;
-  height: 700px;
-  overflow: hidden;
-  background: #fafafa;
+  height: 680px;
+  overflow: auto;
+  background: #333333;
   gap: 20px;
   position: relative;
+  /* Prevent layout shift */
+  min-height: 680px;
+  /* Maintain center alignment regardless of browser zoom */
+  place-items: center;
+  place-content: center;
+  /* Prevent browser zoom effects */
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  -ms-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+.viewer-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.viewer-container::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.viewer-container::-webkit-scrollbar-thumb {
+  background: #555555;
+  border-radius: 4px;
+}
+
+.viewer-container::-webkit-scrollbar-thumb:hover {
+  background: #666666;
 }
 
 /* Flipbook Navigation Buttons */
 .flipbook-nav-btn {
+  position: absolute !important;
+  top: 50%;
+  transform: translateY(-50%);
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.95) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
   border: 1px solid #e0e0e0 !important;
   color: #1a1a1a !important;
   transition: all 0.3s ease !important;
-  z-index: 10;
+  z-index: 100 !important;
+  pointer-events: auto !important;
+}
+
+.flipbook-nav-prev {
+  left: 20px;
+}
+
+.flipbook-nav-next {
+  right: 20px;
 }
 
 .flipbook-nav-btn:hover:not(:disabled) {
   background: #ffffff !important;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2) !important;
-  transform: scale(1.1);
+  transform: translateY(-50%) scale(1.1);
 }
 
 .flipbook-nav-btn:disabled {
   opacity: 0.3 !important;
+  cursor: not-allowed;
 }
 
-.viewer-content {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+/* Zoom Wrapper for proper scrolling */
+.zoom-wrapper {
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+/* Page Flip Styles */
+.page-flip-container {
+  width: 100%;
+  height: 600px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #333333;
+  position: relative;
+  overflow: visible;
+  opacity: 1;
+  transition: transform 0.3s ease-out;
+  place-items: center;
+  place-content: center;
+  margin: auto;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  pointer-events: none;
+}
+
+.page-flip-book {
+  width: 900px;
+  height: 600px;
   margin: 0 auto;
-  overflow: hidden;
-}
-
-/* Flipbook Styles */
-.flipbook-wrapper {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  min-height: 600px;
+  pointer-events: auto;
   display: flex;
-  align-items: center;
   justify-content: center;
-  background: #f5f5f5;
+  align-items: center;
+  cursor: default;
 }
 
-.flipbook {
-  width: 100% !important;
-  max-width: 1400px !important;
-  height: 600px !important;
+:deep(.stf__wrapper) {
+  box-shadow: none !important;
   margin: 0 auto !important;
-}
-
-:deep(.flipbook .viewport) {
-  width: 100% !important;
-  height: 600px !important;
+  gap: 0 !important;
   display: flex !important;
-  align-items: center !important;
   justify-content: center !important;
-  overflow: visible !important;
+  align-items: center !important;
+  width: 100% !important;
 }
 
-:deep(.flipbook .bounding-box) {
-  box-shadow: 0 0 60px rgba(0, 0, 0, 0.3);
+:deep(.stf__parent) {
+  position: relative !important;
+  background: transparent !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  gap: 0 !important;
+  justify-content: center !important;
+  align-items: center !important;
 }
 
-:deep(.flipbook .page) {
+:deep(.stf__block) {
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  display: flex !important;
+  justify-content: center !important;
+}
+
+:deep(.stf__item) {
+  margin: 0 !important;
+  padding: 0 !important;
+  cursor: default !important;
+}
+
+:deep(.stf__page) {
+  cursor: default !important;
+}
+
+:deep(.stf__outerShadow) {
+  display: none !important;
+}
+
+:deep(.stf__hardShadow) {
+  display: none !important;
+}
+
+:deep(.stf__hardInnerShadow) {
+  display: none !important;
+}
+
+:deep(.stf__left) {
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
+:deep(.stf__right) {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+:deep(.page-content) {
   background: #ffffff;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-}
-
-.flipbook-page {
-  width: 100%;
-  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
   overflow: hidden;
+  box-shadow: none !important;
+  border: 1px solid #e0e0e0;
+  margin: 0 !important;
+  padding: 0 !important;
+  cursor: default !important;
 }
 
-.flipbook-page img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
+:deep(.page-content img) {
+  cursor: default !important;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .flipbook-loading {
@@ -684,6 +1013,20 @@ function handleImageError(event) {
   justify-content: center;
   min-height: 400px;
   color: #666;
+  /* Ensure loading state is visible immediately */
+  animation: fadeIn 0.2s ease-in;
+  background: transparent;
+  width: 100%;
+  border-radius: 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .pdf-placeholder {
@@ -692,22 +1035,22 @@ function handleImageError(event) {
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  background: transparent;
+  border-radius: 0;
   padding: 40px;
 }
 
 /* Bottom Control Bar */
 .viewer-controls {
-  background: #ffffff;
-  color: #1a1a1a;
-  padding: 16px 32px;
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 12px 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 20px;
-  border-top: 1px solid #e0e0e0;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
 }
 
 .controls-left,
@@ -723,103 +1066,146 @@ function handleImageError(event) {
   justify-content: center;
 }
 
-.page-counter,
-.zoom-level {
-  color: #333333;
+.zoom-slider {
+  width: 100px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+}
+
+.zoom-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  border: none;
+}
+
+.page-counter {
+  color: white;
   font-size: 14px;
   font-weight: 500;
   min-width: 90px;
   text-align: center;
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border-radius: 6px;
-  border: 1px solid #e0e0e0;
 }
 
 .viewer-controls :deep(.v-btn) {
-  color: #1a1a1a !important;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
+  color: white !important;
+  opacity: 0.9;
 }
 
 .viewer-controls :deep(.v-btn:hover) {
-  background: #eeeeee;
-  border-color: #d0d0d0;
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
 .viewer-controls :deep(.v-btn:disabled) {
-  opacity: 0.4;
+  opacity: 0.3;
 }
 
 /* Info Panel Below */
 .info-panel {
   width: 100%;
   max-width: 1400px;
-  margin: 40px auto 0;
+  margin: 32px auto 0;
   background: #ffffff;
   color: #1a1a1a;
-  padding: 48px;
-  border-radius: 8px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
-  border: 1px solid #d0d0d0;
+  padding: 32px 40px;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e8e8e8;
 }
 
-.info-title {
-  font-size: 24px;
+.info-container {
+  max-width: 100% !important;
+  padding: 0 !important;
+}
+
+.info-row {
+  margin: 0 !important;
+}
+
+.publication-details {
+  padding: 0 !important;
+}
+
+.publication-title {
+  font-size: 28px;
   font-weight: 700;
   color: #1a1a1a;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+  line-height: 1.3;
 }
 
-.info-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-bottom: 28px;
-}
-
-.meta-row {
+.publication-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
-  color: #555555;
+  gap: 24px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #666666;
   font-size: 15px;
-  padding: 12px 0;
+  font-weight: 500;
 }
 
-.meta-row :deep(.v-icon) {
-  color: #f5c52b;
+.publisher-section {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 !important;
 }
 
-.info-tags {
-  margin-top: 20px;
+.publisher-card {
+  background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
+  padding: 24px 28px;
+  border-radius: 10px;
+  border: 1px solid #e8e8e8;
+  text-align: right;
+  min-width: 280px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.info-tags :deep(.v-chip) {
-  background: #ffffff !important;
-  border: 1px solid #e0e0e0;
-  color: #555555 !important;
+.publisher-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #999999;
+  margin-bottom: 8px;
 }
 
-.publisher-info {
-  background: #ffffff;
-  padding: 28px;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.publisher-info h4 {
+.publisher-name {
   font-size: 18px;
   font-weight: 600;
-  margin-bottom: 12px;
   color: #1a1a1a;
+  margin: 0;
+  line-height: 1.4;
 }
 
-.publisher-info p {
-  color: #555555;
-  margin: 6px 0;
-  font-size: 15px;
+.publisher-org {
+  font-size: 14px;
+  color: #666666;
+  margin: 4px 0 0 0;
+  font-weight: 500;
 }
 
 /* Responsive */
@@ -847,16 +1233,14 @@ function handleImageError(event) {
     font-size: 32px !important;
   }
 
-  .viewer-content {
-    max-width: 100%;
-  }
-
-  .flipbook {
+  .page-flip-container {
     width: 95vw;
+    height: 500px;
   }
 
-  :deep(.flipbook .viewport) {
-    height: 500px !important;
+  .page-flip-book {
+    width: 800px;
+    height: 500px;
   }
 
   .viewer-controls {
@@ -875,6 +1259,25 @@ function handleImageError(event) {
     width: 100%;
     justify-content: center;
     margin-bottom: 12px;
+  }
+
+  .info-panel {
+    padding: 24px 20px;
+    margin: 24px auto 0;
+  }
+
+  .publication-title {
+    font-size: 22px;
+  }
+
+  .publisher-section {
+    justify-content: flex-start;
+    margin-top: 20px;
+  }
+
+  .publisher-card {
+    min-width: 100%;
+    text-align: left;
   }
 }
 
@@ -910,21 +1313,34 @@ function handleImageError(event) {
     font-size: 28px !important;
   }
 
-  .viewer-content {
-    width: 100%;
-  }
-
-  .flipbook {
+  .page-flip-container {
     width: 100vw;
+    height: 400px;
     margin: 0 -16px;
   }
 
-  :deep(.flipbook .viewport) {
-    height: 400px !important;
+  .page-flip-book {
+    width: 600px;
+    height: 400px;
   }
 
   .info-panel {
-    padding: 32px;
+    padding: 20px 16px;
+    margin: 20px auto 0;
+  }
+
+  .publication-title {
+    font-size: 20px;
+  }
+
+  .publication-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .publisher-card {
+    padding: 20px;
   }
 
   .publisher-info {
@@ -1007,5 +1423,38 @@ function handleImageError(event) {
 
 .brand-icon:hover {
   transform: scale(1.15);
+}
+
+/* Keyboard Hint Overlay */
+.keyboard-hint {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.keyboard-hint :deep(.v-icon) {
+  color: #f5c52b;
+}
+
+/* Fade Transition */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
