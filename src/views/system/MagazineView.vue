@@ -22,25 +22,46 @@ onMounted(() => {
 
 const loadProjects = async () => {
   try {
-    // Load from Supabase directly
+    // Load from Supabase with section head profile data
     const { data, error } = await supabase
       .from('projects')
-      .select('*')
+      .select(
+        `
+        *,
+        section_head_profile:profiles!section_head_id(id, first_name, last_name, email)
+      `,
+      )
       .eq('project_type', 'magazine')
       .order('created_at', { ascending: false })
-    
+
     if (error) throw error
-    
-    projects.value = (data || []).map(project => ({
-      ...project,
-      id: project.id,
-      title: project.title,
-      status: project.status,
-      deadline: project.due_date,
-      createdAt: project.created_at,
-      updatedAt: project.updated_at,
-      starred: project.is_starred || false
-    }))
+
+    projects.value = (data || []).map((project) => {
+      // Build section head name from profile data
+      let sectionHeadName = ''
+      if (project.section_head_profile) {
+        const profile = project.section_head_profile
+        if (profile.first_name || profile.last_name) {
+          sectionHeadName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        } else if (profile.email) {
+          sectionHeadName = profile.email
+        }
+      }
+
+      return {
+        ...project,
+        id: project.id,
+        title: project.title,
+        status: project.status,
+        sectionHead: sectionHeadName,
+        deadline: project.due_date,
+        dueDate: project.due_date,
+        createdAt: project.created_at,
+        updatedAt: project.updated_at,
+        starred: project.is_starred || false,
+        isStarred: project.is_starred || false,
+      }
+    })
   } catch (error) {
     console.error('Error loading projects from Supabase:', error)
     projects.value = []
@@ -145,7 +166,7 @@ const toggleStar = async (projectId) => {
     // Update via Supabase
     try {
       await projectsService.update(projectId, {
-        is_starred: project.isStarred
+        is_starred: project.isStarred,
       })
     } catch (error) {
       console.error('Error updating star status:', error)
@@ -245,7 +266,7 @@ const saveEdit = async () => {
       title: editingProject.value.title,
       description: editingProject.value.description,
       deadline: editingProject.value.deadline,
-      status: editingProject.value.status
+      status: editingProject.value.status,
     })
 
     // Update local state
