@@ -46,7 +46,7 @@ export const projectsService = {
     return data
   },
 
-  // Delete project
+  // Delete project (simplified after CASCADE is in place)
   async delete(id) {
     const { error } = await supabase.from('projects').delete().eq('id', id)
     if (error) throw error
