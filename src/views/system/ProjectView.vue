@@ -8,7 +8,7 @@ import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
 import { projectsService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
-import { autoCreateVersionOnEdit } from '@/services/localProjectHistory.js'
+import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import {
   getProjectComments,
   addProjectComment,
@@ -134,6 +134,24 @@ const saveTitleEdit = async () => {
       })
 
       console.log('✅ Title updated via Supabase:', project.value.title)
+
+      // Create version history in Supabase
+      try {
+        const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+        await createProjectVersionSupabase(
+          projectType.value,
+          projectId,
+          project.value,
+          'Title updated',
+          userEmail,
+          'draft',
+        )
+        console.log('✅ Version history created for title change')
+      } catch (versionError) {
+        console.error('Error creating version history:', versionError)
+        // Don't fail the save if version history fails
+      }
+
       showNotification('Title updated successfully')
       updateLastSaveTime()
     } catch (error) {
@@ -186,6 +204,23 @@ const saveContent = async (showNotif = false) => {
 
       console.log('✅ Content saved to Supabase')
 
+      // Create version history in Supabase
+      try {
+        const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+        await createProjectVersionSupabase(
+          projectType.value,
+          projectId,
+          project.value,
+          'Content updated',
+          userEmail,
+          'draft',
+        )
+        console.log('✅ Version history created in Supabase')
+      } catch (versionError) {
+        console.error('Error creating version history:', versionError)
+        // Don't fail the save if version history fails
+      }
+
       // Update previous content for next comparison
       previousContent.value = content
 
@@ -196,10 +231,10 @@ const saveContent = async (showNotif = false) => {
         showNotification('Content saved', 'success')
       }
 
-      console.log('Content auto-saved to localStorage')
+      console.log('Content auto-saved to Supabase')
       return true // Successfully saved
     } catch (error) {
-      console.error('Error saving content to localStorage:', error)
+      console.error('Error saving content to Supabase:', error)
       if (showNotif) {
         showNotification('Error saving content', 'error')
       }
