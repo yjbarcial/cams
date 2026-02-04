@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
@@ -8,6 +8,7 @@ import { supabase } from '@/utils/supabase'
 import { projectsService } from '@/services/supabaseService'
 
 const router = useRouter()
+const route = useRoute()
 
 // Initialize projects - NO DEFAULT PROJECTS
 const projects = ref([])
@@ -16,6 +17,16 @@ const projects = ref([])
 onMounted(() => {
   loadProjects()
 })
+
+// Watch for route changes to reload projects
+watch(
+  () => route.path,
+  () => {
+    if (route.path === '/newsletter') {
+      loadProjects()
+    }
+  },
+)
 
 const loadProjects = async () => {
   try {

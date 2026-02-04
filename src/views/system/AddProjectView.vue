@@ -209,9 +209,9 @@ const assignProject = async () => {
     console.log('✅ Project created via Supabase:', newProject)
 
     showNotification('Project assigned successfully!', 'success')
-    setTimeout(() => {
-      router.push(cancelPath.value)
-    }, 1000)
+
+    // Navigate back and the route watcher will reload the data
+    await router.push(cancelPath.value)
   } catch (error) {
     console.error('Error creating project:', error)
     showNotification(error.error?.message || 'Failed to create project', 'error')
