@@ -235,29 +235,48 @@ const filteredProjects = computed(() => {
 })
 
 const canEditProject = (project) => {
+  // For development/demo purposes, allow editing all projects
+  // In production, this would check against actual user authentication
   return true
 }
 
 const startEdit = (project) => {
-  editingProject.value = { ...project }
-  showEditDialog.value = true
+  if (canEditProject(project)) {
+    editingProject.value = { ...project }
+    showEditDialog.value = true
+  } else {
+    alert('Only the section head who created this project can edit it.')
+  }
 }
 
-const saveEdit = () => {
+const saveEdit = async () => {
   if (!editingProject.value.title.trim()) {
     alert('Please enter a project title')
     return
   }
 
-  const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
-  if (projectIndex !== -1) {
-    projects.value[projectIndex] = { ...editingProject.value }
-    // Updates are handled by saveEdit function via API
-    loadProjects()
-  }
+  try {
+    // Update via Supabase
+    await projectsService.update(editingProject.value.id, {
+      title: editingProject.value.title,
+      description: editingProject.value.description,
+      deadline: editingProject.value.deadline,
+      status: editingProject.value.status,
+    })
 
-  editingProject.value = null
-  showEditDialog.value = false
+    // Update local state
+    const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
+    if (projectIndex !== -1) {
+      projects.value[projectIndex] = { ...editingProject.value }
+    }
+
+    // Close the dialog
+    editingProject.value = null
+    showEditDialog.value = false
+  } catch (error) {
+    console.error('Error updating project:', error)
+    alert('Failed to update project: ' + (error.error?.message || error.message))
+  }
 }
 
 const cancelEdit = () => {
@@ -266,18 +285,30 @@ const cancelEdit = () => {
 }
 
 const startDelete = (project) => {
-  projectToDelete.value = project
-  showDeleteConfirm.value = true
+  if (canEditProject(project)) {
+    projectToDelete.value = project
+    showDeleteConfirm.value = true
+  } else {
+    alert('Only the section head who created this project can delete it.')
+  }
 }
 
-const confirmDelete = () => {
+const confirmDelete = async () => {
   if (projectToDelete.value) {
-    projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
-    // Deletion is handled by confirmDelete function via API
-  }
+    try {
+      // Delete via Supabase
+      await projectsService.delete(projectToDelete.value.id)
 
-  showDeleteConfirm.value = false
-  projectToDelete.value = null
+      // Remove from local state
+      projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
+
+      projectToDelete.value = null
+      showDeleteConfirm.value = false
+    } catch (error) {
+      console.error('Error deleting project:', error)
+      alert('Failed to delete project: ' + (error.error?.message || error.message))
+    }
+  }
 }
 
 const cancelDelete = () => {
@@ -401,8 +432,7 @@ const deleteFromEdit = () => {
                   variant="text"
                   icon
                   size="small"
-                  aria-label="View and edit project"
-                  title="View and edit project"
+                  aria-label="View project"
                 >
                   <v-icon>mdi-eye</v-icon>
                 </v-btn>
@@ -414,11 +444,11 @@ const deleteFromEdit = () => {
                   variant="text"
                   icon
                   size="small"
-                  aria-label="Edit project details"
-                  title="Edit project details"
+                  aria-label="Edit project"
                 >
                   <v-icon>mdi-pencil</v-icon>
                 </v-btn>
+
                 <ProjectHistoryButton
                   :project-id="project.id"
                   project-type="other"
@@ -428,6 +458,7 @@ const deleteFromEdit = () => {
                   icon="mdi-history"
                   class="action-btn history-btn"
                 />
+
                 <v-btn
                   v-if="canEditProject(project)"
                   class="action-btn delete-btn"
@@ -436,7 +467,6 @@ const deleteFromEdit = () => {
                   icon
                   size="small"
                   aria-label="Delete project"
-                  title="Delete project"
                 >
                   <v-icon>mdi-delete</v-icon>
                 </v-btn>
