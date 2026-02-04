@@ -151,7 +151,7 @@ const cancelUpload = () => {
     <v-card>
       <v-card-title class="text-h5 d-flex justify-space-between align-center pa-4">
         <div class="d-flex align-center">
-          <v-icon class="mr-2" color="primary">mdi-cloud-upload</v-icon>
+          <v-icon class="mr-2" color="#f5c52b">mdi-cloud-upload</v-icon>
           Upload Content
         </div>
         <v-btn icon variant="text" @click="$emit('close')">
@@ -187,7 +187,7 @@ const cancelUpload = () => {
           />
           <label for="file-upload" class="upload-label">
             <div class="text-center">
-              <v-icon size="64" color="primary" class="mb-4">mdi-cloud-upload-outline</v-icon>
+              <v-icon size="64" color="#f5c52b" class="mb-4">mdi-cloud-upload-outline</v-icon>
               <h3 class="text-h6 mb-2">Drag and drop files here</h3>
               <p class="text-body-2 text-grey">or click to browse</p>
               <p class="text-caption text-grey mt-2">
@@ -202,7 +202,7 @@ const cancelUpload = () => {
           <v-list>
             <v-list-item v-for="(file, index) in selectedFiles" :key="index" class="file-item">
               <template v-slot:prepend>
-                <v-icon color="primary">mdi-file-document</v-icon>
+                <v-icon color="#f5c52b">mdi-file-document</v-icon>
               </template>
               <v-list-item-title>{{ file.name }}</v-list-item-title>
               <v-list-item-subtitle
@@ -218,10 +218,10 @@ const cancelUpload = () => {
         </div>
 
         <!-- Upload Actions -->
-        <div class="d-flex justify-end gap-3 mt-4">
+        <div class="d-flex justify-end mt-4" style="gap: 12px">
           <v-btn variant="outlined" @click="cancelUpload">Cancel</v-btn>
           <v-btn
-            color="primary"
+            color="#f5c52b"
             :disabled="selectedFiles.length === 0 || uploading"
             :loading="uploading"
             @click="uploadFiles"
@@ -267,5 +267,10 @@ const cancelUpload = () => {
   border: 1px solid #e0e0e0;
   border-radius: 4px;
   margin-bottom: 8px;
+}
+
+/* Lighter disabled state for upload button */
+:deep(.v-btn--disabled) {
+  opacity: 0.4 !important;
 }
 </style>

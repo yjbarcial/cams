@@ -247,7 +247,7 @@ const submitApproval = async () => {
     showNotification('Project published successfully!', 'success')
 
     setTimeout(() => {
-      router.push('/other')
+      router.push('/admin')
     }, 600)
   } catch (error) {
     console.error('Error processing approval:', error)
