@@ -112,6 +112,7 @@ const formatStatus = (status) => {
 const searchQuery = ref('')
 const sortOrder = ref('Date Added ↓')
 const showOnlyStarred = ref(false)
+const selectAll = ref(false)
 
 // Edit and delete functionality
 const editingProject = ref(null)
@@ -302,6 +303,21 @@ const deleteFromEdit = () => {
     showDeleteConfirm.value = true
   }
 }
+
+const confirmBulkDelete = async () => {
+  if (projects.value.length > 0) {
+    try {
+      await projectsService.deleteBulk(projects.value.map((p) => p.id))
+      projects.value = []
+    } catch (error) {
+      console.error('Error deleting bulk projects:', error)
+      alert('Failed to delete bulk projects')
+    }
+  }
+
+  showDeleteConfirm.value = false
+  projectToDelete.value = null
+}
 </script>
 
 <template>
@@ -411,8 +427,7 @@ const deleteFromEdit = () => {
                   variant="text"
                   icon
                   size="small"
-                  aria-label="View and edit project"
-                  title="View and edit project"
+                  aria-label="View project"
                 >
                   <v-icon>mdi-eye</v-icon>
                 </v-btn>
@@ -424,11 +439,11 @@ const deleteFromEdit = () => {
                   variant="text"
                   icon
                   size="small"
-                  aria-label="Edit project details"
-                  title="Edit project details"
+                  aria-label="Edit project"
                 >
                   <v-icon>mdi-pencil</v-icon>
                 </v-btn>
+
                 <ProjectHistoryButton
                   :project-id="project.id"
                   project-type="folio"
@@ -438,6 +453,7 @@ const deleteFromEdit = () => {
                   icon="mdi-history"
                   class="action-btn history-btn"
                 />
+
                 <v-btn
                   v-if="canEditProject(project)"
                   class="action-btn delete-btn"
@@ -446,7 +462,6 @@ const deleteFromEdit = () => {
                   icon
                   size="small"
                   aria-label="Delete project"
-                  title="Delete project"
                 >
                   <v-icon>mdi-delete</v-icon>
                 </v-btn>

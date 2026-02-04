@@ -341,6 +341,12 @@ const deleteFromEdit = () => {
     showDeleteConfirm.value = true
   }
 }
+
+// Bulk delete functionality
+const confirmBulkDelete = () => {
+  console.log('Bulk delete projects')
+  // Handle bulk delete logic here
+}
 </script>
 
 <template>
@@ -466,6 +472,7 @@ const deleteFromEdit = () => {
                 >
                   <v-icon>mdi-pencil</v-icon>
                 </v-btn>
+
                 <ProjectHistoryButton
                   :project-id="project.id"
                   project-type="magazine"
@@ -475,6 +482,7 @@ const deleteFromEdit = () => {
                   icon="mdi-history"
                   class="action-btn history-btn"
                 />
+
                 <v-btn
                   v-if="canEditProject(project)"
                   class="action-btn delete-btn"

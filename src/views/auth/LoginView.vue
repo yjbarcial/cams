@@ -100,7 +100,73 @@ const preventUnauthorizedNavigation = () => {
 }
 
 onMounted(async () => {
-  // Check for active session FIRST
+  // Handle auth callback from magic link (check this FIRST before session)
+  const urlParams = new URLSearchParams(window.location.search)
+  const hashParams = new URLSearchParams(window.location.hash.substring(1))
+
+  // Check if tokens are in a redirect parameter (Supabase email link format)
+  const redirectParam = urlParams.get('redirect')
+  let accessToken = hashParams.get('access_token') || urlParams.get('access_token')
+  let refreshToken = hashParams.get('refresh_token') || urlParams.get('refresh_token')
+
+  // If redirect parameter exists, parse tokens from it
+  if (redirectParam && redirectParam.includes('access_token')) {
+    try {
+      const redirectHash = redirectParam.split('#')[1]
+      if (redirectHash) {
+        const redirectParams = new URLSearchParams(redirectHash)
+        accessToken = redirectParams.get('access_token')
+        refreshToken = redirectParams.get('refresh_token')
+      }
+    } catch (error) {
+      console.error('Error parsing redirect parameter:', error)
+    }
+  }
+
+  // If we have tokens in the URL, this is a callback from magic link
+  if (accessToken || refreshToken) {
+    loading.value = true
+    try {
+      // Wait a moment for Supabase to process the callback
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      const {
+        data: { session: newSession },
+      } = await supabase.auth.getSession()
+
+      if (newSession) {
+        // Verify user is authorized
+        if (!isAuthorizedUser(newSession.user.email)) {
+          await supabase.auth.signOut()
+          localStorage.setItem('isLoggedIn', 'false')
+          errorMessage.value = 'Your account is not authorized to access this system.'
+          loading.value = false
+          // Clean URL
+          window.history.replaceState({}, '', window.location.pathname)
+          return
+        }
+
+        // User is authorized - complete login
+        localStorage.setItem('isLoggedIn', 'true')
+        localStorage.setItem('userEmail', newSession.user.email)
+        addUserToProfiles(newSession.user)
+
+        // Clean URL before redirect
+        window.history.replaceState({}, '', window.location.pathname)
+        router.replace('/dashboard')
+        return
+      }
+    } catch (error) {
+      console.error('❌ Error handling auth callback:', error)
+      errorMessage.value = 'Failed to complete sign in. Please try again.'
+      loading.value = false
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname)
+      return
+    }
+  }
+
+  // Check for active session
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -124,43 +190,16 @@ onMounted(async () => {
     return
   }
 
-  // No session - enable the form
-  loading.value = false
-
-  // Handle auth callback from magic link (legacy support)
-  const hashParams = new URLSearchParams(window.location.hash.substring(1))
-  const accessToken = hashParams.get('access_token')
-
-  if (accessToken) {
-    const {
-      data: { session: newSession },
-    } = await supabase.auth.getSession()
-    if (newSession) {
-      // Verify user is authorized
-      if (!isAuthorizedUser(newSession.user.email)) {
-        await supabase.auth.signOut()
-        localStorage.setItem('isLoggedIn', 'false')
-        errorMessage.value = 'Your account is not authorized to access this system.'
-        loading.value = false
-        return
-      }
-
-      localStorage.setItem('isLoggedIn', 'true')
-      localStorage.setItem('userEmail', newSession.user.email)
-      addUserToProfiles(newSession.user) // Don't await
-      router.replace('/dashboard')
-      return
-    }
-  }
-
-  const urlParams = new URLSearchParams(window.location.search)
+  // Check for logout parameter
   const fromLogout = urlParams.get('logout')
-
   if (fromLogout === 'true') {
     window.history.replaceState(history.state, '', window.location.pathname)
     localStorage.setItem('isLoggedIn', 'false')
     await supabase.auth.signOut()
   }
+
+  // No session - enable the form
+  loading.value = false
 
   preventUnauthorizedNavigation()
   window.addEventListener('popstate', handlePopState)
@@ -227,7 +266,7 @@ async function sendMagicLink() {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.value,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: `${window.location.origin}/login`,
       },
     })
 
@@ -235,10 +274,16 @@ async function sendMagicLink() {
 
     magicLinkSent.value = true
   } catch (error) {
-    // Handle rate limit errors with a user-friendly message
+    // Handle specific error types with user-friendly messages
     if (error.message?.toLowerCase().includes('rate limit')) {
       errorMessage.value =
         'Too many magic link requests. Please check your email for the link that was already sent, or use password sign-in instead for instant access.'
+    } else if (
+      error.message?.toLowerCase().includes('fetch') ||
+      error.name === 'AuthRetryableFetchError'
+    ) {
+      errorMessage.value =
+        'Network connection error. Please check your internet connection and try again. If the problem persists, use password sign-in instead.'
     } else {
       errorMessage.value = error.message || 'Failed to send magic link.'
     }

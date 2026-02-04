@@ -17,18 +17,18 @@ const routeType = computed(() => {
   if (route.name && String(route.name).includes('magazine')) return 'magazine'
   if (route.name && String(route.name).includes('newsletter')) return 'newsletter'
   if (route.name && String(route.name).includes('folio')) return 'folio'
-  if (route.name && String(route.name).includes('other')) return 'social-media'
+  if (route.name && String(route.name).includes('other')) return 'other'
   // Fallback by path
   const p = route.path
   if (p.includes('/magazine')) return 'magazine'
   if (p.includes('/newsletter')) return 'newsletter'
   if (p.includes('/folio')) return 'folio'
-  if (p.includes('/other')) return 'social-media'
+  if (p.includes('/other')) return 'other'
   return 'magazine'
 })
 
 const categoryLabel = computed(() => {
-  return routeType.value === 'social-media'
+  return routeType.value === 'other'
     ? 'Other'
     : routeType.value.charAt(0).toUpperCase() + routeType.value.slice(1)
 })
@@ -149,7 +149,7 @@ const cancelPath = computed(() => {
       return '/newsletter'
     case 'folio':
       return '/folio'
-    case 'social-media':
+    case 'other':
       return '/other'
     default:
       return '/'
@@ -224,7 +224,7 @@ const getDepartmentFromType = (type) => {
     magazine: 'Editorial',
     newsletter: 'News',
     folio: 'Arts',
-    'social-media': 'Marketing',
+    other: 'Marketing',
   }
   return typeMap[type] || 'General'
 }
@@ -264,11 +264,8 @@ const saveAsDraft = () => {
   const writersString = writerNames.length > 0 ? writerNames.join(', ') : 'Not assigned'
   const artistsString = artistNames.length > 0 ? artistNames.join(', ') : 'Not assigned'
 
-  // Determine storage key (handle other/social-media)
-  let storageKey = `${routeType.value}_projects`
-  if (routeType.value === 'social-media') {
-    storageKey = 'social-media_projects'
-  }
+  // Determine storage key
+  const storageKey = `${routeType.value}_projects`
 
   const draftProject = {
     id: Date.now(),

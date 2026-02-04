@@ -108,7 +108,7 @@ const loadAllProjects = async () => {
   try {
     console.log('🔍 Fetching all projects from Supabase...')
 
-    // Fetch projects with user profile information
+    // Fetch only published projects with user profile information
     const { data: apiProjects, error } = await supabase
       .from('projects')
       .select(
@@ -118,11 +118,11 @@ const loadAllProjects = async () => {
           id,
           email,
           first_name,
-          last_name,
-          full_name
+          last_name
         )
       `,
       )
+      .eq('status', 'Published')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -137,10 +137,9 @@ const loadAllProjects = async () => {
       // Get user info from the profiles join
       const userProfile = project.profiles
       const fullName =
-        userProfile?.full_name ||
-        (userProfile?.first_name && userProfile?.last_name
+        userProfile?.first_name && userProfile?.last_name
           ? `${userProfile.first_name} ${userProfile.last_name}`
-          : null)
+          : null
 
       return {
         id: project.id,
@@ -304,21 +303,34 @@ onMounted(async () => {
       submissions: allSubmissions.length,
     })
 
-    // Set up real-time subscription for projects
-    projectsSubscription = supabase
-      .channel('projects-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'projects' },
-        async (payload) => {
-          console.log('📡 Real-time update received:', payload)
-          // Refresh projects list when any change occurs
-          await refreshData()
-        },
+    // Set up real-time subscription for projects (optional - will fail silently if connection issues)
+    try {
+      projectsSubscription = supabase
+        .channel('projects-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'projects' },
+          async (payload) => {
+            console.log('📡 Real-time update received:', payload)
+            // Refresh projects list when any change occurs
+            await refreshData()
+          },
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Real-time subscription active for projects')
+          } else if (status === 'CHANNEL_ERROR') {
+            console.warn('⚠️ Real-time subscription error (non-critical)')
+          } else if (status === 'TIMED_OUT') {
+            console.warn('⚠️ Real-time subscription timed out (non-critical)')
+          }
+        })
+    } catch (subscriptionError) {
+      console.warn(
+        '⚠️ Could not establish real-time subscription (non-critical):',
+        subscriptionError,
       )
-      .subscribe()
-
-    console.log('✅ Real-time subscription active for projects')
+    }
   } catch (err) {
     console.error('❌ Error in onMounted:', err)
     error.value = `Failed to load dashboard data: ${err.message}`
@@ -489,7 +501,7 @@ const performClearClientData = async () => {
               <v-card-text class="px-6 pb-6">
                 <v-row class="stats-cards">
                   <!-- Stats Cards -->
-                  <v-col cols="12" sm="6" md="3">
+                  <v-col cols="12" sm="6" md="4">
                     <v-card class="stat-card stat-card-primary" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -503,7 +515,7 @@ const performClearClientData = async () => {
                     </v-card>
                   </v-col>
 
-                  <v-col cols="12" sm="6" md="3">
+                  <v-col cols="12" sm="6" md="4">
                     <v-card class="stat-card stat-card-success" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -517,7 +529,7 @@ const performClearClientData = async () => {
                     </v-card>
                   </v-col>
 
-                  <v-col cols="12" sm="6" md="3">
+                  <v-col cols="12" sm="6" md="4">
                     <v-card class="stat-card stat-card-info" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -526,20 +538,6 @@ const performClearClientData = async () => {
                         <div class="stat-info">
                           <div class="stat-value">{{ statistics.totalProjects }}</div>
                           <div class="stat-label">Total Projects</div>
-                        </div>
-                      </div>
-                    </v-card>
-                  </v-col>
-
-                  <v-col cols="12" sm="6" md="3">
-                    <v-card class="stat-card stat-card-warning" elevation="0">
-                      <div class="stat-card-content">
-                        <div class="stat-icon-wrapper">
-                          <v-icon size="40" color="white">mdi-file-document-multiple</v-icon>
-                        </div>
-                        <div class="stat-info">
-                          <div class="stat-value">{{ statistics.totalSubmissions }}</div>
-                          <div class="stat-label">Total Submissions</div>
                         </div>
                       </div>
                     </v-card>
@@ -599,53 +597,6 @@ const performClearClientData = async () => {
                                 {{ project.user?.full_name || project.sectionHead }}
                               </td>
                               <td>{{ formatDate(project.created_at) }}</td>
-                            </tr>
-                          </tbody>
-                        </v-table>
-                      </v-card-text>
-                    </v-card>
-                  </v-col>
-
-                  <v-col cols="12" class="mt-4">
-                    <v-card>
-                      <v-card-title class="text-h6 d-flex justify-space-between align-center">
-                        <div>
-                          <v-icon class="mr-2" color="#757575">mdi-file-document-multiple</v-icon>
-                          All Submissions
-                        </div>
-                        <v-btn
-                          variant="text"
-                          color="#757575"
-                          @click="fetchAllRecords('submissions')"
-                          class="text-none"
-                        >
-                          View Details
-                          <v-icon end>mdi-chevron-right</v-icon>
-                        </v-btn>
-                      </v-card-title>
-                      <v-card-text>
-                        <v-table>
-                          <thead>
-                            <tr>
-                              <th class="text-center" style="width: 60px">#</th>
-                              <th>Title</th>
-                              <th>Type</th>
-                              <th>Department</th>
-                              <th>Submitted By</th>
-                              <th>Date</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr
-                              v-for="(submission, index) in statistics.recentSubmissions"
-                              :key="submission.id"
-                            >
-                              <td class="text-center">{{ index + 1 }}</td>
-                              <td>{{ submission.title }}</td>
-                              <td>{{ submission.type }}</td>
-                              <td>{{ submission.department }}</td>
-                              <td>{{ submission.user?.full_name || submission.user?.email }}</td>
-                              <td>{{ formatDate(submission.created_at) }}</td>
                             </tr>
                           </tbody>
                         </v-table>
@@ -859,7 +810,7 @@ const performClearClientData = async () => {
                   <v-card-text>
                     <div v-if="!showUploadView" class="content-management">
                       <div class="text-center py-8">
-                        <v-icon size="64" color="grey">mdi-folder-multiple</v-icon>
+                        <v-icon size="64" color="#f5c52b">mdi-folder-multiple</v-icon>
                         <h3 class="text-h6 mt-4">Content Management</h3>
                         <p class="text-grey">
                           Manage newsletters, folios, and other content submissions
