@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { projectsService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
@@ -23,7 +23,9 @@ const statistics = ref({
 const users = ref([])
 const projects = ref([])
 const loading = ref(true)
+const refreshing = ref(false)
 const error = ref(null)
+let projectsSubscription = null
 const search = ref('')
 const departmentFilter = ref('all')
 const showAllDialog = ref(false)
@@ -106,32 +108,85 @@ const loadAllProjects = async () => {
   try {
     console.log('🔍 Fetching all projects from Supabase...')
 
-    const apiProjects = await projectsService.getAll()
+    // Fetch projects with user profile information
+    const { data: apiProjects, error } = await supabase
+      .from('projects')
+      .select(
+        `
+        *,
+        profiles!created_by (
+          id,
+          email,
+          first_name,
+          last_name,
+          full_name
+        )
+      `,
+      )
+      .order('created_at', { ascending: false })
 
-    console.log('📊 Supabase Projects:', apiProjects.length)
+    if (error) {
+      console.error('❌ Supabase error:', error)
+      throw error
+    }
+
+    console.log('📊 Supabase Projects:', apiProjects?.length || 0)
 
     // Map to display format
-    const mappedProjects = apiProjects.map((project) => ({
-      id: project.id,
-      title: project.title,
-      type: project.project_type
-        ? project.project_type.charAt(0).toUpperCase() + project.project_type.slice(1)
-        : 'Other',
-      status: project.status || 'draft',
-      department: project.department || 'N/A',
-      created_at: project.created_at,
-      updated_at: project.updated_at,
-      user: {
-        full_name: project.created_by || 'Unknown',
-        email: project.created_by_email || 'N/A',
-      },
-    }))
+    const mappedProjects = (apiProjects || []).map((project) => {
+      // Get user info from the profiles join
+      const userProfile = project.profiles
+      const fullName =
+        userProfile?.full_name ||
+        (userProfile?.first_name && userProfile?.last_name
+          ? `${userProfile.first_name} ${userProfile.last_name}`
+          : null)
+
+      return {
+        id: project.id,
+        title: project.title,
+        type: project.project_type
+          ? project.project_type.charAt(0).toUpperCase() + project.project_type.slice(1)
+          : 'Other',
+        status: project.status || 'draft',
+        department: project.department || 'N/A',
+        created_at: project.created_at,
+        updated_at: project.updated_at,
+        user: {
+          full_name: fullName || userProfile?.email || 'Unknown',
+          email: userProfile?.email || 'N/A',
+        },
+      }
+    })
 
     console.log('✅ Projects loaded from Supabase:', mappedProjects.length)
     return mappedProjects
   } catch (error) {
     console.error('❌ Error loading projects from Supabase:', error)
     return []
+  }
+}
+
+// Refresh all data
+const refreshData = async () => {
+  try {
+    refreshing.value = true
+    const allProjects = await loadAllProjects()
+    projects.value = allProjects
+
+    // Update statistics
+    statistics.value.totalProjects = allProjects.length
+    statistics.value.activeProjects = allProjects.filter(
+      (p) => p.status === 'in_progress' || p.status === 'under_review',
+    ).length
+    statistics.value.publishedWorks = allProjects.filter((p) => p.status === 'published').length
+    statistics.value.recentProjects = allProjects.slice(0, 5)
+
+    console.log('✅ Data refreshed successfully')
+  } catch (err) {
+    console.error('❌ Error refreshing data:', err)
+  } finally {
+    refreshing.value = false
   }
 }
 
@@ -248,11 +303,35 @@ onMounted(async () => {
       projects: allProjects.length,
       submissions: allSubmissions.length,
     })
+
+    // Set up real-time subscription for projects
+    projectsSubscription = supabase
+      .channel('projects-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'projects' },
+        async (payload) => {
+          console.log('📡 Real-time update received:', payload)
+          // Refresh projects list when any change occurs
+          await refreshData()
+        },
+      )
+      .subscribe()
+
+    console.log('✅ Real-time subscription active for projects')
   } catch (err) {
     console.error('❌ Error in onMounted:', err)
     error.value = `Failed to load dashboard data: ${err.message}`
   } finally {
     loading.value = false
+  }
+})
+
+// Clean up subscription on component unmount
+onUnmounted(() => {
+  if (projectsSubscription) {
+    supabase.removeChannel(projectsSubscription)
+    console.log('🔌 Real-time subscription cleaned up')
   }
 })
 
@@ -331,11 +410,20 @@ const performClearClientData = async () => {
   try {
     if (clearTypedConfirm.value !== 'YES') return
     clearInProgress.value = true
-    clearClientData({ confirm: true })
-    clearMessage.value = 'Local project data cleared. Reloading...'
+
+    const result = clearClientData({ confirm: true })
+
+    if (result.removed > 0) {
+      clearMessage.value = `Successfully cleared ${result.removed} local storage item(s). The page will reload to refresh all views...`
+    } else {
+      clearMessage.value = 'No local project data found to clear.'
+    }
+
+    console.log('📋 Cleared localStorage items:', result.details)
+
     setTimeout(() => {
       window.location.reload()
-    }, 900)
+    }, 1500)
   } catch (err) {
     console.error('Error clearing client data:', err)
     clearMessage.value = `Error: ${err.message || String(err)}`
@@ -375,15 +463,27 @@ const performClearClientData = async () => {
                       <div class="text-caption text-grey">Content & Archival Management System</div>
                     </div>
                   </div>
-                  <v-btn
-                    color="error"
-                    variant="outlined"
-                    @click="showClearDialog = true"
-                    class="clear-btn"
-                  >
-                    <v-icon start>mdi-delete-alert</v-icon>
-                    Clear Local Data
-                  </v-btn>
+                  <div class="d-flex gap-2">
+                    <v-btn
+                      color="primary"
+                      variant="outlined"
+                      @click="refreshData"
+                      :loading="refreshing"
+                      class="refresh-btn"
+                    >
+                      <v-icon start>mdi-refresh</v-icon>
+                      Refresh
+                    </v-btn>
+                    <v-btn
+                      color="error"
+                      variant="outlined"
+                      @click="showClearDialog = true"
+                      class="clear-btn"
+                    >
+                      <v-icon start>mdi-delete-alert</v-icon>
+                      Clear Local Data
+                    </v-btn>
+                  </div>
                 </div>
               </v-card-title>
               <v-card-text class="px-6 pb-6">
@@ -568,9 +668,20 @@ const performClearClientData = async () => {
                     </v-card-title>
                     <v-card-text>
                       <p>
-                        This will remove project lists and project history stored in your browser's
-                        localStorage for this app. It will not affect Supabase data. This action is
-                        irreversible for the client copy.
+                        This will remove <strong>ALL</strong> project-related data stored in your
+                        browser's localStorage for this app, including:
+                      </p>
+                      <ul class="mb-3">
+                        <li>Magazine projects list and history</li>
+                        <li>Newsletter projects list and history</li>
+                        <li>Folio projects list and history</li>
+                        <li>Other projects list and history</li>
+                        <li>All project version history data</li>
+                      </ul>
+                      <p class="font-weight-bold text-warning">
+                        <v-icon size="small" color="warning">mdi-alert</v-icon>
+                        This will NOT affect data stored in Supabase. This action is irreversible
+                        for the local client copy.
                       </p>
                       <p class="mb-4">
                         To confirm, type <strong>YES</strong> in the box below and press Confirm.
@@ -818,12 +929,17 @@ const performClearClientData = async () => {
   background: #2c3e50;
 }
 
+.refresh-btn,
 .clear-btn {
   text-transform: none !important;
   letter-spacing: normal !important;
   font-weight: 500;
   border-radius: 8px !important;
   padding: 0 20px !important;
+}
+
+.gap-2 {
+  gap: 8px;
 }
 
 /* Stats Cards */
