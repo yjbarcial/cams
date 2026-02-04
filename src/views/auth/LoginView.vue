@@ -39,6 +39,7 @@ const AUTHORIZED_USERS = [
   'yssahjulianah.barcial@carsu.edu.ph',
   'lovellhudson.clavel@carsu.edu.ph',
   'altheaguila.gorres@carsu.edu.ph',
+
   // Artists & Writers
   'lexzyrrehdevonnaire.abellanosa@carsu.edu.ph',
   'teejay.abello@carsu.edu.ph',
@@ -169,23 +170,45 @@ onUnmounted(() => {
   window.removeEventListener('popstate', handlePopState)
 })
 
-// Debounce timer for login attempts to prevent rate limiting
-const loginAttemptTimestamps = ref({})
-const RATE_LIMIT_DELAY = 60000 // 60 seconds between attempts per email
+// Sign in with password
+async function signInWithPassword() {
+  loading.value = true
+  errorMessage.value = ''
 
-// Check if user is rate-limited locally
-function isLocallyRateLimited(emailToCheck) {
-  const lastAttempt = loginAttemptTimestamps.value[emailToCheck] || 0
-  const now = Date.now()
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.value,
+      password: password.value,
+    })
 
-  if (now - lastAttempt < RATE_LIMIT_DELAY) {
-    const secondsRemaining = Math.ceil((RATE_LIMIT_DELAY - (now - lastAttempt)) / 1000)
-    errorMessage.value = `Please wait ${secondsRemaining} seconds before requesting another login link.`
-    return true
+    if (error) throw error
+
+    // Verify user is authorized
+    if (!isAuthorizedUser(data.user.email)) {
+      await supabase.auth.signOut()
+      localStorage.setItem('isLoggedIn', 'false')
+      errorMessage.value = 'Your account is not authorized to access this system.'
+      loading.value = false
+      return
+    }
+
+    localStorage.setItem('isLoggedIn', 'true')
+    localStorage.setItem('userEmail', data.user.email)
+    addUserToProfiles(data.user)
+    router.replace('/dashboard')
+  } catch (error) {
+    if (error.message?.includes('Invalid login credentials')) {
+      errorMessage.value =
+        "Invalid email or password. If you don't have a password set, leave it empty to receive a magic link instead."
+    } else {
+      errorMessage.value = error.message || 'Failed to sign in.'
+    }
+    if (import.meta.env.DEV) {
+      console.error('❌ Password sign in error:', error)
+    }
+  } finally {
+    loading.value = false
   }
-
-  loginAttemptTimestamps.value[emailToCheck] = now
-  return false
 }
 
 // Send magic link for first-time users
@@ -212,9 +235,10 @@ async function sendMagicLink() {
 
     magicLinkSent.value = true
   } catch (error) {
-    if (error.message?.includes('rate limit')) {
+    // Handle rate limit errors with a user-friendly message
+    if (error.message?.toLowerCase().includes('rate limit')) {
       errorMessage.value =
-        'Too many login requests. Please wait at least 60 seconds before trying again, or check your email for a previous link that may still be valid.'
+        'Too many magic link requests. Please check your email for the link that was already sent, or use password sign-in instead for instant access.'
     } else {
       errorMessage.value = error.message || 'Failed to send magic link.'
     }
@@ -247,13 +271,13 @@ async function submit() {
     return
   }
 
-  // Check local rate limiting
-  if (isLocallyRateLimited(email.value)) {
-    return
+  // If password is provided, use password authentication
+  // Otherwise, send magic link
+  if (password.value && password.value.trim() !== '') {
+    await signInWithPassword()
+  } else {
+    await sendMagicLink()
   }
-
-  // Send magic link
-  await sendMagicLink()
 }
 
 const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
@@ -290,7 +314,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
             {{
               magicLinkSent
                 ? 'We sent a magic link to your email'
-                : 'Enter your CARSU email to continue'
+                : 'Sign in with your password or get a magic link'
             }}
           </v-card-subtitle>
 
@@ -344,7 +368,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
               <v-text-field
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
-                placeholder="Password (optional)"
+                placeholder="Password (leave empty for magic link)"
                 prepend-inner-icon="mdi-lock-outline"
                 :append-inner-icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
                 @click:append-inner="togglePassword"
@@ -355,9 +379,23 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
               />
 
               <v-btn type="submit" class="primary-btn" :loading="loading" :disabled="loading">
-                <span v-if="!loading">CONTINUE</span>
-                <span v-else>Sending...</span>
+                <span v-if="!loading">
+                  {{ password && password.trim() !== '' ? 'SIGN IN' : 'SEND MAGIC LINK' }}
+                </span>
+                <span v-else>{{
+                  password && password.trim() !== '' ? 'Signing in...' : 'Sending...'
+                }}</span>
               </v-btn>
+
+              <div class="text-center mt-2">
+                <small class="text-grey">
+                  {{
+                    password && password.trim() !== ''
+                      ? 'Or leave password empty to get a magic link via email'
+                      : 'Or enter your password to sign in instantly'
+                  }}
+                </small>
+              </div>
 
               <!-- CARSU Domain Info -->
               <div v-if="showDomainPopup" class="domain-info mt-3">
