@@ -157,7 +157,7 @@ const approvalActions = computed(() => {
 
 // EDITOR-IN-CHIEF - Status mapping
 const getNextStatus = (action) => {
-  if (action === 'approve') return 'EIC Approved'
+  if (action === 'approve') return 'For Publish' // Send directly to Archival Manager
   if (action === 'forward') return 'to_chief_adviser'
   return project.value.status
 }
@@ -217,6 +217,8 @@ const submitApproval = async () => {
   const newStatus = getNextStatus(action)
 
   try {
+    console.log('🔄 Starting approval process...', { action, newStatus })
+
     if (isEditorEditable.value) {
       await saveContentChanges()
     }
@@ -226,9 +228,12 @@ const submitApproval = async () => {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
+      console.error('❌ User not authenticated')
       showNotification('User not authenticated', 'error')
       return
     }
+
+    console.log('✅ User authenticated:', user.id)
 
     // Update via Supabase
     const updateData = {
@@ -236,17 +241,20 @@ const submitApproval = async () => {
       updated_at: new Date().toISOString(),
     }
 
-    if (action === 'approve') {
-      updateData.eic_approved_by = user.id
-      updateData.eic_approved_date = new Date().toISOString()
-      updateData.eic_comments = approvalComments.value
-      updateData.priority = approvalPriority.value
-    } else if (action === 'forward') {
-      updateData.forwarded_to_adviser_by = user.id
-      updateData.forwarded_to_adviser_date = new Date().toISOString()
-      updateData.forward_notes = approvalComments.value
-      updateData.priority = approvalPriority.value
-    }
+    // Only add EIC-specific fields if they're actually needed
+    // if (action === 'approve') {
+    //   updateData.eic_approved_by = user.id
+    //   updateData.eic_approved_date = new Date().toISOString()
+    //   updateData.eic_comments = approvalComments.value
+    //   updateData.priority = approvalPriority.value
+    // } else if (action === 'forward') {
+    //   updateData.forwarded_to_adviser_by = user.id
+    //   updateData.forwarded_to_adviser_date = new Date().toISOString()
+    //   updateData.forward_notes = approvalComments.value
+    //   updateData.priority = approvalPriority.value
+    // }
+
+    console.log('📝 Update data:', updateData)
 
     await projectsService.update(projectId, updateData)
 
@@ -254,29 +262,38 @@ const submitApproval = async () => {
 
     project.value.status = newStatus
 
-    // Create notification based on action
-    if (action === 'approve') {
-      createStatusChangeNotification({
-        projectId: projectId,
-        projectType: project.value.type,
-        projectTitle: project.value.title,
-        oldStatus: 'to_editor_in_chief',
-        newStatus: 'EIC Approved',
-        actionBy: currentUser.value,
-        recipient: 'All',
-        comments: approvalComments.value,
-      })
-    } else if (action === 'forward') {
-      createStatusChangeNotification({
-        projectId: projectId,
-        projectType: project.value.type,
-        projectTitle: project.value.title,
-        oldStatus: 'to_editor_in_chief',
-        newStatus: 'To Chief Adviser',
-        actionBy: currentUser.value,
-        recipient: 'Chief Adviser',
-        comments: approvalComments.value,
-      })
+    // Create notification based on action - wrap in try-catch to isolate errors
+    try {
+      if (action === 'approve') {
+        console.log('📬 Creating notification for Archival Manager...')
+        await createStatusChangeNotification({
+          projectId: projectId,
+          projectType: project.value.type,
+          projectTitle: project.value.title,
+          oldStatus: 'to_editor_in_chief',
+          newStatus: 'For Publish',
+          actionBy: currentUser.value,
+          recipient: 'Archival Manager',
+          comments: approvalComments.value,
+        })
+        console.log('✅ Notification created successfully')
+      } else if (action === 'forward') {
+        console.log('📬 Creating notification for Chief Adviser...')
+        await createStatusChangeNotification({
+          projectId: projectId,
+          projectType: project.value.type,
+          projectTitle: project.value.title,
+          oldStatus: 'to_editor_in_chief',
+          newStatus: 'to_chief_adviser',
+          actionBy: currentUser.value,
+          recipient: 'Chief Adviser',
+          comments: approvalComments.value,
+        })
+        console.log('✅ Notification created successfully')
+      }
+    } catch (notifError) {
+      console.warn('⚠️ Notification creation failed (non-critical):', notifError)
+      // Continue execution even if notification fails
     }
 
     showApprovalDialog.value = false
@@ -285,7 +302,7 @@ const submitApproval = async () => {
     approvalPriority.value = 'Medium'
 
     if (action === 'approve') {
-      showNotification('Project approved successfully!', 'success')
+      showNotification('Project approved and sent to Archival Manager for publishing!', 'success')
       setTimeout(() => {
         // Route based on project type
         const routePath =
@@ -302,8 +319,15 @@ const submitApproval = async () => {
       }, 600)
     }
   } catch (error) {
-    console.error('Error processing approval:', error)
-    showNotification('Error processing approval.', 'error')
+    console.error('❌ Error processing approval:', error)
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      action,
+      newStatus,
+      projectId,
+    })
+    showNotification(`Error processing approval: ${error.message}`, 'error')
   }
 }
 
@@ -919,8 +943,7 @@ onMounted(() => {
               <v-icon size="20">mdi-information-outline</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Next Step:</strong> Project will be approved. You can then forward it to Chief
-              Adviser for consultation or publish directly.
+              <strong>Next Step:</strong> Project will be sent to Archival Manager for publishing.
             </div>
           </v-alert>
 
