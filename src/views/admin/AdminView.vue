@@ -29,18 +29,11 @@ const departmentFilter = ref('all')
 const showAllDialog = ref(false)
 const showAllType = ref('')
 const allRecords = ref([])
-const showAddUserDialog = ref(false)
 const showUploadView = ref(false)
 const showClearDialog = ref(false)
 const clearTypedConfirm = ref('')
 const clearInProgress = ref(false)
 const clearMessage = ref('')
-const newUser = ref({
-  full_name: '',
-  email: '',
-  department: '',
-  role: '',
-})
 
 // Departments for filtering
 const departments = ['Creatives', 'Scribes']
@@ -288,56 +281,6 @@ const formatDate = (date) => {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-// Add user to Supabase profiles table
-const addUser = async () => {
-  if (!newUser.value.full_name || !newUser.value.email) {
-    alert('Please fill in all required fields')
-    return
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert([
-        {
-          email: newUser.value.email,
-          full_name: newUser.value.full_name,
-          department: newUser.value.department || departments[0],
-          role: newUser.value.role || 'Writer',
-        },
-      ])
-      .select()
-
-    if (error) throw error
-
-    users.value.push({
-      id: data[0].id,
-      full_name: newUser.value.full_name,
-      email: newUser.value.email,
-      department: newUser.value.department || departments[0],
-      role: newUser.value.role || 'Writer',
-      status: 'active',
-      created_at: new Date().toISOString(),
-    })
-
-    newUser.value = {
-      full_name: '',
-      email: '',
-      department: '',
-      role: '',
-    }
-
-    showAddUserDialog.value = false
-    statistics.value.totalUsers = users.value.length
-    statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
-
-    alert('User added successfully!')
-  } catch (err) {
-    console.error('Error adding user:', err)
-    alert(`Failed to add user: ${err.message}`)
-  }
 }
 
 // Remove user from Supabase
@@ -741,7 +684,7 @@ const performClearClientData = async () => {
                 <!-- User Management Tab -->
                 <v-window-item value="users">
                   <v-card-text>
-                    <!-- Filters and Add User Button -->
+                    <!-- Filters -->
                     <v-row class="mb-4" align="center">
                       <v-col cols="12" md="4">
                         <v-text-field
@@ -762,16 +705,6 @@ const performClearClientData = async () => {
                           density="comfortable"
                           hide-details
                         ></v-select>
-                      </v-col>
-                      <v-col cols="12" md="5" class="d-flex justify-end">
-                        <v-btn
-                          color="#f5c52b"
-                          class="add-user-btn"
-                          @click="showAddUserDialog = true"
-                        >
-                          <v-icon start color="#2c3e50">mdi-plus-circle</v-icon>
-                          <span style="color: #2c3e50">Add User</span>
-                        </v-btn>
                       </v-col>
                     </v-row>
 
@@ -807,60 +740,6 @@ const performClearClientData = async () => {
                         </tr>
                       </tbody>
                     </v-table>
-
-                    <!-- Add User Dialog -->
-                    <v-dialog v-model="showAddUserDialog" max-width="600">
-                      <v-card>
-                        <v-card-title class="dialog-title-admin">
-                          <div class="d-flex align-center">
-                            <div class="dialog-icon-admin">
-                              <v-icon size="24" color="white">mdi-account-plus</v-icon>
-                            </div>
-                            <span class="ml-3 text-h6">Add New User</span>
-                          </div>
-                        </v-card-title>
-                        <v-divider></v-divider>
-                        <v-card-text>
-                          <v-text-field
-                            v-model="newUser.full_name"
-                            label="Full Name"
-                            variant="outlined"
-                            class="mb-3"
-                            required
-                          ></v-text-field>
-                          <v-text-field
-                            v-model="newUser.email"
-                            label="Email"
-                            type="email"
-                            variant="outlined"
-                            class="mb-3"
-                            required
-                          ></v-text-field>
-                          <v-select
-                            v-model="newUser.department"
-                            label="Department"
-                            :items="[...departments, 'Administration', 'Editorial']"
-                            variant="outlined"
-                            class="mb-3"
-                          ></v-select>
-                          <v-select
-                            v-model="newUser.role"
-                            label="Role"
-                            :items="roles"
-                            variant="outlined"
-                          ></v-select>
-                        </v-card-text>
-                        <v-card-actions>
-                          <v-spacer></v-spacer>
-                          <v-btn variant="text" @click="showAddUserDialog = false" color="#757575">
-                            Cancel
-                          </v-btn>
-                          <v-btn color="#f5c52b" @click="addUser" class="px-6">
-                            <span style="color: #2c3e50; font-weight: 600">Add User</span>
-                          </v-btn>
-                        </v-card-actions>
-                      </v-card>
-                    </v-dialog>
                   </v-card-text>
                 </v-window-item>
 
@@ -1121,19 +1000,6 @@ const performClearClientData = async () => {
 :deep(.v-tab__slider) {
   background-color: #f5c52b !important;
   height: 3px !important;
-}
-
-/* Add User Button */
-.add-user-btn {
-  text-transform: none !important;
-  letter-spacing: normal !important;
-  font-weight: 600 !important;
-  box-shadow: 0 2px 8px rgba(245, 197, 43, 0.3) !important;
-}
-
-.add-user-btn:hover {
-  box-shadow: 0 4px 12px rgba(245, 197, 43, 0.4) !important;
-  transform: translateY(-2px);
 }
 
 /* Upload Content Button */
