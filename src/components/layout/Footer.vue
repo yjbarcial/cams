@@ -83,4 +83,19 @@ const goToDashboard = () => {
 .clickable-brand:active {
   transform: scale(0.95);
 }
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .site-footer {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .footer-left,
+  .footer-right {
+    justify-self: center;
+  }
+}
 </style>
