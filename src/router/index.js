@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import ArchiveView from '@/views/system/ArchiveView.vue'
 import PublicationView from '@/views/system/PublicationView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
+import ResetPasswordView from '@/views/auth/ResetPasswordView.vue'
 import ContributorDashboard from '@/views/system/ContributorDashboard.vue'
 import NotificationsView from '@/views/system/NotificationsView.vue'
 import AddProjectView from '@/views/system/AddProjectView.vue'
@@ -65,6 +66,16 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: LoginView,
+    },
+    {
+      path: '/auth/reset-password',
+      name: 'reset-password',
+      component: ResetPasswordView,
+    },
+    {
+      path: '/auth/callback',
+      name: 'auth-callback',
+      component: LoginView, // Reuse LoginView to handle the callback
     },
     {
       path: '/archive',
