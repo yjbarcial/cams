@@ -1,24 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  requiredValidator,
-  emailValidator,
-  passwordValidator,
-  confirmedValidator,
-  betweenValidator,
-  integerValidator,
-  regexValidator,
-  alphaValidator,
-  urlValidator,
-  lengthValidator,
-  alphaDashValidator,
-  imageValidator,
-  isEmpty,
-  isNullOrUndefined,
-  isEmptyArray,
-  isObject,
-} from '@/utils/validators'
+import { requiredValidator, emailValidator } from '@/utils/validators'
 import { supabase } from '@/utils/supabase'
 import { addUserToProfiles } from '@/utils/autoAddUser'
 import libBg from '/images/lib-hd.jpg'
@@ -31,7 +14,10 @@ const showPassword = ref(false)
 const loading = ref(true) // Start with true to prevent form interaction
 const errorMessage = ref('')
 const showDomainPopup = ref(false)
-const magicLinkSent = ref(false)
+const isSignupMode = ref(false)
+const confirmPassword = ref('')
+const showConfirmPassword = ref(false)
+const successMessage = ref('')
 
 // AUTHORIZED USERS ONLY - Complete whitelist
 const AUTHORIZED_USERS = [
@@ -39,6 +25,7 @@ const AUTHORIZED_USERS = [
   'yssahjulianah.barcial@carsu.edu.ph',
   'lovellhudson.clavel@carsu.edu.ph',
   'altheaguila.gorres@carsu.edu.ph',
+  'princessriomae.jalop@carsu.edu.ph',
 
   // Artists & Writers
   'lexzyrrehdevonnaire.abellanosa@carsu.edu.ph',
@@ -82,7 +69,7 @@ function togglePassword() {
 }
 
 // Handle back button navigation prevention
-const handlePopState = (event) => {
+const handlePopState = () => {
   const isLoggedIn = localStorage.getItem('isLoggedIn')
   if (!isLoggedIn || isLoggedIn === 'false') {
     // Preserve history state when manipulating
@@ -100,71 +87,7 @@ const preventUnauthorizedNavigation = () => {
 }
 
 onMounted(async () => {
-  // Handle auth callback from magic link (check this FIRST before session)
   const urlParams = new URLSearchParams(window.location.search)
-  const hashParams = new URLSearchParams(window.location.hash.substring(1))
-
-  // Check if tokens are in a redirect parameter (Supabase email link format)
-  const redirectParam = urlParams.get('redirect')
-  let accessToken = hashParams.get('access_token') || urlParams.get('access_token')
-  let refreshToken = hashParams.get('refresh_token') || urlParams.get('refresh_token')
-
-  // If redirect parameter exists, parse tokens from it
-  if (redirectParam && redirectParam.includes('access_token')) {
-    try {
-      const redirectHash = redirectParam.split('#')[1]
-      if (redirectHash) {
-        const redirectParams = new URLSearchParams(redirectHash)
-        accessToken = redirectParams.get('access_token')
-        refreshToken = redirectParams.get('refresh_token')
-      }
-    } catch (error) {
-      console.error('Error parsing redirect parameter:', error)
-    }
-  }
-
-  // If we have tokens in the URL, this is a callback from magic link
-  if (accessToken || refreshToken) {
-    loading.value = true
-    try {
-      // Wait a moment for Supabase to process the callback
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const {
-        data: { session: newSession },
-      } = await supabase.auth.getSession()
-
-      if (newSession) {
-        // Verify user is authorized
-        if (!isAuthorizedUser(newSession.user.email)) {
-          await supabase.auth.signOut()
-          localStorage.setItem('isLoggedIn', 'false')
-          errorMessage.value = 'Your account is not authorized to access this system.'
-          loading.value = false
-          // Clean URL
-          window.history.replaceState({}, '', window.location.pathname)
-          return
-        }
-
-        // User is authorized - complete login
-        localStorage.setItem('isLoggedIn', 'true')
-        localStorage.setItem('userEmail', newSession.user.email)
-        addUserToProfiles(newSession.user)
-
-        // Clean URL before redirect
-        window.history.replaceState({}, '', window.location.pathname)
-        router.replace('/dashboard')
-        return
-      }
-    } catch (error) {
-      console.error('❌ Error handling auth callback:', error)
-      errorMessage.value = 'Failed to complete sign in. Please try again.'
-      loading.value = false
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname)
-      return
-    }
-  }
 
   // Check for active session
   const {
@@ -238,7 +161,10 @@ async function signInWithPassword() {
   } catch (error) {
     if (error.message?.includes('Invalid login credentials')) {
       errorMessage.value =
-        "Invalid email or password. If you don't have a password set, leave it empty to receive a magic link instead."
+        'Invalid email or password. New user? Click "Create Account" below. Just signed up? Check your email to verify your account first.'
+    } else if (error.message?.includes('Email not confirmed')) {
+      errorMessage.value =
+        'Please verify your email first. Check your inbox for the verification link, click it, then try logging in again.'
     } else {
       errorMessage.value = error.message || 'Failed to sign in.'
     }
@@ -250,21 +176,30 @@ async function signInWithPassword() {
   }
 }
 
-// Send magic link for first-time users
-async function sendMagicLink() {
+// Sign up new user with password
+async function signUpWithPassword() {
   loading.value = true
   errorMessage.value = ''
+  successMessage.value = ''
 
-  // Double-check authorization before sending magic link
-  if (!isAuthorizedUser(email.value)) {
-    errorMessage.value = 'This email is not authorized to access the system.'
+  // Validate password match
+  if (password.value !== confirmPassword.value) {
+    errorMessage.value = 'Passwords do not match.'
+    loading.value = false
+    return
+  }
+
+  // Validate password strength
+  if (password.value.length < 8) {
+    errorMessage.value = 'Password must be at least 8 characters long.'
     loading.value = false
     return
   }
 
   try {
-    const { error } = await supabase.auth.signInWithOtp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.value,
+      password: password.value,
       options: {
         emailRedirectTo: `${window.location.origin}/login`,
       },
@@ -272,23 +207,43 @@ async function sendMagicLink() {
 
     if (error) throw error
 
-    magicLinkSent.value = true
+    // Check if email confirmation is required
+    if (data.user && !data.session) {
+      // Email verification required - show clear instructions
+      successMessage.value = `✅ Account created! Check your email (${email.value}) for the verification link. Click it to activate your account, then return here to sign in.`
+      isSignupMode.value = false // Switch back to login mode
+      password.value = '' // Clear password for security
+      confirmPassword.value = ''
+      loading.value = false
+      return
+    }
+
+    // Auto-login after successful signup (if session exists - instant verification)
+    if (data.user && data.session) {
+      localStorage.setItem('isLoggedIn', 'true')
+      localStorage.setItem('userEmail', data.user.email)
+      addUserToProfiles(data.user)
+      successMessage.value = 'Account created successfully! Redirecting...'
+
+      // Short delay to show success message
+      setTimeout(() => {
+        router.replace('/dashboard')
+      }, 1000)
+    } else if (data.user) {
+      // Fallback - user created but needs email confirmation
+      successMessage.value = `Account created! Check ${email.value} for verification link, then sign in.`
+      isSignupMode.value = false
+      password.value = ''
+      confirmPassword.value = ''
+    }
   } catch (error) {
-    // Handle specific error types with user-friendly messages
-    if (error.message?.toLowerCase().includes('rate limit')) {
-      errorMessage.value =
-        'Too many magic link requests. Please check your email for the link that was already sent, or use password sign-in instead for instant access.'
-    } else if (
-      error.message?.toLowerCase().includes('fetch') ||
-      error.name === 'AuthRetryableFetchError'
-    ) {
-      errorMessage.value =
-        'Network connection error. Please check your internet connection and try again. If the problem persists, use password sign-in instead.'
+    if (error.message?.includes('already registered')) {
+      errorMessage.value = 'This email is already registered. Try signing in instead.'
     } else {
-      errorMessage.value = error.message || 'Failed to send magic link.'
+      errorMessage.value = error.message || 'Failed to create account.'
     }
     if (import.meta.env.DEV) {
-      console.error('❌ Magic link error:', error)
+      console.error('❌ Sign up error:', error)
     }
   } finally {
     loading.value = false
@@ -297,7 +252,8 @@ async function sendMagicLink() {
 
 async function submit() {
   showDomainPopup.value = false
-  magicLinkSent.value = false
+  errorMessage.value = ''
+  successMessage.value = ''
 
   const { valid } = await form.value.validate()
   if (!valid) return
@@ -316,13 +272,33 @@ async function submit() {
     return
   }
 
-  // If password is provided, use password authentication
-  // Otherwise, send magic link
-  if (password.value && password.value.trim() !== '') {
-    await signInWithPassword()
-  } else {
-    await sendMagicLink()
+  // Password is now required
+  if (!password.value || password.value.trim() === '') {
+    errorMessage.value = 'Password is required.'
+    return
   }
+
+  // Handle signup or signin
+  if (isSignupMode.value) {
+    await signUpWithPassword()
+  } else {
+    await signInWithPassword()
+  }
+}
+
+function toggleMode() {
+  isSignupMode.value = !isSignupMode.value
+  errorMessage.value = ''
+  successMessage.value = ''
+  password.value = ''
+  confirmPassword.value = ''
+}
+
+// Request password reset - show contact admin message
+function requestPasswordReset() {
+  successMessage.value = ''
+  errorMessage.value =
+    'Forgot your password? Please contact an admin to reset it. Admins can help you via the Admin Dashboard → Password Reset tab.'
 }
 
 const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
@@ -353,36 +329,22 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
         />
         <v-card class="card" flat>
           <v-card-title class="headline pa-0 font-weight-bold">
-            {{ magicLinkSent ? 'Check Your Email!' : 'Welcome!' }}
+            {{ isSignupMode ? 'Create Account' : 'Welcome Back!' }}
           </v-card-title>
           <v-card-subtitle class="subtext pa-0">
-            {{
-              magicLinkSent
-                ? 'We sent a magic link to your email'
-                : 'Sign in with your password or get a magic link'
-            }}
+            {{ isSignupMode ? 'Sign up with your CARSU email' : 'Sign in to your account' }}
           </v-card-subtitle>
 
           <v-card-text class="pa-0">
-            <!-- Magic Link Sent Success -->
+            <!-- Success Alert -->
             <v-alert
-              v-if="magicLinkSent"
+              v-if="successMessage"
               type="success"
               class="mb-3"
               density="compact"
               variant="tonal"
             >
-              <div class="d-flex align-center">
-                <v-icon start>mdi-email-check-outline</v-icon>
-                <div>
-                  <strong>Magic link sent!</strong><br />
-                  <small
-                    >Check your inbox at <strong>{{ email }}</strong> and click the link to sign
-                    in.</small
-                  >
-                  >
-                </div>
-              </div>
+              {{ successMessage }}
             </v-alert>
 
             <!-- Error Alert -->
@@ -396,7 +358,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
               {{ errorMessage }}
             </v-alert>
 
-            <v-form v-if="!magicLinkSent" ref="form" @submit.prevent="submit" class="form">
+            <v-form ref="form" @submit.prevent="submit" class="form">
               <v-text-field
                 v-model="email"
                 type="email"
@@ -413,7 +375,9 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
               <v-text-field
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
-                placeholder="Password (leave empty for magic link)"
+                :placeholder="
+                  isSignupMode ? 'Create a password (min 8 characters)' : 'Your password'
+                "
                 prepend-inner-icon="mdi-lock-outline"
                 :append-inner-icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
                 @click:append-inner="togglePassword"
@@ -421,25 +385,54 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 class="input-group"
                 density="compact"
                 :disabled="loading"
+                required
+              />
+
+              <v-text-field
+                v-if="isSignupMode"
+                v-model="confirmPassword"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                placeholder="Confirm your password"
+                prepend-inner-icon="mdi-lock-check-outline"
+                :append-inner-icon="showConfirmPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                @click:append-inner="showConfirmPassword = !showConfirmPassword"
+                variant="outlined"
+                class="input-group"
+                density="compact"
+                :disabled="loading"
+                required
               />
 
               <v-btn type="submit" class="primary-btn" :loading="loading" :disabled="loading">
-                <span v-if="!loading">
-                  {{ password && password.trim() !== '' ? 'SIGN IN' : 'SEND MAGIC LINK' }}
-                </span>
-                <span v-else>{{
-                  password && password.trim() !== '' ? 'Signing in...' : 'Sending...'
-                }}</span>
+                {{ isSignupMode ? 'CREATE ACCOUNT' : 'SIGN IN' }}
               </v-btn>
 
-              <div class="text-center mt-2">
-                <small class="text-grey">
+              <div class="text-center mt-3">
+                <v-btn
+                  variant="text"
+                  color="primary"
+                  size="small"
+                  @click="toggleMode"
+                  :disabled="loading"
+                >
                   {{
-                    password && password.trim() !== ''
-                      ? 'Or leave password empty to get a magic link via email'
-                      : 'Or enter your password to sign in instantly'
+                    isSignupMode
+                      ? 'Already have an account? Sign in'
+                      : "Don't have an account? Create one"
                   }}
-                </small>
+                </v-btn>
+              </div>
+
+              <div class="text-center mt-2" v-if="!isSignupMode">
+                <v-btn
+                  variant="text"
+                  color="primary"
+                  size="small"
+                  @click="requestPasswordReset"
+                  :disabled="loading || !email"
+                >
+                  Forgot Password?
+                </v-btn>
               </div>
 
               <!-- CARSU Domain Info -->
@@ -450,24 +443,6 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 >
               </div>
             </v-form>
-
-            <!-- Reset button when magic link is sent -->
-            <div v-if="magicLinkSent" class="text-center mt-4">
-              <v-btn
-                variant="text"
-                color="primary"
-                @click="
-                  () => {
-                    magicLinkSent = false
-                    errorMessage = ''
-                    loginAttemptTimestamps = {}
-                  }
-                "
-              >
-                <v-icon start>mdi-arrow-left</v-icon>
-                Try a different email
-              </v-btn>
-            </div>
           </v-card-text>
         </v-card>
       </v-col>
