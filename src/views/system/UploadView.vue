@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'upload-success', 'upload-error'])
 import { archivesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
 
@@ -8,10 +8,27 @@ const uploadDialog = ref(false)
 const selectedFiles = ref([])
 const uploading = ref(false)
 const fileInput = ref(null)
+const showNotification = ref(false)
+const notificationMessage = ref('')
+const notificationType = ref('success')
 
 const title = ref('')
 const category = ref('Magazine')
 const publishedAt = ref(new Date().toISOString().split('T')[0])
+
+// Show notification function
+const displayNotification = (message, type = 'success') => {
+  console.log('🔔 Displaying notification:', message, type)
+  notificationMessage.value = message
+  notificationType.value = type
+  showNotification.value = true
+  console.log('showNotification value:', showNotification.value)
+
+  // Auto-hide after 4 seconds
+  setTimeout(() => {
+    showNotification.value = false
+  }, 4000)
+}
 
 const handleFileSelect = (event) => {
   const files = Array.from(event.target.files)
@@ -63,7 +80,7 @@ const generateThumbnail = async (file) => {
 const uploadFiles = async () => {
   if (selectedFiles.value.length === 0) return
   if (!title.value) {
-    alert('Please provide a title for the publication')
+    displayNotification('Please provide a title for the publication', 'warning')
     return
   }
 
@@ -120,21 +137,28 @@ const uploadFiles = async () => {
       await archivesService.create(archiveData)
     }
 
-    // Clear form and close
+    // Clear form
     selectedFiles.value = []
     title.value = ''
     category.value = 'Magazine'
     publishedAt.value = new Date().toISOString().split('T')[0]
     uploadDialog.value = false
 
-    // Notify parent to close (AdminView listens to @close)
-    emit('close')
+    // Show success notification FIRST
+    displayNotification('Upload successful! Your files have been published.', 'success')
 
-    // Notify success
-    alert('Upload successful')
+    // Emit success event to parent
+    emit('upload-success', 'Files uploaded successfully')
+
+    // Delay closing to show notification
+    setTimeout(() => {
+      emit('close')
+    }, 2000)
   } catch (error) {
     console.error('Upload error:', error)
-    alert('Upload failed: ' + (error.error?.message || error.message || String(error)))
+    const errorMsg = 'Upload failed: ' + (error.error?.message || error.message || String(error))
+    displayNotification(errorMsg, 'error')
+    emit('upload-error', errorMsg)
   } finally {
     uploading.value = false
   }
@@ -232,6 +256,50 @@ const cancelUpload = () => {
         </div>
       </v-card-text>
     </v-card>
+
+    <!-- Notification Card -->
+    <Teleport to="body">
+      <transition name="slide-down">
+        <v-card
+          v-if="showNotification"
+          class="notification-card"
+          :class="`notification-${notificationType}`"
+          elevation="6"
+        >
+          <div class="notification-content">
+            <v-icon
+              :color="
+                notificationType === 'success'
+                  ? 'success'
+                  : notificationType === 'error'
+                    ? 'error'
+                    : 'warning'
+              "
+              size="24"
+              class="notification-icon"
+            >
+              {{
+                notificationType === 'success'
+                  ? 'mdi-check-circle'
+                  : notificationType === 'error'
+                    ? 'mdi-alert-circle'
+                    : 'mdi-alert'
+              }}
+            </v-icon>
+            <span class="notification-message">{{ notificationMessage }}</span>
+            <v-btn
+              icon
+              size="small"
+              variant="text"
+              @click="showNotification = false"
+              class="notification-close"
+            >
+              <v-icon size="20">mdi-close</v-icon>
+            </v-btn>
+          </div>
+        </v-card>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
@@ -272,5 +340,93 @@ const cancelUpload = () => {
 /* Lighter disabled state for upload button */
 :deep(.v-btn--disabled) {
   opacity: 0.4 !important;
+}
+
+/* Notification Card */
+.notification-card {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 99999;
+  min-width: 320px;
+  max-width: 500px;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+}
+
+.notification-success {
+  background: #fff;
+  border-left: 4px solid #4caf50;
+}
+
+.notification-error {
+  background: #fff;
+  border-left: 4px solid #f44336;
+}
+
+.notification-warning {
+  background: #fff;
+  border-left: 4px solid #ff9800;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #2c3e50;
+}
+
+.notification-close {
+  flex-shrink: 0;
+}
+
+/* Slide down animation */
+.slide-down-enter-active {
+  animation: slideDown 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  animation: slideUp 0.3s ease-in;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .notification-card {
+    right: 12px;
+    left: 12px;
+    min-width: auto;
+  }
 }
 </style>

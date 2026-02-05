@@ -15,6 +15,9 @@ const saving = ref(false)
 const imageFile = ref(null)
 const imagePreview = ref(null)
 const uploadingImage = ref(false)
+const showNotification = ref(false)
+const notificationMessage = ref('')
+const notificationType = ref('success')
 
 // Edit form data
 const editForm = ref({
@@ -24,6 +27,17 @@ const editForm = ref({
   phone: '',
   avatar_url: '',
 })
+
+// Display notification
+const displayNotification = (message, type = 'success') => {
+  notificationMessage.value = message
+  notificationType.value = type
+  showNotification.value = true
+
+  setTimeout(() => {
+    showNotification.value = false
+  }, 4000)
+}
 
 // Get current user's profile
 async function loadProfile() {
@@ -116,7 +130,9 @@ async function saveProfile() {
       try {
         avatarUrl = await uploadImage()
       } catch (uploadErr) {
-        error.value = 'Failed to process image. Please try again.'
+        const errorMsg = 'Failed to process image. Please try again.'
+        error.value = errorMsg
+        displayNotification(errorMsg, 'error')
         saving.value = false
         return
       }
@@ -133,9 +149,14 @@ async function saveProfile() {
     profile.value = updated
     editMode.value = false
     imageFile.value = null
+
+    // Show success notification
+    displayNotification('Profile updated successfully!', 'success')
   } catch (err) {
     console.error('Error saving profile:', err)
-    error.value = err.message || 'Failed to save profile. Please try again.'
+    const errorMsg = err.message || 'Failed to save profile. Please try again.'
+    error.value = errorMsg
+    displayNotification(errorMsg, 'error')
   } finally {
     saving.value = false
   }
@@ -207,9 +228,12 @@ onMounted(() => {
           </v-card>
 
           <!-- Error State -->
-          <v-alert v-else-if="error" type="error" variant="tonal" class="mb-4">
-            {{ error }}
-          </v-alert>
+          <v-card v-else-if="error" class="mb-4 message-card error-card" elevation="2">
+            <div class="message-content">
+              <v-icon color="error" size="24" class="message-icon">mdi-alert-circle</v-icon>
+              <span class="message-text">{{ error }}</span>
+            </div>
+          </v-card>
 
           <!-- Profile Content -->
           <div v-else-if="profile">
@@ -455,6 +479,50 @@ onMounted(() => {
     </v-container>
 
     <Footer />
+
+    <!-- Notification Card -->
+    <Teleport to="body">
+      <transition name="slide-down">
+        <v-card
+          v-if="showNotification"
+          class="notification-card"
+          :class="`notification-${notificationType}`"
+          elevation="8"
+        >
+          <div class="notification-content">
+            <v-icon
+              :color="
+                notificationType === 'success'
+                  ? 'success'
+                  : notificationType === 'error'
+                    ? 'error'
+                    : 'warning'
+              "
+              size="24"
+              class="notification-icon"
+            >
+              {{
+                notificationType === 'success'
+                  ? 'mdi-check-circle'
+                  : notificationType === 'error'
+                    ? 'mdi-alert-circle'
+                    : 'mdi-alert'
+              }}
+            </v-icon>
+            <span class="notification-message">{{ notificationMessage }}</span>
+            <v-btn
+              icon
+              size="small"
+              variant="text"
+              @click="showNotification = false"
+              class="notification-close"
+            >
+              <v-icon size="20">mdi-close</v-icon>
+            </v-btn>
+          </div>
+        </v-card>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
@@ -464,6 +532,35 @@ onMounted(() => {
   background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
   display: flex;
   flex-direction: column;
+}
+
+/* Message Cards */
+.message-card {
+  border-radius: 12px !important;
+  padding: 16px 20px;
+  border-left: 4px solid;
+}
+
+.error-card {
+  background: rgba(244, 67, 54, 0.08) !important;
+  border-left-color: #f44336;
+}
+
+.message-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.message-icon {
+  flex-shrink: 0;
+}
+
+.message-text {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #2c3e50;
+  flex: 1;
 }
 
 .profile-header-card {
@@ -681,5 +778,94 @@ onMounted(() => {
 .text-caption {
   overflow-wrap: break-word;
   word-wrap: break-word;
+}
+
+/* Notification Card */
+.notification-card {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 99999;
+  min-width: 340px;
+  max-width: 500px;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+}
+
+.notification-success {
+  background: #fff;
+  border-left: 4px solid #4caf50;
+}
+
+.notification-error {
+  background: #fff;
+  border-left: 4px solid #f44336;
+}
+
+.notification-warning {
+  background: #fff;
+  border-left: 4px solid #ff9800;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+.notification-close {
+  flex-shrink: 0;
+}
+
+/* Slide down animation */
+.slide-down-enter-active {
+  animation: slideDown 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  animation: slideUp 0.3s ease-in;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .notification-card {
+    right: 12px;
+    left: 12px;
+    min-width: auto;
+  }
 }
 </style>

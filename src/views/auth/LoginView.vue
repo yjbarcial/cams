@@ -364,27 +364,21 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
           </v-card-subtitle>
 
           <v-card-text class="pa-0">
-            <!-- Success Alert -->
-            <v-alert
-              v-if="successMessage"
-              type="success"
-              class="mb-3"
-              density="compact"
-              variant="tonal"
-            >
-              {{ successMessage }}
-            </v-alert>
+            <!-- Success Card -->
+            <v-card v-if="successMessage" class="mb-3 message-card success-card" elevation="0">
+              <div class="message-content">
+                <v-icon color="success" size="22" class="message-icon"> mdi-check-circle </v-icon>
+                <span class="message-text">{{ successMessage }}</span>
+              </div>
+            </v-card>
 
-            <!-- Error Alert -->
-            <v-alert
-              v-if="errorMessage"
-              type="error"
-              class="mb-3"
-              density="compact"
-              variant="tonal"
-            >
-              {{ errorMessage }}
-            </v-alert>
+            <!-- Error Card -->
+            <v-card v-if="errorMessage" class="mb-3 message-card error-card" elevation="0">
+              <div class="message-content">
+                <v-icon color="error" size="22" class="message-icon"> mdi-alert-circle </v-icon>
+                <span class="message-text">{{ errorMessage }}</span>
+              </div>
+            </v-card>
 
             <v-form ref="form" @submit.prevent="submit" class="form">
               <v-text-field
@@ -650,6 +644,40 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   border-radius: 999px !important;
   padding: 4px 12px !important;
   text-transform: none !important;
+}
+
+/* Message Cards */
+.message-card {
+  border-radius: 12px !important;
+  padding: 14px 18px;
+  border-left: 4px solid;
+}
+
+.success-card {
+  background: rgba(76, 175, 80, 0.08) !important;
+  border-left-color: #4caf50;
+}
+
+.error-card {
+  background: rgba(244, 67, 54, 0.08) !important;
+  border-left-color: #f44336;
+}
+
+.message-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.message-icon {
+  flex-shrink: 0;
+}
+
+.message-text {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #2c3e50;
+  flex: 1;
 }
 
 @media (max-width: 480px) {

@@ -34,6 +34,32 @@ const clearTypedConfirm = ref('')
 const clearInProgress = ref(false)
 const clearMessage = ref('')
 
+// Notification state
+const showNotification = ref(false)
+const notificationMessage = ref('')
+const notificationType = ref('success')
+
+// Display notification
+const displayNotification = (message, type = 'success') => {
+  notificationMessage.value = message
+  notificationType.value = type
+  showNotification.value = true
+
+  setTimeout(() => {
+    showNotification.value = false
+  }, 4000)
+}
+
+// Handle upload events
+const handleUploadSuccess = (message) => {
+  displayNotification(message || 'Upload completed successfully!', 'success')
+  showUploadView.value = false
+}
+
+const handleUploadError = (message) => {
+  displayNotification(message || 'Upload failed', 'error')
+}
+
 // Departments for filtering
 const departments = ['Creatives', 'Scribes']
 
@@ -824,7 +850,12 @@ const performClearClientData = async () => {
                         </v-btn>
                       </div>
                     </div>
-                    <UploadView v-else @close="showUploadView = false" />
+                    <UploadView
+                      v-else
+                      @close="showUploadView = false"
+                      @upload-success="handleUploadSuccess"
+                      @upload-error="handleUploadError"
+                    />
                   </v-card-text>
                 </v-window-item>
               </v-window>
@@ -835,6 +866,50 @@ const performClearClientData = async () => {
     </v-main>
 
     <Footer />
+
+    <!-- Notification Card -->
+    <Teleport to="body">
+      <transition name="slide-down">
+        <v-card
+          v-if="showNotification"
+          class="notification-card"
+          :class="`notification-${notificationType}`"
+          elevation="8"
+        >
+          <div class="notification-content">
+            <v-icon
+              :color="
+                notificationType === 'success'
+                  ? 'success'
+                  : notificationType === 'error'
+                    ? 'error'
+                    : 'warning'
+              "
+              size="24"
+              class="notification-icon"
+            >
+              {{
+                notificationType === 'success'
+                  ? 'mdi-check-circle'
+                  : notificationType === 'error'
+                    ? 'mdi-alert-circle'
+                    : 'mdi-alert'
+              }}
+            </v-icon>
+            <span class="notification-message">{{ notificationMessage }}</span>
+            <v-btn
+              icon
+              size="small"
+              variant="text"
+              @click="showNotification = false"
+              class="notification-close"
+            >
+              <v-icon size="20">mdi-close</v-icon>
+            </v-btn>
+          </div>
+        </v-card>
+      </transition>
+    </Teleport>
   </v-app>
 </template>
 
@@ -1160,6 +1235,87 @@ const performClearClientData = async () => {
 
   .table-header {
     padding: 12px 16px !important;
+  }
+}
+
+/* Notification Card */
+.notification-card {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 99999;
+  min-width: 340px;
+  max-width: 500px;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+}
+
+.notification-success {
+  background: #fff;
+  border-left: 4px solid #4caf50;
+}
+
+.notification-error {
+  background: #fff;
+  border-left: 4px solid #f44336;
+}
+
+.notification-warning {
+  background: #fff;
+  border-left: 4px solid #ff9800;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+.notification-close {
+  flex-shrink: 0;
+}
+
+/* Slide down animation */
+.slide-down-enter-active {
+  animation: slideDown 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  animation: slideUp 0.3s ease-in;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
   }
 }
 </style>
