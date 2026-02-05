@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import { projectsService, profilesService } from '@/services/supabaseService'
+import { createNotification } from '@/services/notificationsService'
+import { supabase } from '@/utils/supabase'
 
 // Accept optional prop; also support reading from route param/query
 const props = defineProps({ type: { type: String, default: '' } })
@@ -187,23 +189,94 @@ const assignProject = async () => {
 
     const newProject = await projectsService.create(projectData)
 
-    // Add team members if any
+    // Get current user info for notification
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const currentUserEmail = user?.email || 'System'
+    const currentUserProfile = user ? await profilesService.getByEmail(currentUserEmail) : null
+    const creatorName = currentUserProfile
+      ? `${currentUserProfile.first_name} ${currentUserProfile.last_name}`.trim()
+      : currentUserEmail
+
+    // Add writers and send notifications
     if (selectedWriters.value.length > 0) {
       for (const writerId of selectedWriters.value) {
         await projectsService.addMember(newProject.id, {
           user_id: writerId,
           role: 'writer',
         })
+
+        // Get writer profile for notification
+        const writerProfile = await profilesService.getById(writerId)
+        const writerName = writerProfile
+          ? `${writerProfile.first_name} ${writerProfile.last_name}`.trim()
+          : 'Writer'
+        const writerEmail = writerProfile?.email
+
+        console.log('📧 Creating notification for writer:', {
+          writerId,
+          writerName,
+          writerEmail,
+          hasEmail: !!writerEmail,
+          profileData: writerProfile,
+        })
+
+        // Create notification for the writer (always create, even without email)
+        await createNotification({
+          type: 'Request',
+          title: 'New Project Assignment',
+          description: `${creatorName} assigned you to write for "${newProject.title}".`,
+          projectId: newProject.id,
+          projectType: newProject.project_type,
+          recipient: writerName,
+          recipientEmail: writerEmail, // May be undefined
+          recipientUserId: writerId, // Add user ID as fallback
+          createdBy: creatorName,
+          actions: [{ label: 'View Project', type: 'view', color: '#3b82f6' }],
+        })
       }
+      console.log(`✅ Notifications sent to ${selectedWriters.value.length} writer(s)`)
     }
 
+    // Add artists and send notifications
     if (selectedArtists.value.length > 0) {
       for (const artistId of selectedArtists.value) {
         await projectsService.addMember(newProject.id, {
           user_id: artistId,
           role: 'artist',
         })
+
+        // Get artist profile for notification
+        const artistProfile = await profilesService.getById(artistId)
+        const artistName = artistProfile
+          ? `${artistProfile.first_name} ${artistProfile.last_name}`.trim()
+          : 'Artist'
+        const artistEmail = artistProfile?.email
+
+        console.log('📧 Creating notification for artist:', {
+          artistId,
+          artistName,
+          artistEmail,
+          hasEmail: !!artistEmail,
+          profileData: artistProfile,
+        })
+
+        // Create notification for the artist (always create, even without email)
+        await createNotification({
+          type: 'Request',
+          title: 'New Project Assignment',
+          description: `${creatorName} assigned you to create artwork for "${newProject.title}".`,
+          projectId: newProject.id,
+          projectType: newProject.project_type,
+          recipient: artistName,
+          recipientEmail: artistEmail, // May be undefined
+          recipientUserId: artistId, // Add user ID as fallback
+          createdBy: creatorName,
+          actions: [{ label: 'View Project', type: 'view', color: '#3b82f6' }],
+        })
       }
+      console.log(`✅ Notifications sent to ${selectedArtists.value.length} artist(s)`)
     }
 
     console.log('✅ Project created via Supabase:', newProject)
