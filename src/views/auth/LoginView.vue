@@ -21,11 +21,10 @@ const successMessage = ref('')
 
 // AUTHORIZED USERS ONLY - Complete whitelist
 const AUTHORIZED_USERS = [
-  // Admins
+  // System Admins
   'yssahjulianah.barcial@carsu.edu.ph',
   'lovellhudson.clavel@carsu.edu.ph',
   'altheaguila.gorres@carsu.edu.ph',
-  'princessriomae.jalop@carsu.edu.ph',
 
   // Artists & Writers
   'lexzyrrehdevonnaire.abellanosa@carsu.edu.ph',
@@ -33,6 +32,7 @@ const AUTHORIZED_USERS = [
   'nissi.abes@carsu.edu.ph',
   'belleblanchekyle.abiol@carsu.edu.ph',
   'jessahmei.allard@carsu.edu.ph',
+  'princessriomae.jalop@carsu.edu.ph',
 ]
 
 // Check if email is authorized
@@ -268,7 +268,7 @@ async function submit() {
   // Check if user is authorized BEFORE doing anything else
   if (!isAuthorizedUser(email.value)) {
     errorMessage.value =
-      'This email is not authorized to access the system. Please contact an administrator.'
+      'This email is not authorized to access the system. Please contact a System Admin.'
     return
   }
 
@@ -297,7 +297,7 @@ function toggleMode() {
 // Request password reset - show contact admin message
 function requestPasswordReset() {
   successMessage.value = ''
-  errorMessage.value = 'Forgot your password? Please contact a system admin to reset it.'
+  errorMessage.value = 'Forgot your password? Please contact a System Admin to reset it.'
 }
 
 const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
