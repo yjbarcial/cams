@@ -16,10 +16,34 @@ import {
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import { createStatusChangeNotification } from '@/services/notificationsService.js'
+import { getDisplayName } from '@/utils/userDisplay.js'
 
 const route = useRoute()
 const router = useRouter()
 const projectId = route.params.id
+
+// Current user profile for display names
+const currentUserProfile = ref(null)
+
+// Load current user's profile
+const loadCurrentUserProfile = async () => {
+  try {
+    const userEmail = localStorage.getItem('userEmail')
+    if (userEmail) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', userEmail)
+        .single()
+
+      if (profiles) {
+        currentUserProfile.value = profiles
+      }
+    }
+  } catch (error) {
+    console.error('Error loading current user profile:', error)
+  }
+}
 
 // Project type
 const projectType = ref('magazine')
@@ -325,11 +349,20 @@ const loadProjectData = async () => {
 const addComment = async () => {
   if (newComment.value.trim()) {
     try {
+      const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+      const fullName = currentUserProfile.value
+        ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+        : ''
+      const profile = currentUserProfile.value
+        ? { ...currentUserProfile.value, full_name: fullName }
+        : { full_name: fullName }
+      const displayName = getDisplayName(userEmail, profile, true)
+
       const comment = await addProjectComment(
         projectType.value,
         projectId,
         newComment.value.trim(),
-        currentUser.value,
+        displayName,
       )
       comments.value.unshift(comment)
       newComment.value = ''
@@ -454,7 +487,8 @@ onUnmounted(() => {
   }
 })
 
-onMounted(() => {
+onMounted(async () => {
+  await loadCurrentUserProfile()
   loadProjectData()
 })
 </script>

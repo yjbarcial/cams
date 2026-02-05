@@ -1,5 +1,30 @@
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue'
+import { getDisplayName } from '@/utils/userDisplay.js'
+import { supabase } from '@/utils/supabase.js'
+
+// Current user profile
+const currentUserProfile = ref(null)
+
+// Load current user's profile
+const loadCurrentUserProfile = async () => {
+  try {
+    const userEmail = localStorage.getItem('userEmail')
+    if (userEmail) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', userEmail)
+        .single()
+
+      if (profiles) {
+        currentUserProfile.value = profiles
+      }
+    }
+  } catch (error) {
+    console.error('Error loading current user profile:', error)
+  }
+}
 
 const props = defineProps({
   modelValue: {
@@ -125,6 +150,9 @@ const loadQuill = () => {
 
 // Initialize Quill editor
 onMounted(async () => {
+  // Load current user profile first
+  await loadCurrentUserProfile()
+
   try {
     const Quill = await loadQuill()
 
@@ -780,6 +808,16 @@ const addHighlightComment = () => {
     // Apply semi-highlight color when comment is added (like Google Docs)
     quill.value.formatText(range.index, range.length, 'background', semiHighlightColor)
 
+    // Get display name for current user
+    const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+    const fullName = currentUserProfile.value
+      ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+      : ''
+    const profile = currentUserProfile.value
+      ? { ...currentUserProfile.value, full_name: fullName }
+      : { full_name: fullName }
+    const displayName = getDisplayName(userEmail, profile, true)
+
     // Store comment with original color and semi-highlight color
     // IMPORTANT: Store the actual text content (trimmed for display, but we'll search for the trimmed version)
     // This allows us to find the text even if whitespace changes
@@ -787,7 +825,7 @@ const addHighlightComment = () => {
       id: `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       text: actualText.trim(), // Store trimmed text for finding it later (handles whitespace changes)
       comment: highlightComment.value,
-      author: 'Current User',
+      author: displayName,
       timestamp: new Date().toISOString(),
       color: highlightColor, // Store original color
       semiColor: semiHighlightColor, // Store semi-highlight color

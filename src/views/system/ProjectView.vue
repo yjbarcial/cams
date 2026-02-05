@@ -20,6 +20,7 @@ import {
   createStatusChangeNotification,
   createCommentNotification,
 } from '@/services/notificationsService.js'
+import { getDisplayName } from '@/utils/userDisplay.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,6 +44,29 @@ const project = ref({
   description: '',
   content: '',
 })
+
+// Current user profile for display names
+const currentUserProfile = ref(null)
+
+// Load current user's profile
+const loadCurrentUserProfile = async () => {
+  try {
+    const userEmail = localStorage.getItem('userEmail')
+    if (userEmail) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', userEmail)
+        .single()
+
+      if (profiles) {
+        currentUserProfile.value = profiles
+      }
+    }
+  } catch (error) {
+    console.error('Error loading current user profile:', error)
+  }
+}
 
 // Title editing state
 const isEditingTitle = ref(false)
@@ -207,12 +231,19 @@ const saveContent = async (showNotif = false) => {
       // Create version history in Supabase
       try {
         const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+        const fullName = currentUserProfile.value
+          ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+          : ''
+        const profile = currentUserProfile.value
+          ? { ...currentUserProfile.value, full_name: fullName }
+          : { full_name: fullName }
+        const displayName = getDisplayName(userEmail, profile, true)
         await createProjectVersionSupabase(
           projectType.value,
           projectId,
           project.value,
           'Content updated',
-          userEmail,
+          displayName,
           'draft',
         )
         console.log('✅ Version history created in Supabase')
@@ -479,9 +510,10 @@ const loadProjectData = async () => {
       try {
         const sectionHeadProfile = await profilesService.getById(foundProject.section_head_id)
         if (sectionHeadProfile) {
-          sectionHeadName =
-            `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim() ||
-            sectionHeadProfile.email
+          const fullName =
+            `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim()
+          const profile = { ...sectionHeadProfile, full_name: fullName }
+          sectionHeadName = getDisplayName(sectionHeadProfile.email, profile, true)
         }
       } catch (error) {
         console.error('Error loading section head profile:', error)
@@ -493,7 +525,9 @@ const loadProjectData = async () => {
       .filter((m) => m.role === 'writer')
       .map((m) => {
         const profile = m.profiles
-        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        const fullProfile = { ...profile, full_name: fullName }
+        return getDisplayName(profile.email, fullProfile, false)
       })
     const writersText = writers.length > 0 ? writers.join(', ') : 'Not assigned'
 
@@ -501,7 +535,9 @@ const loadProjectData = async () => {
       .filter((m) => m.role === 'artist')
       .map((m) => {
         const profile = m.profiles
-        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        const fullProfile = { ...profile, full_name: fullName }
+        return getDisplayName(profile.email, fullProfile, false)
       })
     const artistsText = artists.length > 0 ? artists.join(', ') : 'Not assigned'
 
@@ -567,11 +603,20 @@ const loadProjectData = async () => {
 const addComment = () => {
   if (newComment.value.trim()) {
     try {
+      const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+      const fullName = currentUserProfile.value
+        ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+        : ''
+      const profile = currentUserProfile.value
+        ? { ...currentUserProfile.value, full_name: fullName }
+        : { full_name: fullName }
+      const displayName = getDisplayName(userEmail, profile, true)
+
       const comment = addProjectComment(
         projectType.value,
         projectId,
         newComment.value.trim(),
-        'Current User', // This should come from auth system
+        displayName,
       )
       comments.value.unshift(comment)
 
@@ -580,7 +625,7 @@ const addComment = () => {
         projectId: projectId,
         projectType: projectType.value,
         projectTitle: project.value.title,
-        commentAuthor: 'Current User',
+        commentAuthor: displayName,
         commentText: newComment.value.trim(),
         recipient: null, // Can be set to specific recipient if needed
       })
@@ -754,6 +799,9 @@ watch(
 
 // Setup auto-save system
 onMounted(async () => {
+  // Load current user profile first
+  await loadCurrentUserProfile()
+
   // Load project data from backend API
   console.log('Loading project:', projectId)
   await loadProjectData()
