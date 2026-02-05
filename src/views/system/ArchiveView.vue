@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import ArchiveHeader from '@/components/layout/ArchiveHeader.vue'
 import { supabase } from '@/utils/supabase'
@@ -27,45 +27,7 @@ function openDeliverable(item, event) {
   router.push({ name: 'publication', params: { id: item.id } })
 }
 
-// Extract first image from HTML content (including base64 images from Quill editor)
-const extractFirstImage = (htmlContent) => {
-  if (!htmlContent) return null
-  try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(htmlContent, 'text/html')
-    const img = doc.querySelector('img')
-    if (img && img.src) {
-      // Return the image src (works with both URLs and base64 data URIs)
-      return img.src
-    }
-  } catch (error) {
-    console.error('Error extracting image:', error)
-  }
-  return null
-}
-
-// Prevent back navigation to dashboard
-const preventBackToDashboard = () => {
-  // Add a new history entry to prevent going back
-  window.history.pushState(history.state, '', window.location.href)
-}
-
-// Handle browser back button
-const handlePopState = (event) => {
-  // Push the current state again to prevent going back
-  window.history.pushState(history.state, '', window.location.href)
-}
-
 onMounted(() => {
-  // Prevent back navigation when component mounts
-  preventBackToDashboard()
-
-  // Listen for back button attempts
-  window.addEventListener('popstate', handlePopState)
-
-  // Replace the current history entry to remove previous page from history
-  window.history.replaceState(history.state, '', window.location.href)
-
   // Fetch archives from Supabase directly
   ;(async () => {
     try {
@@ -99,62 +61,11 @@ onMounted(() => {
 
         articles.value = mapped
       }
-
-      // Add test publication with text content
-      articles.value.unshift({
-        id: 'test-publication-1',
-        title: 'Test Publication: The Art of Digital Publishing',
-        category: 'Magazine',
-        cover: '/images/lib-hd.jpg',
-        publishedAt: new Date().toISOString(),
-        content: `
-          <h2>Welcome to Our Test Publication</h2>
-          <p>This is a comprehensive test article designed to showcase the capabilities of our digital publishing platform. The content you're reading demonstrates how text, formatting, and various elements come together to create an engaging reading experience.</p>
-          
-          <h3>Why Digital Publishing Matters</h3>
-          <p>In today's fast-paced world, digital publishing has revolutionized the way we consume and share information. It offers unprecedented accessibility, allowing readers to access content from anywhere in the world at any time. This democratization of knowledge has transformed education, journalism, and creative writing.</p>
-          
-          <h3>The Power of Typography</h3>
-          <p>Typography is more than just choosing fonts—it's about creating a visual hierarchy that guides readers through your content. Good typography enhances readability, establishes mood, and reinforces your brand identity. Every font choice, line height, and spacing decision contributes to the overall reading experience.</p>
-          
-          <blockquote>
-            "Design is not just what it looks like and feels like. Design is how it works." - Steve Jobs
-          </blockquote>
-          
-          <h3>Key Features of Modern Publishing</h3>
-          <ul>
-            <li><strong>Responsive Design:</strong> Content adapts seamlessly across all devices</li>
-            <li><strong>Interactive Elements:</strong> Engaging multimedia enriches the narrative</li>
-            <li><strong>Accessibility:</strong> Inclusive design ensures everyone can access content</li>
-            <li><strong>Analytics:</strong> Data-driven insights help improve future publications</li>
-            <li><strong>Search Optimization:</strong> Smart indexing makes content discoverable</li>
-          </ul>
-          
-          <h3>Looking Ahead</h3>
-          <p>As we continue to evolve in this digital age, the future of publishing looks bright. Emerging technologies like artificial intelligence, augmented reality, and voice interfaces are opening new possibilities for storytelling and content delivery. The key is to embrace these innovations while maintaining the core values of quality, accuracy, and reader engagement.</p>
-          
-          <p>This test publication serves as a foundation for exploring these possibilities. Whether you're a writer, editor, designer, or reader, understanding the mechanics of digital publishing empowers you to create and consume content more effectively.</p>
-          
-          <h3>Final Thoughts</h3>
-          <p>Thank you for taking the time to explore this test publication. We hope it demonstrates the potential of our platform and inspires you to create your own compelling content. The journey of digital publishing is just beginning, and we're excited to be part of it with you.</p>
-        `,
-        mediaUploaded: '',
-        writers: 'The Gold Panicles Editorial Team',
-        artists: 'The Gold Panicles',
-        pages: null,
-        volumeIssue: 'Test Issue Vol. 1',
-        tags: ['test', 'digital-publishing', 'typography'],
-      })
     } catch (err) {
       console.error('Error loading archives from Supabase:', err)
       // Fallback: articles remain empty array
     }
   })()
-})
-
-onUnmounted(() => {
-  // Clean up event listener
-  window.removeEventListener('popstate', handlePopState)
 })
 
 function setCategory(cat) {

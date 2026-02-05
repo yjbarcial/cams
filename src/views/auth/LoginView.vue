@@ -294,10 +294,39 @@ function toggleMode() {
   confirmPassword.value = ''
 }
 
-// Request password reset - show contact admin message
-function requestPasswordReset() {
+// Request password reset
+async function requestPasswordReset() {
   successMessage.value = ''
-  errorMessage.value = 'Forgot your password? Please contact a System Admin to reset it.'
+  errorMessage.value = ''
+
+  if (!email.value || !email.value.trim()) {
+    errorMessage.value = 'Please enter your email address first.'
+    return
+  }
+
+  if (!email.value.endsWith('@carsu.edu.ph')) {
+    errorMessage.value = 'Please enter a valid CARSU email address.'
+    return
+  }
+
+  loading.value = true
+
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.value, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    })
+
+    if (error) throw error
+
+    successMessage.value = `Password reset email sent to ${email.value}. Check your inbox and click the link to reset your password.`
+  } catch (error) {
+    errorMessage.value = error.message || 'Failed to send password reset email. Please try again.'
+    if (import.meta.env.DEV) {
+      console.error('❌ Password reset error:', error)
+    }
+  } finally {
+    loading.value = false
+  }
 }
 
 const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
