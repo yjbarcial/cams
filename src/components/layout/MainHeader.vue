@@ -344,7 +344,7 @@ const goToDashboard = () => {
 .account-dropdown-pill {
   min-width: 60px !important;
   max-width: 60px !important;
-  height: 120px !important;
+  height: 140px !important;
   border-radius: 30px !important;
   background: #ffffff !important;
   border: 2px solid #353535 !important;
