@@ -297,8 +297,7 @@ function toggleMode() {
 // Request password reset - show contact admin message
 function requestPasswordReset() {
   successMessage.value = ''
-  errorMessage.value =
-    'Forgot your password? Please contact an admin to reset it. Admins can help you via the Admin Dashboard → Password Reset tab.'
+  errorMessage.value = 'Forgot your password? Please contact a system admin to reset it.'
 }
 
 const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
