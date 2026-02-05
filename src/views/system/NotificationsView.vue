@@ -27,8 +27,8 @@ const viewerMedia = ref('')
 const viewerAuthor = ref('')
 const viewerDate = ref('')
 
-const loadNotifications = () => {
-  notifications.value = getNotifications()
+const loadNotifications = async () => {
+  notifications.value = await getNotifications()
   // Update visible count if it exceeds total notifications
   if (visibleCount.value > notifications.value.length) {
     visibleCount.value = notifications.value.length
@@ -79,7 +79,7 @@ const formatTimestamp = (timestamp) => {
 const handleNotificationClick = async (notification) => {
   // Mark notification as read when user clicks on it
   if (!notification.isRead) {
-    markAsRead(notification.id)
+    await markAsRead(notification.id)
     notification.isRead = true
   }
 
@@ -161,13 +161,13 @@ const closeViewer = () => {
   viewerCategory.value = 'Magazine'
 }
 
-const handleAction = (notification, actionType, event) => {
+const handleAction = async (notification, actionType, event) => {
   // Stop propagation to prevent card click
   event.stopPropagation()
 
   // Mark notification as read when user interacts with it
   if (!notification.isRead) {
-    markAsRead(notification.id)
+    await markAsRead(notification.id)
     notification.isRead = true
   }
 
@@ -186,19 +186,19 @@ const handleAction = (notification, actionType, event) => {
   }
 }
 
-const handleDelete = (notificationId, event) => {
+const handleDelete = async (notificationId, event) => {
   // Stop propagation to prevent card click
   event.stopPropagation()
 
   if (confirm('Are you sure you want to delete this notification?')) {
-    deleteNotification(notificationId)
-    loadNotifications()
+    await deleteNotification(notificationId)
+    await loadNotifications()
   }
 }
 
-const handleMarkAllRead = () => {
-  markAllAsRead()
-  loadNotifications()
+const handleMarkAllRead = async () => {
+  await markAllAsRead()
+  await loadNotifications()
 }
 
 const unreadCount = computed(() => {
@@ -285,11 +285,16 @@ onMounted(() => {
 
                 <div
                   class="notification-footer"
-                  v-if="notification.actions && notification.actions.some((a) => a.type !== 'view')"
+                  v-if="
+                    notification.actions &&
+                    notification.actions.some((a) => a.type !== 'view' && a.type !== 'dismiss')
+                  "
                 >
                   <div class="notification-actions">
                     <v-btn
-                      v-for="action in notification.actions.filter((a) => a.type !== 'view')"
+                      v-for="action in notification.actions.filter(
+                        (a) => a.type !== 'view' && a.type !== 'dismiss',
+                      )"
                       :key="action.label"
                       class="action-btn"
                       :class="action.type"

@@ -3,14 +3,81 @@
 import { isPushNotificationsEnabled, isEmailNotificationsEnabled } from './settingsService.js'
 
 /**
- * Get all notifications
- * @returns {Array} Array of notification objects
+ * Get all notifications for the current user
+ * @returns {Array} Array of notification objects for current user
  */
-export const getNotifications = () => {
+export const getNotifications = async () => {
   try {
     const notifications = JSON.parse(localStorage.getItem('notifications') || '[]')
+    const currentUserEmail = localStorage.getItem('userEmail')
+
+    if (!currentUserEmail) {
+      return []
+    }
+
+    // Get current user's ID from their profile
+    const { profilesService } = await import('./supabaseService.js')
+    let currentUserId = null
+    try {
+      const currentProfile = await profilesService.getByEmail(currentUserEmail)
+      currentUserId = currentProfile?.id
+      console.log('🔑 Current user details:', {
+        email: currentUserEmail,
+        userId: currentUserId,
+      })
+    } catch (error) {
+      console.error('Error fetching current user profile:', error)
+    }
+
+    // Get current user's role from localStorage
+    const currentUserRole = localStorage.getItem('userRole')
+
+    // Role mapping for notification recipients
+    const roleMapping = {
+      'Section Head': 'section_head',
+      'Technical Editor': 'editor',
+      'Editor-in-Chief': 'editor',
+      'Chief Adviser': 'admin',
+    }
+
+    // Filter notifications for current user
+    const userNotifications = notifications.filter((n) => {
+      // 1. User ID-based notifications (most reliable)
+      if (n.recipientUserId && currentUserId) {
+        const matches = n.recipientUserId === currentUserId
+        console.log('🔍 User ID notification filter:', {
+          notificationId: n.id,
+          recipientUserId: n.recipientUserId,
+          currentUserId,
+          matches,
+        })
+        if (matches) return true
+      }
+
+      // 2. Email-based notifications (fallback)
+      if (n.recipientEmail) {
+        // Case-insensitive email comparison
+        const matches = n.recipientEmail.toLowerCase() === currentUserEmail.toLowerCase()
+        console.log('🔍 Email notification filter:', {
+          notificationId: n.id,
+          recipientEmail: n.recipientEmail,
+          currentUserEmail,
+          matches,
+        })
+        if (matches) return true
+      }
+
+      // 3. Role-based notifications (e.g., "Section Head", "Technical Editor")
+      if (n.recipient && roleMapping[n.recipient] && currentUserRole) {
+        return currentUserRole === roleMapping[n.recipient]
+      }
+
+      // 4. Legacy notifications without specific recipient - show to all
+      return !n.recipient
+    })
+
     // Sort by timestamp (newest first)
-    return notifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    return userNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
   } catch (error) {
     console.error('Error getting notifications:', error)
     return []
@@ -21,8 +88,8 @@ export const getNotifications = () => {
  * Get unread notifications count
  * @returns {number} Count of unread notifications
  */
-export const getUnreadCount = () => {
-  const notifications = getNotifications()
+export const getUnreadCount = async () => {
+  const notifications = await getNotifications()
   return notifications.filter((n) => !n.isRead).length
 }
 
@@ -35,10 +102,13 @@ export const getUnreadCount = () => {
  * @param {string} notificationData.projectId - Related project ID (optional)
  * @param {string} notificationData.projectType - Related project type (optional)
  * @param {Array} notificationData.actions - Array of action objects (optional)
- * @param {string} notificationData.recipient - Recipient user/role (optional)
+ * @param {string} notificationData.recipient - Recipient name (optional)
+ * @param {string} notificationData.recipientEmail - Recipient email (for filtering)
+ * @param {number} notificationData.recipientUserId - Recipient user ID (for filtering, more reliable)
+ * @param {string} notificationData.createdBy - Creator name (optional)
  * @returns {Object} Created notification object
  */
-export const createNotification = (notificationData) => {
+export const createNotification = async (notificationData) => {
   try {
     // Check if push notifications are enabled
     if (!isPushNotificationsEnabled()) {
@@ -64,14 +134,17 @@ export const createNotification = (notificationData) => {
       projectType: notificationData.projectType || null,
       actions: notificationData.actions || [{ label: 'View', type: 'view', color: '#3b82f6' }],
       recipient: notificationData.recipient || null,
+      recipientEmail: notificationData.recipientEmail || null,
+      recipientUserId: notificationData.recipientUserId || null, // Add user ID
       createdBy: notificationData.createdBy || 'System',
     }
 
-    const notifications = getNotifications()
-    notifications.unshift(notification)
+    // Get ALL notifications from localStorage (not filtered)
+    const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
+    allNotifications.unshift(notification)
 
     // Keep only last 100 notifications to prevent storage bloat
-    const trimmedNotifications = notifications.slice(0, 100)
+    const trimmedNotifications = allNotifications.slice(0, 100)
     localStorage.setItem('notifications', JSON.stringify(trimmedNotifications))
 
     // Dispatch custom event to notify MainHeader of new notification
@@ -96,13 +169,14 @@ export const createNotification = (notificationData) => {
  * @param {string} notificationId - Notification ID
  * @returns {boolean} Success status
  */
-export const markAsRead = (notificationId) => {
+export const markAsRead = async (notificationId) => {
   try {
-    const notifications = getNotifications()
-    const notification = notifications.find((n) => n.id === notificationId)
+    // Get ALL notifications from localStorage (not filtered)
+    const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
+    const notification = allNotifications.find((n) => n.id === notificationId)
     if (notification) {
       notification.isRead = true
-      localStorage.setItem('notifications', JSON.stringify(notifications))
+      localStorage.setItem('notifications', JSON.stringify(allNotifications))
 
       // Dispatch custom event to notify MainHeader
       window.dispatchEvent(new CustomEvent('notificationUpdated'))
@@ -120,11 +194,37 @@ export const markAsRead = (notificationId) => {
  * Mark all notifications as read
  * @returns {boolean} Success status
  */
-export const markAllAsRead = () => {
+export const markAllAsRead = async () => {
   try {
-    const notifications = getNotifications()
-    notifications.forEach((n) => (n.isRead = true))
-    localStorage.setItem('notifications', JSON.stringify(notifications))
+    // Get ALL notifications from localStorage (not filtered)
+    const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
+    const currentUserEmail = localStorage.getItem('userEmail')
+
+    // Get current user's ID
+    const { profilesService } = await import('./supabaseService.js')
+    let currentUserId = null
+    try {
+      const currentProfile = await profilesService.getByEmail(currentUserEmail)
+      currentUserId = currentProfile?.id
+    } catch (error) {
+      console.error('Error fetching user profile:', error)
+    }
+
+    // Mark only current user's notifications as read
+    allNotifications.forEach((n) => {
+      // Check if notification belongs to current user
+      const belongsToUser =
+        (n.recipientUserId && currentUserId && n.recipientUserId === currentUserId) ||
+        (n.recipientEmail &&
+          currentUserEmail &&
+          n.recipientEmail.toLowerCase() === currentUserEmail.toLowerCase())
+
+      if (belongsToUser) {
+        n.isRead = true
+      }
+    })
+
+    localStorage.setItem('notifications', JSON.stringify(allNotifications))
 
     // Dispatch custom event to notify MainHeader
     window.dispatchEvent(new CustomEvent('notificationUpdated'))
@@ -141,10 +241,11 @@ export const markAllAsRead = () => {
  * @param {string} notificationId - Notification ID
  * @returns {boolean} Success status
  */
-export const deleteNotification = (notificationId) => {
+export const deleteNotification = async (notificationId) => {
   try {
-    const notifications = getNotifications()
-    const filtered = notifications.filter((n) => n.id !== notificationId)
+    // Get ALL notifications from localStorage (not filtered)
+    const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
+    const filtered = allNotifications.filter((n) => n.id !== notificationId)
     localStorage.setItem('notifications', JSON.stringify(filtered))
     return true
   } catch (error) {
@@ -182,6 +283,7 @@ const getTypeColor = (type) => {
  * @param {string} params.newStatus - New status
  * @param {string} params.actionBy - User who performed the action
  * @param {string} params.recipient - Recipient role/user
+ * @param {string} params.recipientEmail - Recipient email address
  * @param {string} params.comments - Additional comments (optional)
  */
 export const createStatusChangeNotification = ({
@@ -192,6 +294,7 @@ export const createStatusChangeNotification = ({
   newStatus,
   actionBy,
   recipient,
+  recipientEmail,
   comments,
 }) => {
   let type = 'Info'
@@ -254,6 +357,7 @@ export const createStatusChangeNotification = ({
     projectType,
     actions,
     recipient,
+    recipientEmail,
     createdBy: actionBy,
   })
 }
@@ -267,6 +371,7 @@ export const createStatusChangeNotification = ({
  * @param {string} params.commentAuthor - Comment author
  * @param {string} params.commentText - Comment text
  * @param {string} params.recipient - Recipient role/user
+ * @param {string} params.recipientEmail - Recipient email address
  */
 export const createCommentNotification = ({
   projectId,
@@ -275,6 +380,7 @@ export const createCommentNotification = ({
   commentAuthor,
   commentText,
   recipient,
+  recipientEmail,
 }) => {
   return createNotification({
     type: 'Comment',
@@ -284,6 +390,7 @@ export const createCommentNotification = ({
     projectType,
     actions: [{ label: 'View', type: 'view', color: '#3b82f6' }],
     recipient,
+    recipientEmail,
     createdBy: commentAuthor,
   })
 }

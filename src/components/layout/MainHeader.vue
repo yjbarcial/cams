@@ -10,8 +10,8 @@ const logoutLoading = ref(false)
 const unreadCount = ref(0)
 
 // Update unread count
-const updateUnreadCount = () => {
-  unreadCount.value = getUnreadCount()
+const updateUnreadCount = async () => {
+  unreadCount.value = await getUnreadCount()
 }
 
 // Check for notifications periodically and on storage changes
@@ -51,7 +51,8 @@ const handleStorageChange = (e) => {
   }
 }
 
-// System Admin email list - must match router adminEmails
+// SYSTEM ADMINS ONLY - Access to admin panel and system settings
+// These are NOT content admins (EIC, Technical Editor, etc.)
 const adminEmails = [
   'yssahjulianah.barcial@carsu.edu.ph',
   'lovellhudson.clavel@carsu.edu.ph',
