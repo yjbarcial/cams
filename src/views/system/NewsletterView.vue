@@ -36,7 +36,8 @@ const loadProjects = async () => {
       .select(
         `
         *,
-        section_head_profile:profiles!section_head_id(id, first_name, last_name, email)
+        section_head_profile:profiles!section_head_id(id, first_name, last_name, email),
+        project_members(user_id)
       `,
       )
       .eq('project_type', 'newsletter')
@@ -56,18 +57,23 @@ const loadProjects = async () => {
         }
       }
 
+      // Extract member user IDs
+      const memberIds = (project.project_members || []).map((m) => m.user_id)
+
       return {
         ...project,
         id: project.id,
         title: project.title,
         status: project.status,
         sectionHead: sectionHeadName,
+        sectionHeadId: project.section_head_id,
         deadline: project.due_date,
         dueDate: project.due_date,
         createdAt: project.created_at,
         updatedAt: project.updated_at,
         starred: project.is_starred || false,
         isStarred: project.is_starred || false,
+        memberIds: memberIds,
       }
     })
   } catch (error) {
@@ -235,7 +241,34 @@ const filteredProjects = computed(() => {
 
 // Permission checking
 const canEditProject = (project) => {
-  return true // Allow editing all projects for now
+  // Get current user's role and ID from localStorage
+  const userRole = localStorage.getItem('userRole')
+  const userId = localStorage.getItem('userId')
+
+  // System admins can always edit
+  if (userRole === 'admin') {
+    return true
+  }
+
+  // Check if user is assigned as section head for THIS specific project
+  if (userRole === 'section_head') {
+    if (project.sectionHeadId && userId) {
+      return parseInt(project.sectionHeadId) === parseInt(userId)
+    }
+    return false
+  }
+
+  // Editors can edit ONLY if they are NOT assigned as writer/artist to this project
+  if (userRole === 'editor') {
+    // If editor is assigned as writer/artist to this project, they cannot edit
+    if (project.memberIds && userId && project.memberIds.includes(parseInt(userId))) {
+      return false
+    }
+    return true
+  }
+
+  // Members (writers/artists) cannot edit from the list view
+  return false
 }
 
 // Edit functionality
@@ -277,8 +310,14 @@ const cancelEdit = () => {
 
 // Delete functionality
 const startDelete = (project) => {
-  projectToDelete.value = project
-  showDeleteConfirm.value = true
+  if (canEditProject(project)) {
+    projectToDelete.value = project
+    showDeleteConfirm.value = true
+  } else {
+    alert(
+      'Only admins, editors, and section heads can delete projects. Writers and artists cannot delete projects.',
+    )
+  }
 }
 
 const confirmDelete = async () => {
