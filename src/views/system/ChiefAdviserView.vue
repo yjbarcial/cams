@@ -187,7 +187,7 @@ const approvalActions = computed(() => {
 const getNextStatus = (action) => {
   if (action === 'approve') return 'For Publish' // Changed from 'EIC Approved' to 'For Publish'
   if (action === 'return') return 'Returned by Chief Adviser'
-  if (action === 'reject') return 'returned_by_section_head' // Send back to artist and writer
+  if (action === 'reject') return 'draft' // Send back to artist and writer (draft status)
   return project.value.status
 }
 
@@ -335,10 +335,10 @@ const submitApproval = async () => {
 
     // Try to save to Supabase (non-blocking)
     try {
-      // Only call Supabase if project has a valid supabaseId
-      if (project.value.supabaseId) {
+      // Only call Supabase if project has a valid id
+      if (projectId) {
         await createProjectVersionSupabase(
-          project.value.supabaseId,
+          projectId,
           editorContent.value || '',
           action === 'approve'
             ? 'Approved by Chief Adviser - Ready for Publishing'
@@ -349,7 +349,7 @@ const submitApproval = async () => {
         )
         console.log('Project version saved to Supabase successfully')
       } else {
-        console.log('Project does not have Supabase ID, skipping sync')
+        console.log('Project does not have valid ID, skipping sync')
       }
     } catch (err) {
       console.warn('Failed to save project version to Supabase (non-critical):', err)
