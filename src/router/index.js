@@ -21,7 +21,8 @@ import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
 import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 import ArchivalManagerView from '@/views/system/ArchivalManagerView.vue'
 
-// System Admin email list - users with system admin privileges
+// SYSTEM ADMINS ONLY - Access to admin panel and system settings
+// These are NOT content admins (EIC, Technical Editor, etc.)
 const adminEmails = [
   'yssahjulianah.barcial@carsu.edu.ph',
   'lovellhudson.clavel@carsu.edu.ph',
