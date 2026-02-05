@@ -26,13 +26,60 @@ const AUTHORIZED_USERS = [
   'lovellhudson.clavel@carsu.edu.ph',
   'altheaguila.gorres@carsu.edu.ph',
 
-  // Artists & Writers
+  // Section Heads
   'lexzyrrehdevonnaire.abellanosa@carsu.edu.ph',
-  'teejay.abello@carsu.edu.ph',
-  'nissi.abes@carsu.edu.ph',
-  'belleblanchekyle.abiol@carsu.edu.ph',
   'jessahmei.allard@carsu.edu.ph',
-  'princessriomae.jalop@carsu.edu.ph',
+  'nevlim.baldelovar@carsu.edu.ph',
+  'rexter.etang@carsu.edu.ph',
+  'jerbyclaire.factularin@carsu.edu.ph',
+  'jofredjames.gerasmio@carsu.edu.ph',
+  'megumierika.labaja@carsu.edu.ph',
+  'elainepearl.silagan@carsu.edu.ph',
+  'samuellhoide.ursales@carsu.edu.ph',
+  'kentadriane.vinatero@carsu.edu.ph',
+
+  // Editors (Technical Editor, Creative Director, Editor-in-Chief, Archive Managers)
+  'jonee.elopre@carsu.edu.ph',
+  'levibrian.cejuela@carsu.edu.ph',
+  'melede.ganoy@carsu.edu.ph',
+  'julesleo.reserva@carsu.edu.ph',
+  'eizzielmarie.bacoy@carsu.edu.ph',
+
+  // Writers
+  'nissi.abes@carsu.edu.ph',
+  'sophija.bentulan@carsu.edu.ph',
+  'joshuajosh.coralde@carsu.edu.ph',
+  'lordelie.darog@carsu.edu.ph',
+  'jezwer.delima@carsu.edu.ph',
+  'jellanaille.denonong@carsu.edu.ph',
+  'devorahgrace.esguerra@carsu.edu.ph',
+  'shienygriethzer.lozada@carsu.edu.ph',
+  'kayadanielle.nason@carsu.edu.ph',
+  'glennferdinan.rojas@carsu.edu.ph',
+  'missividka.santillan@carsu.edu.ph',
+  'samanthajezette.maestrado@carsu.edu.ph',
+
+  // Artists
+  'teejay.abello@carsu.edu.ph',
+  'belleblanchekyle.abiol@carsu.edu.ph',
+  'jonhian.alfaras@carsu.edu.ph',
+  'lendon.almocera@carsu.edu.ph',
+  'robertlouis.bebis@carsu.edu.ph',
+  'ryanchristianbenignos@carsu.edu.ph',
+  'peterlorenzo.calo@carsu.edu.ph',
+  'josefa.cruzada@carsu.edu.ph',
+  'mattandrew.graban@carsu.edu.ph',
+  'hannahfaith.labadan@carsu.edu.ph',
+  'anne.lanzon@carsu.edu.ph',
+  'gerzaallea.lim@carsu.edu.ph',
+  'jhondavid.lloren@carsu.edu.ph',
+  'jaylor.malnegro@carsu.edu.ph',
+  'majulianny.navarez@carsu.edu.ph',
+  'edwin.mori@carsu.edu.ph',
+  'mhegan.niez@carsu.edu.ph',
+  'kurtclyde.pablo@carsu.edu.ph',
+  'jharedmiguel.paderna@carsu.edu.ph',
+  'jevan.racaza@carsu.edu.ph',
 ]
 
 // Check if email is authorized
