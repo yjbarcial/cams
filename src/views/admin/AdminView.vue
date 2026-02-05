@@ -1,14 +1,11 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { projectsService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import UploadView from '@/views/system/UploadView.vue'
 import clearClientData from '@/utils/clearClientData'
-
-const router = useRouter()
 
 // State for statistics and content
 const statistics = ref({
@@ -39,17 +36,6 @@ const clearMessage = ref('')
 
 // Departments for filtering
 const departments = ['Creatives', 'Scribes']
-
-const roles = [
-  'Artist',
-  'Writer',
-  'Section Head',
-  'Technical Editor',
-  'Creative Director',
-  'Editor-in-Chief',
-  'Chief Adviser',
-  'Archival Manager',
-]
 
 const activeTab = ref('users')
 
@@ -207,7 +193,7 @@ const loadSubmissions = async () => {
   }
 }
 
-// Admin emails to hide from user management
+// System Admin emails to hide from user management
 const ADMIN_EMAILS = [
   'lovellhudson.clavel@carsu.edu.ph',
   'yssahjulianah.barcial@carsu.edu.ph',
@@ -228,12 +214,12 @@ const fetchRealUsers = async () => {
       return []
     }
 
-    // ⭐ Filter out admin emails
+    // ⭐ Filter out system admin emails
     const regularUsers = data.filter(
       (user) => user.email && !ADMIN_EMAILS.includes(user.email.toLowerCase()),
     )
 
-    console.log('✅ Found users:', regularUsers.length, '(excluding admins)')
+    console.log('✅ Found users:', regularUsers.length, '(excluding system admins)')
 
     return regularUsers.map((user) => ({
       id: user.id,
@@ -254,7 +240,7 @@ const fetchRealUsers = async () => {
 // Load data on mount
 onMounted(async () => {
   try {
-    console.log('Starting to fetch admin data from Supabase...')
+    console.log('Starting to fetch system admin data from Supabase...')
     loading.value = true
 
     // Fetch REAL users from Supabase
@@ -415,11 +401,6 @@ const removeUser = async (userId) => {
   }
 }
 
-// Navigation helper
-const goTo = (route, params = {}) => {
-  router.push({ name: route, params })
-}
-
 // Fetch all records function
 const fetchAllRecords = async (type) => {
   try {
@@ -489,7 +470,7 @@ const performClearClientData = async () => {
                       <v-icon size="28" color="white">mdi-view-dashboard</v-icon>
                     </div>
                     <div class="ml-3">
-                      <div class="text-h5 font-weight-bold">Admin Dashboard</div>
+                      <div class="text-h5 font-weight-bold">System Admin Dashboard</div>
                       <div class="text-caption text-grey">Content & Archival Management System</div>
                     </div>
                   </div>
