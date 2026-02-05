@@ -13,6 +13,7 @@ import OtherView from '@/views/system/OtherView.vue'
 import DeliverableView from '@/views/system/DeliverableView.vue'
 import ProjectView from '@/views/system/ProjectView.vue'
 import SettingsView from '@/views/system/SettingsView.vue'
+import ProfileView from '@/views/system/ProfileView.vue'
 import AdminView from '@/views/admin/AdminView.vue'
 import SectionHeadView from '@/views/system/SectionHeadView.vue'
 import TechnicalEditorView from '@/views/system/TechnicalEditorView.vue'
@@ -20,7 +21,7 @@ import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
 import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 import ArchivalManagerView from '@/views/system/ArchivalManagerView.vue'
 
-// Admin email list - users with admin privileges
+// System Admin email list - users with system admin privileges
 const adminEmails = [
   'yssahjulianah.barcial@carsu.edu.ph',
   'lovellhudson.clavel@carsu.edu.ph',
@@ -37,7 +38,7 @@ const requireAuth = (to, from, next) => {
   }
 }
 
-// Admin guard - requires authentication and admin privileges
+// System Admin guard - requires authentication and system admin privileges
 const requireAdmin = (to, from, next) => {
   const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
   if (!isLoggedIn) {
@@ -47,6 +48,7 @@ const requireAdmin = (to, from, next) => {
 
   const userEmail = localStorage.getItem('userEmail')
   if (!userEmail || !adminEmails.includes(userEmail)) {
+    // Not a System Admin - redirect to dashboard
     next({ name: 'dashboard' })
   } else {
     next()
@@ -107,8 +109,14 @@ const router = createRouter({
       component: SettingsView,
       beforeEnter: requireAuth,
     },
+    {
+      path: '/profile',
+      name: 'profile',
+      component: ProfileView,
+      beforeEnter: requireAuth,
+    },
 
-    // Admin Routes
+    // System Admin Routes
     {
       path: '/admin',
       name: 'admin',
