@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS projects (
   completed_at TIMESTAMPTZ,
   section_head_id BIGINT REFERENCES profiles(id) ON DELETE SET NULL,
   created_by BIGINT REFERENCES profiles(id) ON DELETE SET NULL,
+  is_starred BOOLEAN DEFAULT FALSE,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
