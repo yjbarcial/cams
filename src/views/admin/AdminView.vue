@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { projectsService, profilesService } from '@/services/supabaseService'
+import { projectsService, profilesService, archivesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
@@ -12,13 +12,14 @@ const statistics = ref({
   totalUsers: 0,
   activeUsers: 0,
   totalProjects: 0,
-  totalSubmissions: 0,
+  totalPublications: 0,
   recentProjects: [],
-  recentSubmissions: [],
+  recentPublications: [],
 })
 
 const users = ref([])
 const projects = ref([])
+const publications = ref([])
 const loading = ref(true)
 const refreshing = ref(false)
 const error = ref(null)
@@ -33,6 +34,8 @@ const showClearDialog = ref(false)
 const clearTypedConfirm = ref('')
 const clearInProgress = ref(false)
 const clearMessage = ref('')
+const showDeleteDialog = ref(false)
+const publicationToDelete = ref(null)
 
 // Notification state
 const showNotification = ref(false)
@@ -185,13 +188,19 @@ const refreshData = async () => {
     const allProjects = await loadAllProjects()
     projects.value = allProjects
 
-    // Update statistics
+    // Reload publications too
+    const allPublications = await loadPublications()
+    publications.value = allPublications
+
+    // Update statistics - show ALL items
     statistics.value.totalProjects = allProjects.length
     statistics.value.activeProjects = allProjects.filter(
       (p) => p.status === 'in_progress' || p.status === 'under_review',
     ).length
     statistics.value.publishedWorks = allProjects.filter((p) => p.status === 'published').length
-    statistics.value.recentProjects = allProjects.slice(0, 5)
+    statistics.value.totalPublications = allPublications.length
+    statistics.value.recentProjects = allProjects
+    statistics.value.recentPublications = allPublications
 
     console.log('✅ Data refreshed successfully')
   } catch (err) {
@@ -201,21 +210,45 @@ const refreshData = async () => {
   }
 }
 
-// ⭐ CLEANED: Function to load only real submissions from Supabase
-const loadSubmissions = async () => {
+// Load publications/archives from Supabase
+const loadPublications = async () => {
   try {
-    // Get projects with 'submitted' or 'under_review' status
-    const projects = await projectsService.getAll({ status: 'submitted' })
-    return projects.slice(0, 5).map((project) => ({
-      id: project.id,
-      title: project.title,
-      type: project.project_type,
-      submittedAt: project.updated_at,
-      submittedBy: project.created_by || 'Unknown',
-    }))
+    const data = await archivesService.getAll()
+    console.log('✅ Publications loaded:', data.length)
+    return data || []
   } catch (error) {
-    console.error('❌ Error loading submissions:', error)
+    console.error('❌ Error loading publications:', error)
     return []
+  }
+}
+
+// Delete publication
+const confirmDeletePublication = (publication) => {
+  publicationToDelete.value = publication
+  showDeleteDialog.value = true
+}
+
+const deletePublication = async () => {
+  if (!publicationToDelete.value) return
+
+  try {
+    await archivesService.delete(publicationToDelete.value.id)
+
+    // Remove from local array
+    publications.value = publications.value.filter((p) => p.id !== publicationToDelete.value.id)
+
+    // Update statistics - show all remaining publications
+    statistics.value.totalPublications = publications.value.length
+    statistics.value.recentPublications = publications.value
+
+    displayNotification('Publication deleted successfully', 'success')
+    console.log('✅ Publication deleted:', publicationToDelete.value.title)
+  } catch (error) {
+    console.error('❌ Error deleting publication:', error)
+    displayNotification('Failed to delete publication', 'error')
+  } finally {
+    showDeleteDialog.value = false
+    publicationToDelete.value = null
   }
 }
 
@@ -292,10 +325,11 @@ onMounted(async () => {
     const allProjects = await loadAllProjects()
     projects.value = allProjects
 
-    // Load submissions from Supabase
-    const allSubmissions = await loadSubmissions()
+    // Load publications from Supabase
+    const allPublications = await loadPublications()
+    publications.value = allPublications
 
-    // Update statistics
+    // Update statistics - show ALL items in scrollable tables
     statistics.value = {
       totalUsers: users.value.length,
       activeUsers: users.value.filter((u) => u.status === 'active').length,
@@ -304,15 +338,15 @@ onMounted(async () => {
         (p) => p.status === 'in_progress' || p.status === 'under_review',
       ).length,
       publishedWorks: allProjects.filter((p) => p.status === 'published').length,
-      totalSubmissions: allSubmissions.length,
-      recentProjects: allProjects.slice(0, 5),
-      recentSubmissions: allSubmissions,
+      totalPublications: allPublications.length,
+      recentProjects: allProjects,
+      recentPublications: allPublications,
     }
 
     console.log('✅ All data loaded successfully from Supabase:', {
       users: users.value.length,
       projects: allProjects.length,
-      submissions: allSubmissions.length,
+      publications: allPublications.length,
     })
 
     // Set up real-time subscription for projects (optional - will fail silently if connection issues)
@@ -433,8 +467,8 @@ const fetchAllRecords = async (type) => {
     showAllType.value = type
     if (type === 'projects') {
       allRecords.value = projects.value
-    } else if (type === 'submissions') {
-      allRecords.value = statistics.value.recentSubmissions
+    } else if (type === 'publications') {
+      allRecords.value = publications.value
     }
     showAllDialog.value = true
   } catch (err) {
@@ -526,7 +560,7 @@ const performClearClientData = async () => {
               <v-card-text class="px-6 pb-6">
                 <v-row class="stats-cards">
                   <!-- Stats Cards -->
-                  <v-col cols="12" sm="6" md="4">
+                  <v-col cols="12" sm="6" md="3">
                     <v-card class="stat-card stat-card-primary" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -540,7 +574,7 @@ const performClearClientData = async () => {
                     </v-card>
                   </v-col>
 
-                  <v-col cols="12" sm="6" md="4">
+                  <v-col cols="12" sm="6" md="3">
                     <v-card class="stat-card stat-card-success" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -554,7 +588,7 @@ const performClearClientData = async () => {
                     </v-card>
                   </v-col>
 
-                  <v-col cols="12" sm="6" md="4">
+                  <v-col cols="12" sm="6" md="3">
                     <v-card class="stat-card stat-card-info" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -563,6 +597,20 @@ const performClearClientData = async () => {
                         <div class="stat-info">
                           <div class="stat-value">{{ statistics.totalProjects }}</div>
                           <div class="stat-label">Total Projects</div>
+                        </div>
+                      </div>
+                    </v-card>
+                  </v-col>
+
+                  <v-col cols="12" sm="6" md="3">
+                    <v-card class="stat-card stat-card-info" elevation="0">
+                      <div class="stat-card-content">
+                        <div class="stat-icon-wrapper">
+                          <v-icon size="40" color="white">mdi-book-open-page-variant</v-icon>
+                        </div>
+                        <div class="stat-info">
+                          <div class="stat-value">{{ statistics.totalPublications }}</div>
+                          <div class="stat-label">Total Publications</div>
                         </div>
                       </div>
                     </v-card>
@@ -593,7 +641,7 @@ const performClearClientData = async () => {
                         </div>
                       </v-card-title>
                       <v-divider></v-divider>
-                      <v-card-text class="pa-0">
+                      <v-card-text class="pa-0 table-scroll-container">
                         <v-table>
                           <thead>
                             <tr>
@@ -622,6 +670,79 @@ const performClearClientData = async () => {
                                 {{ project.user?.full_name || project.sectionHead }}
                               </td>
                               <td>{{ formatDate(project.created_at) }}</td>
+                            </tr>
+                          </tbody>
+                        </v-table>
+                      </v-card-text>
+                    </v-card>
+                  </v-col>
+                </v-row>
+
+                <!-- All Publications Section -->
+                <v-row class="mt-6">
+                  <v-col cols="12">
+                    <v-card class="data-table-card" elevation="2">
+                      <v-card-title class="table-header px-6 py-4">
+                        <div class="d-flex justify-space-between align-center w-100">
+                          <div class="d-flex align-center">
+                            <div class="icon-wrapper-small success">
+                              <v-icon size="20" color="white">mdi-book-open-page-variant</v-icon>
+                            </div>
+                            <span class="text-h6 font-weight-bold ml-3">All Publications</span>
+                          </div>
+                          <v-btn
+                            variant="text"
+                            color="#757575"
+                            @click="fetchAllRecords('publications')"
+                            class="view-details-btn"
+                          >
+                            View Details
+                            <v-icon end size="18">mdi-chevron-right</v-icon>
+                          </v-btn>
+                        </div>
+                      </v-card-title>
+                      <v-divider></v-divider>
+                      <v-card-text class="pa-0 table-scroll-container">
+                        <v-table>
+                          <thead>
+                            <tr>
+                              <th class="text-center" style="width: 60px">#</th>
+                              <th>Title</th>
+                              <th>Category</th>
+                              <th>Date Published</th>
+                              <th class="text-center" style="width: 120px">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr
+                              v-for="(publication, index) in statistics.recentPublications"
+                              :key="publication.id"
+                            >
+                              <td class="text-center">{{ index + 1 }}</td>
+                              <td>{{ publication.title || 'Untitled' }}</td>
+                              <td>
+                                <v-chip color="success" size="small">
+                                  {{ publication.category || 'General' }}
+                                </v-chip>
+                              </td>
+                              <td>{{ formatDate(publication.created_at) }}</td>
+                              <td class="text-center">
+                                <v-btn
+                                  icon
+                                  size="small"
+                                  color="error"
+                                  variant="text"
+                                  @click="confirmDeletePublication(publication)"
+                                  title="Delete Publication"
+                                >
+                                  <v-icon>mdi-delete</v-icon>
+                                </v-btn>
+                              </td>
+                            </tr>
+                            <tr v-if="statistics.recentPublications.length === 0">
+                              <td colspan="5" class="text-center text-grey py-4">
+                                No publications yet. Upload content to get started.
+                              </td>
                             </tr>
                           </tbody>
                         </v-table>
@@ -689,6 +810,39 @@ const performClearClientData = async () => {
                   </v-card>
                 </v-dialog>
 
+                <!-- Delete Publication Confirmation Dialog -->
+                <v-dialog v-model="showDeleteDialog" max-width="500">
+                  <v-card>
+                    <v-card-title class="text-h6 d-flex justify-space-between align-center">
+                      <div>
+                        <v-icon class="mr-2" color="error">mdi-delete-alert</v-icon>
+                        Delete Publication
+                      </div>
+                      <v-btn icon @click="showDeleteDialog = false">
+                        <v-icon>mdi-close</v-icon>
+                      </v-btn>
+                    </v-card-title>
+                    <v-card-text>
+                      <p class="mb-3">Are you sure you want to delete this publication?</p>
+                      <v-alert type="warning" density="compact" class="mb-3">
+                        <strong>{{ publicationToDelete?.title || 'Untitled' }}</strong>
+                      </v-alert>
+                      <p class="text-caption text-grey">
+                        This action cannot be undone. The publication will be permanently removed
+                        from the system.
+                      </p>
+                    </v-card-text>
+                    <v-card-actions>
+                      <v-spacer />
+                      <v-btn variant="text" @click="showDeleteDialog = false">Cancel</v-btn>
+                      <v-btn color="error" @click="deletePublication">
+                        <v-icon left>mdi-delete</v-icon>
+                        Delete
+                      </v-btn>
+                    </v-card-actions>
+                  </v-card>
+                </v-dialog>
+
                 <!-- View All Dialog -->
                 <v-dialog v-model="showAllDialog" max-width="1200">
                   <v-card>
@@ -698,10 +852,10 @@ const performClearClientData = async () => {
                           {{
                             showAllType === 'projects'
                               ? 'mdi-folder-multiple'
-                              : 'mdi-file-document-multiple'
+                              : 'mdi-book-open-page-variant'
                           }}
                         </v-icon>
-                        All {{ showAllType === 'projects' ? 'Projects' : 'Submissions' }} Details
+                        All {{ showAllType === 'projects' ? 'Projects' : 'Publications' }} Details
                       </div>
                       <v-btn icon @click="showAllDialog = false">
                         <v-icon>mdi-close</v-icon>
@@ -713,32 +867,61 @@ const performClearClientData = async () => {
                           <tr>
                             <th class="text-center" style="width: 60px">#</th>
                             <th>Title</th>
-                            <th>Type</th>
+                            <th>{{ showAllType === 'projects' ? 'Type' : 'Category' }}</th>
                             <th v-if="showAllType === 'projects'">Status</th>
-                            <th v-else>Department</th>
-                            <th>
-                              {{ showAllType === 'projects' ? 'Created By' : 'Submitted By' }}
-                            </th>
+                            <th v-if="showAllType === 'projects'">Created By</th>
                             <th>Date</th>
+                            <th v-if="showAllType === 'publications'" class="text-center">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr v-for="(record, index) in allRecords" :key="record.id">
                             <td class="text-center">{{ index + 1 }}</td>
-                            <td>{{ record.title }}</td>
-                            <td>{{ record.type }}</td>
+                            <td>{{ record.title || 'Untitled' }}</td>
                             <td>
                               <v-chip
-                                v-if="showAllType === 'projects'"
-                                :color="getStatusColor(record.status)"
+                                :color="showAllType === 'projects' ? 'primary' : 'success'"
                                 size="small"
                               >
+                                {{
+                                  showAllType === 'projects'
+                                    ? record.type
+                                    : record.category || 'General'
+                                }}
+                              </v-chip>
+                            </td>
+                            <td v-if="showAllType === 'projects'">
+                              <v-chip :color="getStatusColor(record.status)" size="small">
                                 {{ formatStatus(record.status) }}
                               </v-chip>
-                              <span v-else>{{ record.department }}</span>
                             </td>
-                            <td>{{ record.user?.full_name || record.sectionHead }}</td>
+                            <td v-if="showAllType === 'projects'">
+                              {{ record.user?.full_name || record.sectionHead }}
+                            </td>
                             <td>{{ formatDate(record.created_at) }}</td>
+                            <td v-if="showAllType === 'publications'" class="text-center">
+                              <v-btn
+                                icon
+                                size="small"
+                                color="error"
+                                variant="text"
+                                @click="confirmDeletePublication(record)"
+                                title="Delete Publication"
+                              >
+                                <v-icon>mdi-delete</v-icon>
+                              </v-btn>
+                            </td>
+                          </tr>
+                          <tr v-if="allRecords.length === 0">
+                            <td
+                              :colspan="showAllType === 'publications' ? 5 : 6"
+                              class="text-center text-grey py-4"
+                            >
+                              No
+                              {{ showAllType === 'projects' ? 'projects' : 'publications' }} found.
+                            </td>
                           </tr>
                         </tbody>
                       </v-table>
@@ -954,6 +1137,14 @@ const performClearClientData = async () => {
   background: #2c3e50;
 }
 
+.icon-wrapper-small.primary {
+  background: #f5c52b;
+}
+
+.icon-wrapper-small.success {
+  background: #4caf50;
+}
+
 .refresh-btn,
 .clear-btn {
   text-transform: none !important;
@@ -974,10 +1165,11 @@ const performClearClientData = async () => {
 
 .stat-card {
   border-radius: 16px !important;
-  padding: 24px;
+  padding: 24px 24px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   border: 2px solid #e0e0e0 !important;
+  height: 100%;
 }
 
 .stat-card:hover {
@@ -1015,37 +1207,46 @@ const performClearClientData = async () => {
   display: flex;
   align-items: center;
   gap: 16px;
+  justify-content: flex-start;
 }
 
 .stat-icon-wrapper {
-  width: 64px;
-  height: 64px;
-  border-radius: 12px;
+  width: 68px;
+  height: 68px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
 }
 
 .stat-card-success .stat-icon-wrapper {
   background: #f5c52b;
 }
 
+.stat-card-info .stat-icon-wrapper,
+.stat-card-warning .stat-icon-wrapper {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .stat-info {
   flex: 1;
+  min-width: 0;
 }
 
 .stat-value {
-  font-size: 2rem;
+  font-size: 2.125rem;
   font-weight: 700;
-  line-height: 1;
-  margin-bottom: 8px;
+  line-height: 1.2;
+  margin-bottom: 6px;
 }
 
 .stat-label {
-  font-size: 0.875rem;
-  opacity: 0.9;
+  font-size: 0.9rem;
+  opacity: 0.95;
   font-weight: 500;
+  line-height: 1.3;
 }
 
 /* Data Table Cards */
@@ -1053,6 +1254,30 @@ const performClearClientData = async () => {
   border-radius: 16px !important;
   overflow: hidden;
   background: white;
+}
+
+.table-scroll-container {
+  max-height: 400px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.table-scroll-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #bdbdbd;
+  border-radius: 4px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #9e9e9e;
 }
 
 .table-header {

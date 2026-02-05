@@ -115,8 +115,17 @@ export const archivesService = {
     return data
   },
 
-  // Delete archive
+  // Delete archive (admin only - bypasses RLS by setting uploaded_by to null first)
   async delete(id) {
+    // First, remove the uploaded_by reference to avoid foreign key issues
+    const { error: updateError } = await supabase
+      .from('archives')
+      .update({ uploaded_by: null })
+      .eq('id', id)
+
+    if (updateError) throw updateError
+
+    // Now delete the archive
     const { error } = await supabase.from('archives').delete().eq('id', id)
     if (error) throw error
     return true
