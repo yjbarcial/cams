@@ -6,6 +6,7 @@ import { supabase } from '@/utils/supabase'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import UploadView from '@/views/system/UploadView.vue'
+import AdminPasswordReset from '@/components/admin/AdminPasswordReset.vue'
 import clearClientData from '@/utils/clearClientData'
 
 const router = useRouter()
@@ -376,9 +377,15 @@ const formatDate = (date) => {
 
 // Remove user from Supabase
 const removeUser = async (userId) => {
-  if (!confirm('Are you sure you want to remove this user?')) return
+  const user = users.value.find((u) => u.id === userId)
+  if (!user) return
+
+  const confirmMsg = `Are you sure you want to remove ${user.email || 'this user'}?\n\nNote: This only removes from profiles. To fully delete, go to Supabase Dashboard → Authentication → Users.`
+
+  if (!confirm(confirmMsg)) return
 
   try {
+    // Only delete from profiles table (frontend can't delete from auth.users)
     const { error } = await supabase.from('profiles').delete().eq('id', userId)
 
     if (error) throw error
@@ -390,10 +397,22 @@ const removeUser = async (userId) => {
       statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
     }
 
-    alert('User removed successfully!')
+    alert(
+      'User removed from profiles successfully!\n\nTo fully delete from authentication, go to Supabase Dashboard → Authentication → Users → Delete user.',
+    )
   } catch (err) {
     console.error('Error removing user:', err)
-    alert(`Failed to remove user: ${err.message}`)
+
+    // Provide helpful error message
+    if (err.message?.includes('foreign key') || err.message?.includes('violates')) {
+      alert(
+        'Cannot delete user: This user has associated data (projects, comments, etc.).\n\nTo delete:\n1. First delete/reassign their projects\n2. Then try again\n\nOr manually delete from Supabase Dashboard.',
+      )
+    } else {
+      alert(
+        `Failed to delete user: ${err.message}\n\nTry using Supabase Dashboard → Authentication → Users → Delete user instead.`,
+      )
+    }
   }
 }
 
@@ -738,6 +757,10 @@ const performClearClientData = async () => {
                   <v-icon start size="20" color="#424242">mdi-folder-multiple</v-icon>
                   Content Management
                 </v-tab>
+                <v-tab value="password-reset">
+                  <v-icon start size="20" color="#424242">mdi-lock-reset</v-icon>
+                  Password Reset
+                </v-tab>
               </v-tabs>
 
               <v-divider></v-divider>
@@ -826,6 +849,13 @@ const performClearClientData = async () => {
                       </div>
                     </div>
                     <UploadView v-else @close="showUploadView = false" />
+                  </v-card-text>
+                </v-window-item>
+
+                <!-- Password Reset Tab -->
+                <v-window-item value="password-reset">
+                  <v-card-text>
+                    <AdminPasswordReset />
                   </v-card-text>
                 </v-window-item>
               </v-window>
