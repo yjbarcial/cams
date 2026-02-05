@@ -61,6 +61,11 @@ const loadCurrentUserProfile = async () => {
 
       if (profiles) {
         currentUserProfile.value = profiles
+        // Store userId in localStorage if not already set
+        if (!localStorage.getItem('userId') && profiles.id) {
+          localStorage.setItem('userId', profiles.id)
+          console.log('🔑 UserId stored in localStorage:', profiles.id)
+        }
       }
     }
   } catch (error) {
@@ -77,6 +82,9 @@ const tempTitle = ref(project.value.title)
 const editorContent = ref('')
 const isEditing = ref(true) // Always true now - auto-edit mode
 const quillEditorRef = ref(null)
+
+// Project members for permission checking
+const projectMemberIds = ref([])
 
 // Auto-save state
 const lastSaveTime = ref(null)
@@ -146,6 +154,13 @@ const startEditingTitle = () => {
 }
 
 const saveTitleEdit = async () => {
+  // Check permission before saving
+  if (!canEditProject.value) {
+    showNotification('You do not have permission to edit this project', 'error')
+    cancelTitleEdit()
+    return
+  }
+
   if (tempTitle.value.trim()) {
     project.value.title = tempTitle.value.trim()
     isEditingTitle.value = false
@@ -207,6 +222,14 @@ const previousContent = ref('')
 
 // Enhanced auto-save content function with API
 const saveContent = async (showNotif = false) => {
+  // Check permission before saving
+  if (!canEditProject.value) {
+    if (showNotif) {
+      showNotification('You do not have permission to edit this project', 'error')
+    }
+    return false
+  }
+
   if (quillEditorRef.value) {
     const content = quillEditorRef.value.getContent()
 
@@ -323,6 +346,12 @@ const toggleEdit = () => {
 }
 
 const saveAsDraft = () => {
+  // Check permission before saving
+  if (!canEditProject.value) {
+    showNotification('You do not have permission to edit this project', 'error')
+    return
+  }
+
   saveContent(true) // Show notification for manual save
 
   // Update status to draft if not already
@@ -473,6 +502,47 @@ const projectTypeMap = {
   'social-media': '/other', // social-media projects route to /other
 }
 
+// Permission checking - determine if current user can edit this project
+const canEditProject = computed(() => {
+  const userRole = localStorage.getItem('userRole')
+  const userId = localStorage.getItem('userId')
+
+  console.log('🔐 Permission Check:', {
+    userRole,
+    userId,
+    projectMemberIds: projectMemberIds.value,
+    currentUserProfile: currentUserProfile.value?.id,
+  })
+
+  // Admins, editors, and section heads can always edit
+  if (userRole === 'admin' || userRole === 'editor' || userRole === 'section_head') {
+    console.log('✅ Permission granted: Admin/Editor/Section Head role')
+    return true
+  }
+
+  // Members (writers/artists) can only edit projects they are assigned to
+  if (userRole === 'member') {
+    // Try to get userId from currentUserProfile if not in localStorage
+    const effectiveUserId = userId || currentUserProfile.value?.id
+
+    if (projectMemberIds.value.length > 0 && effectiveUserId) {
+      const hasAccess = projectMemberIds.value.includes(parseInt(effectiveUserId))
+      console.log('🔍 Member permission check:', {
+        effectiveUserId,
+        memberIds: projectMemberIds.value,
+        hasAccess,
+      })
+      return hasAccess
+    }
+    console.log('❌ Permission denied: No userId or no project members')
+    return false
+  }
+
+  console.log('❌ Permission denied: No valid role')
+  // Default to false for safety
+  return false
+})
+
 const performNavigation = () => {
   // For other/social-media types, route to /other
   const route = projectTypeMap[projectType.value] || '/magazine'
@@ -487,6 +557,7 @@ const loadProjectComments = async () => {
   } catch (error) {
     console.error('Error loading comments:', error)
     comments.value = []
+    console.log('📋 Project member IDs:', projectMemberIds.value)
   }
 }
 
@@ -503,6 +574,9 @@ const loadProjectData = async () => {
     // Load project members with their profile info
     const members = await projectsService.getMembers(projectId)
     console.log('✅ Project members loaded:', members)
+
+    // Store member user IDs for permission checking
+    projectMemberIds.value = members.map((m) => m.user_id)
 
     // Get section head name from section_head_id
     let sectionHeadName = 'Not assigned'
@@ -853,6 +927,18 @@ const getBackButtonText = computed(() => {
 
     <v-main class="main-content">
       <v-container fluid class="project-container pa-5">
+        <!-- Read-Only Banner for users without edit permission -->
+        <v-alert
+          v-if="!canEditProject"
+          type="info"
+          variant="tonal"
+          class="mb-4"
+          density="compact"
+          icon="mdi-eye"
+        >
+          You are viewing this project in read-only mode. Only assigned writers/artists can edit.
+        </v-alert>
+
         <v-row>
           <!-- Left Panel - Project Details and Editor -->
           <v-col cols="12" lg="8" class="left-panel">
@@ -860,12 +946,18 @@ const getBackButtonText = computed(() => {
             <div class="title-section">
               <h1
                 v-if="!isEditingTitle"
-                class="project-title editable-title"
-                @click="startEditingTitle"
-                title="Click to edit title"
+                class="project-title"
+                :class="{ 'editable-title': canEditProject }"
+                @click="canEditProject && startEditingTitle()"
+                :title="
+                  canEditProject
+                    ? 'Click to edit title'
+                    : 'You do not have permission to edit this project'
+                "
               >
                 {{ project.title }}
-                <v-icon class="edit-icon" size="20">mdi-pencil</v-icon>
+                <v-icon v-if="canEditProject" class="edit-icon" size="20">mdi-pencil</v-icon>
+                <v-icon v-else class="lock-icon" size="18" color="#9ca3af">mdi-lock</v-icon>
               </h1>
               <div v-else class="title-edit-container">
                 <v-text-field
@@ -960,7 +1052,7 @@ const getBackButtonText = computed(() => {
               <QuillEditor
                 ref="quillEditorRef"
                 v-model="editorContent"
-                :read-only="false"
+                :read-only="!canEditProject"
                 :project-id="projectId"
                 :project-type="projectType"
                 height="500px"
@@ -977,14 +1069,21 @@ const getBackButtonText = computed(() => {
                 @click="toggleEdit"
                 variant="outlined"
                 class="edit-btn"
-                :disabled="!canSubmitProject"
+                :disabled="!canSubmitProject || !canEditProject"
               >
                 Submit for Approval
               </v-btn>
-              <v-btn @click="saveAsDraft" variant="outlined" class="draft-btn">
+              <v-btn
+                @click="saveAsDraft"
+                variant="outlined"
+                class="draft-btn"
+                :disabled="!canEditProject"
+              >
                 Save as Draft
               </v-btn>
-              <v-btn variant="outlined" class="remove-btn"> Remove Submission </v-btn>
+              <v-btn variant="outlined" class="remove-btn" :disabled="!canEditProject">
+                Remove Submission
+              </v-btn>
             </div>
           </v-col>
 
@@ -1346,10 +1445,20 @@ const getBackButtonText = computed(() => {
   color: #374151;
 }
 
+.project-title:not(.editable-title) {
+  cursor: default;
+  padding: 8px 12px;
+}
+
 .edit-icon {
   opacity: 0;
   transition: opacity 0.2s ease;
   color: #6b7280;
+}
+
+.lock-icon {
+  opacity: 0.5;
+  margin-left: 8px;
 }
 
 .editable-title:hover .edit-icon {
