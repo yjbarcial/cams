@@ -6,7 +6,6 @@ import { supabase } from '@/utils/supabase'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import UploadView from '@/views/system/UploadView.vue'
-import AdminPasswordReset from '@/components/admin/AdminPasswordReset.vue'
 import clearClientData from '@/utils/clearClientData'
 
 const router = useRouter()
@@ -757,10 +756,6 @@ const performClearClientData = async () => {
                   <v-icon start size="20" color="#424242">mdi-folder-multiple</v-icon>
                   Content Management
                 </v-tab>
-                <v-tab value="password-reset">
-                  <v-icon start size="20" color="#424242">mdi-lock-reset</v-icon>
-                  Password Reset
-                </v-tab>
               </v-tabs>
 
               <v-divider></v-divider>
@@ -849,13 +844,6 @@ const performClearClientData = async () => {
                       </div>
                     </div>
                     <UploadView v-else @close="showUploadView = false" />
-                  </v-card-text>
-                </v-window-item>
-
-                <!-- Password Reset Tab -->
-                <v-window-item value="password-reset">
-                  <v-card-text>
-                    <AdminPasswordReset />
                   </v-card-text>
                 </v-window-item>
               </v-window>
