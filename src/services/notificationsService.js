@@ -228,6 +228,13 @@ export const createStatusChangeNotification = ({
     if (comments) {
       description += ` ${comments}`
     }
+  } else if (newStatus === 'returned_by_section_head' && oldStatus === 'To Chief Adviser') {
+    // Special case: Rejection by Chief Adviser sends it back to artist/writer
+    type = 'Rejected'
+    description = `${actionBy} rejected "${projectTitle}" and sent it back for major revisions.`
+    if (comments) {
+      description += ` ${comments}`
+    }
   } else if (newStatus === 'Rejected by Chief Adviser' || newStatus.includes('Rejected')) {
     type = 'Rejected'
     description = `${actionBy} rejected "${projectTitle}".`

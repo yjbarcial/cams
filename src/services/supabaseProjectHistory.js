@@ -63,9 +63,9 @@ const transformVersionFromDB = (dbVersion) => {
     projectType: dbVersion.project_type || 'magazine',
     versionNumber: dbVersion.version_number,
     timestamp: dbVersion.created_at,
-    author: dbVersion.author,
+    author: dbVersion.metadata?.author || dbVersion.author || 'Unknown',
     changeDescription: dbVersion.change_description,
-    versionType: dbVersion.version_type,
+    versionType: dbVersion.metadata?.versionType || dbVersion.version_type || 'draft',
     data: {
       title: dbVersion.project_data?.title || '',
       description: dbVersion.project_data?.description || '',
@@ -79,7 +79,7 @@ const transformVersionFromDB = (dbVersion) => {
       mediaUploaded: dbVersion.project_data?.mediaUploaded || '',
       metadata: dbVersion.metadata || {},
     },
-    comments: (dbVersion.project_history_comments || []).map((comment) => ({
+    comments: (dbVersion.version_comments || []).map((comment) => ({
       id: comment.id,
       author: comment.author,
       content: comment.content,
@@ -87,8 +87,8 @@ const transformVersionFromDB = (dbVersion) => {
       isApproved: comment.is_approved,
     })),
     tags: [],
-    isActive: dbVersion.is_active,
-    isDeleted: dbVersion.is_deleted,
+    isActive: dbVersion.is_active || false,
+    isDeleted: dbVersion.is_deleted || false,
   }
 }
 
@@ -215,19 +215,49 @@ export const createProjectVersion = async (
 
     const nextVersionNumber = versions?.length > 0 ? versions[0].version_number + 1 : 1
 
-    // Mark all previous versions as inactive
-    await supabase
-      .from('project_history')
-      .update({ is_active: false })
-      .eq('project_id', actualProjectId)
+    // Get current user email
+    const currentUserId = await getCurrentUserId()
+    if (!currentUserId) {
+      console.warn('No user ID found, cannot create version history')
+      throw new Error('User not authenticated')
+    }
+
+    // Get user email
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userEmail = user?.email
+
+    // Get profile ID from profiles table using email
+    let authorProfileId = null
+    if (userEmail) {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', userEmail)
+          .maybeSingle()
+
+        if (profile) {
+          authorProfileId = profile.id
+        }
+      } catch (error) {
+        console.warn('Could not fetch profile ID:', error)
+      }
+    }
+
+    // If no profile ID found, we can't create version (author_id is required)
+    if (!authorProfileId) {
+      console.warn('No profile ID found for user email:', userEmail, '- skipping version creation')
+      throw new Error('Profile not found for current user')
+    }
 
     // Create new version
     const versionData = {
       project_id: actualProjectId,
       version_number: nextVersionNumber,
-      version_type: versionType,
       change_description: changeDescription || 'No description provided',
-      author,
+      author_id: authorProfileId,
       project_data: {
         title: projectData.title,
         description: projectData.description,
@@ -244,21 +274,22 @@ export const createProjectVersion = async (
         wordCount: projectData.content ? countWords(projectData.content) : 0,
         characterCount: projectData.content ? projectData.content.length : 0,
         lastModified: new Date().toISOString(),
+        author: author, // Store author in metadata instead
+        versionType: versionType, // Store version type in metadata instead
       },
-      is_active: true,
       created_at: new Date().toISOString(),
     }
 
     const { data: version, error } = await supabase
       .from('project_history')
       .insert(versionData)
-      .select(
-        `
-        *,
-        project_history_comments (*)
-      `,
-      )
+      .select('*')
       .maybeSingle()
+
+    // Attach empty comments array since it's a new version
+    if (version) {
+      version.version_comments = []
+    }
 
     if (error) {
       console.error('Error creating version in Supabase:', error)
@@ -284,21 +315,24 @@ export const createProjectVersion = async (
  */
 export const getProjectHistory = async (projectType, projectId) => {
   try {
-    const { data, error } = await supabase
+    // Fetch project history
+    const { data: historyData, error: historyError } = await supabase
       .from('project_history')
-      .select(
-        `
-        *,
-        project_history_comments (*)
-      `,
-      )
+      .select('*')
       .eq('project_id', projectId)
-      .eq('is_deleted', false)
       .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (historyError) throw historyError
 
-    return (data || []).map(transformVersionFromDB)
+    if (!historyData || historyData.length === 0) return []
+
+    // Attach empty comments array since version_comments table doesn't exist
+    const versionsWithComments = historyData.map((version) => ({
+      ...version,
+      version_comments: [], // No comments table available
+    }))
+
+    return versionsWithComments.map(transformVersionFromDB)
   } catch (error) {
     console.error('Error fetching project history:', error)
     throw error
@@ -324,17 +358,21 @@ export const getActiveProjectHistory = async (projectType, projectId) => {
  */
 export const getProjectVersion = async (projectType, projectId, versionId) => {
   try {
-    const { data, error } = await supabase
+    const { data: versionData, error } = await supabase
       .from('project_history')
-      .select(
-        `
-        *,
-        project_history_comments (*)
-      `,
-      )
+      .select('*')
       .eq('id', versionId)
       .eq('project_id', projectId)
       .maybeSingle()
+
+    if (error) throw error
+    if (!versionData) return null
+
+    // Attach empty comments array since version_comments table doesn't exist
+    const data = {
+      ...versionData,
+      version_comments: [], // No comments table available
+    }
 
     if (error) {
       throw error
@@ -422,20 +460,10 @@ export const restoreProjectVersion = async (projectType, projectId, versionId) =
  */
 export const addVersionComment = async (projectType, projectId, versionId, comment, author) => {
   try {
-    const { data, error } = await supabase
-      .from('project_history_comments')
-      .insert({
-        project_history_id: versionId,
-        author,
-        content: comment,
-        is_approved: false,
-      })
-      .select()
-      .maybeSingle()
+    // version_comments table doesn't exist, so skip comment creation
+    console.warn('version_comments table does not exist - comments are not supported')
 
-    if (error) throw error
-
-    // Return the updated version with comments
+    // Return the version without adding comment
     const version = await getProjectVersion(projectType, projectId, versionId)
     return version
   } catch (error) {
@@ -445,7 +473,7 @@ export const addVersionComment = async (projectType, projectId, versionId, comme
 }
 
 /**
- * Delete a specific version (soft delete)
+ * Delete a specific version
  * @param {string} projectType - Type of project
  * @param {string} projectId - Project identifier
  * @param {string} versionId - Version identifier
@@ -453,13 +481,8 @@ export const addVersionComment = async (projectType, projectId, versionId, comme
  */
 export const deleteProjectVersion = async (projectType, projectId, versionId) => {
   try {
-    const { error } = await supabase
-      .from('project_history')
-      .update({
-        is_deleted: true,
-        deleted_at: new Date().toISOString(),
-      })
-      .eq('id', versionId)
+    // Delete the version from database
+    const { error } = await supabase.from('project_history').delete().eq('id', versionId)
 
     if (error) throw error
     return true
@@ -477,16 +500,11 @@ export const deleteProjectVersion = async (projectType, projectId, versionId) =>
  */
 export const getProjectStatistics = async (projectType, projectId) => {
   try {
+    // Fetch project history
     const { data: versions, error } = await supabase
       .from('project_history')
-      .select(
-        `
-        *,
-        project_history_comments (*)
-      `,
-      )
+      .select('*')
       .eq('project_id', projectId)
-      .eq('is_deleted', false)
 
     if (error) throw error
 
@@ -501,22 +519,31 @@ export const getProjectStatistics = async (projectType, projectId) => {
       }
     }
 
-    const totalComments = versions.reduce(
-      (sum, v) => sum + (v.project_history_comments?.length || 0),
+    // Attach empty comments array since version_comments table doesn't exist
+    const versionsWithComments = versions.map((version) => ({
+      ...version,
+      version_comments: [], // No comments table available
+    }))
+
+    const totalComments = versionsWithComments.reduce(
+      (sum, v) => sum + (v.version_comments?.length || 0),
       0,
     )
-    const totalWords = versions.reduce((sum, v) => sum + (v.metadata?.wordCount || 0), 0)
-    const versionTypes = versions.reduce((acc, v) => {
+    const totalWords = versionsWithComments.reduce(
+      (sum, v) => sum + (v.metadata?.wordCount || 0),
+      0,
+    )
+    const versionTypes = versionsWithComments.reduce((acc, v) => {
       acc[v.version_type] = (acc[v.version_type] || 0) + 1
       return acc
     }, {})
 
     return {
-      totalVersions: versions.length,
+      totalVersions: versionsWithComments.length,
       totalComments,
-      firstVersion: transformVersionFromDB(versions[versions.length - 1]),
-      lastVersion: transformVersionFromDB(versions[0]),
-      averageWordsPerVersion: Math.round(totalWords / versions.length),
+      firstVersion: transformVersionFromDB(versionsWithComments[versionsWithComments.length - 1]),
+      lastVersion: transformVersionFromDB(versionsWithComments[0]),
+      averageWordsPerVersion: Math.round(totalWords / versionsWithComments.length),
       versionTypes,
     }
   } catch (error) {

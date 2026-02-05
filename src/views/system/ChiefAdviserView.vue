@@ -163,7 +163,7 @@ const approvalActions = computed(() => {
 const getNextStatus = (action) => {
   if (action === 'approve') return 'For Publish' // Changed from 'EIC Approved' to 'For Publish'
   if (action === 'return') return 'Returned by Chief Adviser'
-  if (action === 'reject') return 'Rejected by Chief Adviser'
+  if (action === 'reject') return 'returned_by_section_head' // Send back to artist and writer
   return project.value.status
 }
 
@@ -176,7 +176,7 @@ const getCommentPlaceholder = () => {
     return 'Explain what needs to be improved or reconsidered...'
   }
   if (approvalAction.value === 'reject') {
-    return 'Explain why this project is being rejected...'
+    return 'Explain what major revisions are needed for the Artist and Writer...'
   }
   return 'Add your comments...'
 }
@@ -302,9 +302,9 @@ const submitApproval = async () => {
         projectType: project.value.type,
         projectTitle: project.value.title,
         oldStatus: 'To Chief Adviser',
-        newStatus: 'Rejected by Chief Adviser',
+        newStatus: 'returned_by_section_head',
         actionBy: currentUser.value,
-        recipient: 'Editor-in-Chief',
+        recipient: 'Artist and Writer',
         comments: approvalComments.value,
       })
     }
@@ -320,7 +320,7 @@ const submitApproval = async () => {
             ? 'Approved by Chief Adviser - Ready for Publishing'
             : action === 'return'
               ? 'Returned by Chief Adviser for reconsideration'
-              : 'Rejected by Chief Adviser',
+              : 'Rejected by Chief Adviser - Returned to Artist and Writer',
           currentUser.value,
         )
         console.log('Project version saved to Supabase successfully')
@@ -341,7 +341,7 @@ const submitApproval = async () => {
     } else if (action === 'return') {
       showNotification('Project returned for reconsideration', 'warning')
     } else if (action === 'reject') {
-      showNotification('Project rejected', 'error')
+      showNotification('Project rejected and sent back to Artist and Writer', 'error')
     }
 
     setTimeout(() => {
@@ -892,8 +892,8 @@ onMounted(() => {
                 returned for reconsideration.
               </template>
               <template v-else-if="approvalAction === 'reject'">
-                Reject <strong>"{{ project.title }}"</strong>. This project will be marked as
-                rejected and cannot be published.
+                Reject <strong>"{{ project.title }}"</strong> and send it back to the Artist and
+                Writer for major revisions.
               </template>
             </p>
           </div>
@@ -957,7 +957,8 @@ onMounted(() => {
               <v-icon size="20">mdi-close-circle-outline</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Final Action:</strong> Project will be permanently rejected.
+              <strong>Action:</strong> Project will be sent back to Artist and Writer for major
+              revisions.
             </div>
           </v-alert>
         </v-card-text>

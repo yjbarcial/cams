@@ -9,7 +9,7 @@ import {
   getProjectStatistics,
   deleteProjectVersion,
   getActiveProjectHistory,
-} from '@/services/localProjectHistory.js'
+} from '@/services/supabaseProjectHistory.js'
 
 const props = defineProps({
   projectId: {
@@ -56,11 +56,11 @@ const hasSelection = computed(() => selectedVersions.value.length > 0)
 const canCompare = computed(() => selectedVersions.value.length === 2)
 
 // Methods
-const loadHistory = () => {
+const loadHistory = async () => {
   try {
     loading.value = true
-    history.value = getActiveProjectHistory(props.projectType, props.projectId)
-    statistics.value = getProjectStatistics(props.projectType, props.projectId)
+    history.value = await getActiveProjectHistory(props.projectType, props.projectId)
+    statistics.value = await getProjectStatistics(props.projectType, props.projectId)
   } catch (err) {
     error.value = 'Failed to load project history'
     console.error('Error loading history:', err)
@@ -127,12 +127,16 @@ const restoreVersion = (versionId) => {
   pendingVersionId.value = versionId
   showConfirm(
     'Are you sure you want to restore this version? This will create a new version with the restored content.',
-    () => {
+    async () => {
       try {
         loading.value = true
-        const restoredProject = restoreProjectVersion(props.projectType, props.projectId, versionId)
+        const restoredProject = await restoreProjectVersion(
+          props.projectType,
+          props.projectId,
+          versionId,
+        )
         emit('version-restored', restoredProject)
-        loadHistory() // Reload history
+        await loadHistory() // Reload history
         showNotification('Version restored successfully', 'success')
       } catch (err) {
         showNotification('Failed to restore version', 'error')
@@ -145,11 +149,11 @@ const restoreVersion = (versionId) => {
   )
 }
 
-const addComment = (versionId) => {
+const addComment = async (versionId) => {
   if (!newComment.value.trim()) return
 
   try {
-    addVersionComment(
+    await addVersionComment(
       props.projectType,
       props.projectId,
       versionId,
@@ -157,7 +161,7 @@ const addComment = (versionId) => {
       'Current User',
     )
     newComment.value = ''
-    loadHistory() // Reload to get updated comments
+    await loadHistory() // Reload to get updated comments
     showNotification('Comment added successfully', 'success')
   } catch (err) {
     showNotification('Failed to add comment', 'error')
@@ -167,23 +171,26 @@ const addComment = (versionId) => {
 
 const deleteVersion = (versionId) => {
   pendingVersionId.value = versionId
-  showConfirm('Are you sure you want to delete this version? This action cannot be undone.', () => {
-    try {
-      const success = deleteProjectVersion(props.projectType, props.projectId, versionId)
-      if (success) {
-        emit('version-deleted', versionId)
-        loadHistory() // Reload history
-        showNotification('Version deleted successfully', 'success')
-      } else {
+  showConfirm(
+    'Are you sure you want to delete this version? This action cannot be undone.',
+    async () => {
+      try {
+        const success = await deleteProjectVersion(props.projectType, props.projectId, versionId)
+        if (success) {
+          emit('version-deleted', versionId)
+          await loadHistory() // Reload history
+          showNotification('Version deleted successfully', 'success')
+        } else {
+          showNotification('Failed to delete version', 'error')
+        }
+      } catch (err) {
         showNotification('Failed to delete version', 'error')
+        console.error('Error deleting version:', err)
+      } finally {
+        pendingVersionId.value = null
       }
-    } catch (err) {
-      showNotification('Failed to delete version', 'error')
-      console.error('Error deleting version:', err)
-    } finally {
-      pendingVersionId.value = null
-    }
-  })
+    },
+  )
 }
 
 const formatDate = (dateString) => {
