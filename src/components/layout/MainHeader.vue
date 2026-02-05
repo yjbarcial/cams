@@ -51,18 +51,24 @@ const handleStorageChange = (e) => {
   }
 }
 
-// Admin email list - must match router adminEmails
+// System Admin email list - must match router adminEmails
 const adminEmails = [
   'yssahjulianah.barcial@carsu.edu.ph',
   'lovellhudson.clavel@carsu.edu.ph',
   'altheaguila.gorres@carsu.edu.ph',
 ]
 
-// Check if current user is an admin
+// Check if current user is a System Admin
 const isAdmin = computed(() => {
   const userEmail = localStorage.getItem('userEmail')
   return userEmail && adminEmails.includes(userEmail)
 })
+
+const handleProfile = () => {
+  console.log('Profile clicked')
+  showAccountMenu.value = false
+  router.push('/profile')
+}
 
 const handleSettings = () => {
   console.log('Settings clicked')
@@ -126,13 +132,13 @@ const goToDashboard = () => {
         ></span>
       </RouterLink>
 
-      <!-- Admin icon - only visible for admins -->
+      <!-- System Admin icon - only visible for system admins -->
       <RouterLink
         v-if="isAdmin"
         to="/admin"
         class="icon-button"
-        aria-label="Admin Panel"
-        title="Admin Panel"
+        aria-label="System Admin Panel"
+        title="System Admin Panel"
       >
         <span class="mdi mdi-shield-outline" aria-hidden="true"></span>
       </RouterLink>
@@ -155,6 +161,9 @@ const goToDashboard = () => {
 
           <v-card class="account-dropdown-pill" elevation="8">
             <div class="icon-container">
+              <div class="dropdown-icon" @click="handleProfile">
+                <v-icon>mdi-account</v-icon>
+              </div>
               <div class="dropdown-icon" @click="handleSettings">
                 <v-icon>mdi-cog</v-icon>
               </div>
