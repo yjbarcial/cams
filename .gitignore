@@ -30,3 +30,6 @@ coverage
 *.tsbuildinfo
 
 .env
+
+# Windows reserved device names
+nul
