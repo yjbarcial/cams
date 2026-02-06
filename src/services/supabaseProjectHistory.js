@@ -5,6 +5,10 @@
 
 import { supabase } from '@/utils/supabase.js'
 
+// Store last version creation time per project to prevent too frequent versions
+const lastVersionTime = new Map()
+const VERSION_DEBOUNCE_MS = 120000 // 2 minutes (like Google Docs)
+
 /**
  * Get current user UUID from Supabase auth session
  * @returns {Promise<string|null>} - Current user's UUID or null if not found
@@ -116,6 +120,25 @@ export const createProjectVersion = async (
 
   try {
     let actualProjectId = projectId
+
+    // Google Docs-style debouncing: Only create version if enough time has passed
+    // Skip debouncing for new projects (projectId is null)
+    if (actualProjectId) {
+      const projectKey = `${projectType}-${actualProjectId}`
+      const now = Date.now()
+      const lastTime = lastVersionTime.get(projectKey)
+
+      if (lastTime && now - lastTime < VERSION_DEBOUNCE_MS) {
+        console.log('⏱️  Skipping version creation - too soon since last version')
+        console.log(`   Time since last version: ${Math.floor((now - lastTime) / 1000)}s`)
+        console.log(`   Minimum interval: ${Math.floor(VERSION_DEBOUNCE_MS / 1000)}s`)
+        return null // Don't create version yet
+      }
+
+      // Update last version time
+      lastVersionTime.set(projectKey, now)
+      console.log('✅ Creating version - sufficient time has passed')
+    }
 
     // For new projects (projectId is null), we'll create the project first and get the auto-generated UUID
     // For existing projects, use the provided projectId

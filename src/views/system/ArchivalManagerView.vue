@@ -91,7 +91,6 @@ const publishData = ref({
 })
 
 // History and comments
-const showHistory = ref(true)
 const comments = ref([])
 const newComment = ref('')
 const commentSearch = ref('')
@@ -618,27 +617,7 @@ onMounted(async () => {
 
           <v-col cols="12" lg="4" class="right-panel">
             <div class="history-section mb-4">
-              <v-card class="project-history-card">
-                <v-card-title class="d-flex justify-space-between align-center">
-                  <span>
-                    <v-icon class="mr-2">mdi-history</v-icon>
-                    Approval History
-                  </span>
-                  <v-btn icon variant="text" size="small" @click="showHistory = !showHistory">
-                    <v-icon>{{ showHistory ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
-                  </v-btn>
-                </v-card-title>
-
-                <v-expand-transition>
-                  <v-card-text v-if="showHistory" class="history-content">
-                    <ProjectHistory
-                      :project-id="projectId"
-                      :project-type="projectType"
-                      mode="approval"
-                    />
-                  </v-card-text>
-                </v-expand-transition>
-              </v-card>
+              <ProjectHistory :project-id="projectId" :project-type="projectType" />
             </div>
 
             <HighlightComments
@@ -926,17 +905,6 @@ onMounted(async () => {
   font-size: 13px;
   line-height: 1.6;
   margin: 0;
-}
-
-.project-history-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: none;
-}
-
-.history-content {
-  padding-top: 0;
-  padding-bottom: 0;
 }
 
 .project-metadata {

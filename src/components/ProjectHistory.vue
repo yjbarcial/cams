@@ -1,13 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import {
-  getProjectHistory,
-  getProjectVersion,
   restoreProjectVersion,
-  addVersionComment,
-  compareVersions,
-  getProjectStatistics,
-  deleteProjectVersion,
   getActiveProjectHistory,
 } from '@/services/supabaseProjectHistory.js'
 
@@ -20,23 +14,17 @@ const props = defineProps({
     type: String,
     required: true,
   },
-  showComments: {
-    type: Boolean,
-    default: true,
-  },
 })
 
-const emit = defineEmits(['version-restored', 'version-deleted'])
+const emit = defineEmits(['version-restored'])
 
 // State
 const history = ref([])
-const selectedVersion = ref(null)
-const selectedVersions = ref([])
-const showComparison = ref(false)
-const newComment = ref('')
 const loading = ref(false)
 const error = ref('')
-const statistics = ref({})
+const selectedVersion = ref(null)
+const showVersionDialog = ref(false)
+const expandedChanges = ref(new Set()) // Track which change groups are expanded
 
 // Notification system
 const showNotificationCard = ref(false)
@@ -47,48 +35,21 @@ const notificationType = ref('success')
 const showConfirmDialog = ref(false)
 const confirmMessage = ref('')
 const confirmAction = ref(null)
-const pendingVersionId = ref(null)
 
 // Computed
 const activeHistory = computed(() => history.value.filter((v) => !v.isDeleted))
 const currentVersion = computed(() => activeHistory.value.find((v) => v.isActive))
-const hasSelection = computed(() => selectedVersions.value.length > 0)
-const canCompare = computed(() => selectedVersions.value.length === 2)
 
 // Methods
 const loadHistory = async () => {
   try {
     loading.value = true
     history.value = await getActiveProjectHistory(props.projectType, props.projectId)
-    statistics.value = await getProjectStatistics(props.projectType, props.projectId)
   } catch (err) {
-    error.value = 'Failed to load project history'
+    error.value = 'Failed to load version history'
     console.error('Error loading history:', err)
   } finally {
     loading.value = false
-  }
-}
-
-const selectVersion = (version) => {
-  if (selectedVersions.value.includes(version.id)) {
-    selectedVersions.value = selectedVersions.value.filter((id) => id !== version.id)
-  } else if (selectedVersions.value.length < 2) {
-    selectedVersions.value.push(version.id)
-  } else {
-    selectedVersions.value = [version.id]
-  }
-}
-
-const compareSelectedVersions = () => {
-  if (!canCompare.value) return
-
-  const [version1Id, version2Id] = selectedVersions.value
-  const version1 = history.value.find((v) => v.id === version1Id)
-  const version2 = history.value.find((v) => v.id === version2Id)
-
-  if (version1 && version2) {
-    selectedVersion.value = { version1, version2, comparison: compareVersions(version1, version2) }
-    showComparison.value = true
   }
 }
 
@@ -120,13 +81,11 @@ const handleConfirm = () => {
 const cancelConfirm = () => {
   showConfirmDialog.value = false
   confirmAction.value = null
-  pendingVersionId.value = null
 }
 
 const restoreVersion = (versionId) => {
-  pendingVersionId.value = versionId
   showConfirm(
-    'Are you sure you want to restore this version? This will create a new version with the restored content.',
+    'Restore this version? This will create a new version with the restored content.',
     async () => {
       try {
         loading.value = true
@@ -136,90 +95,151 @@ const restoreVersion = (versionId) => {
           versionId,
         )
         emit('version-restored', restoredProject)
-        await loadHistory() // Reload history
+        await loadHistory()
         showNotification('Version restored successfully', 'success')
       } catch (err) {
         showNotification('Failed to restore version', 'error')
         console.error('Error restoring version:', err)
       } finally {
         loading.value = false
-        pendingVersionId.value = null
       }
     },
   )
 }
 
-const addComment = async (versionId) => {
-  if (!newComment.value.trim()) return
+const viewVersion = (version) => {
+  selectedVersion.value = version
+  showVersionDialog.value = true
+}
 
-  try {
-    await addVersionComment(
-      props.projectType,
-      props.projectId,
-      versionId,
-      newComment.value,
-      'Current User',
-    )
-    newComment.value = ''
-    await loadHistory() // Reload to get updated comments
-    showNotification('Comment added successfully', 'success')
-  } catch (err) {
-    showNotification('Failed to add comment', 'error')
-    console.error('Error adding comment:', err)
+const closeVersionDialog = () => {
+  showVersionDialog.value = false
+  selectedVersion.value = null
+  expandedChanges.value.clear() // Clear expanded state when closing
+}
+
+const toggleChangeGroup = (groupKey) => {
+  if (expandedChanges.value.has(groupKey)) {
+    expandedChanges.value.delete(groupKey)
+  } else {
+    expandedChanges.value.add(groupKey)
   }
 }
 
-const deleteVersion = (versionId) => {
-  pendingVersionId.value = versionId
-  showConfirm(
-    'Are you sure you want to delete this version? This action cannot be undone.',
-    async () => {
-      try {
-        const success = await deleteProjectVersion(props.projectType, props.projectId, versionId)
-        if (success) {
-          emit('version-deleted', versionId)
-          await loadHistory() // Reload history
-          showNotification('Version deleted successfully', 'success')
-        } else {
-          showNotification('Failed to delete version', 'error')
-        }
-      } catch (err) {
-        showNotification('Failed to delete version', 'error')
-        console.error('Error deleting version:', err)
-      } finally {
-        pendingVersionId.value = null
-      }
-    },
-  )
+const isChangeExpanded = (groupKey) => {
+  return expandedChanges.value.has(groupKey)
+}
+
+// Get changes made in this version compared to previous
+const getVersionChanges = (version) => {
+  const currentIndex = activeHistory.value.findIndex((v) => v.id === version.id)
+  if (currentIndex === -1 || currentIndex === activeHistory.value.length - 1) {
+    return { added: [], modified: [], removed: [], isFirstVersion: true }
+  }
+
+  const previousVersion = activeHistory.value[currentIndex + 1]
+  const currentData = version.data || {}
+  const previousData = previousVersion.data || {}
+
+  const changes = {
+    added: [],
+    modified: [],
+    removed: [],
+    isFirstVersion: false,
+  }
+
+  // Check all fields in current version
+  Object.keys(currentData).forEach((key) => {
+    if (key === 'metadata') return // Skip metadata for now
+
+    if (!(key in previousData) || previousData[key] === null || previousData[key] === undefined) {
+      // Field was added
+      changes.added.push({ field: key, value: stripHtml(currentData[key]) })
+    } else if (JSON.stringify(currentData[key]) !== JSON.stringify(previousData[key])) {
+      // Field was modified
+      changes.modified.push({
+        field: key,
+        oldValue: stripHtml(previousData[key]),
+        newValue: stripHtml(currentData[key]),
+      })
+    }
+  })
+
+  // Check for removed fields
+  Object.keys(previousData).forEach((key) => {
+    if (key === 'metadata') return
+    if (!(key in currentData) || currentData[key] === null || currentData[key] === undefined) {
+      changes.removed.push({ field: key, value: stripHtml(previousData[key]) })
+    }
+  })
+
+  return changes
+}
+
+const stripHtml = (value) => {
+  if (typeof value !== 'string') return value
+
+  // Remove HTML tags and decode entities
+  const text = value
+    .replace(/<br\s*\/?>/gi, '\n') // Convert <br> to newlines
+    .replace(/<\/p>/gi, '\n') // Convert closing </p> to newlines
+    .replace(/<p>/gi, '') // Remove opening <p> tags
+    .replace(/<[^>]*>/g, '') // Remove all other HTML tags
+    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n\s*\n/g, '\n') // Remove extra blank lines
+    .trim()
+
+  return text || value
+}
+
+const formatFieldName = (field) => {
+  return field
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim()
 }
 
 const formatDate = (dateString) => {
   const date = new Date(dateString)
   const now = new Date()
-  const diffInMinutes = Math.floor((now - date) / (1000 * 60))
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const versionDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
 
-  if (diffInMinutes < 1) return 'Just now'
-  if (diffInMinutes < 60) return `${diffInMinutes}m ago`
-  if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`
-  if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+  const timeStr = date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   })
-}
 
-const formatFullDate = (dateString) => {
-  return new Date(dateString).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+  if (versionDate.getTime() === today.getTime()) {
+    return `Today ${timeStr}`
+  } else if (versionDate.getTime() === yesterday.getTime()) {
+    return `Yesterday ${timeStr}`
+  } else if (date.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    })
+  } else {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    })
+  }
 }
 
 const getInitials = (name) => {
@@ -252,26 +272,24 @@ const getAvatarColor = (name) => {
   return colors[Math.abs(hash) % colors.length]
 }
 
-const getVersionTypeColor = (type) => {
+const getStatusColor = (status) => {
   const colors = {
+    'in-progress': 'primary',
+    planning: 'info',
+    completed: 'success',
+    'on-hold': 'warning',
     draft: 'grey',
-    published: 'green',
-    major: 'blue',
-    minor: 'orange',
-    restoration: 'purple',
   }
-  return colors[type] || 'grey'
+  return colors[status?.toLowerCase()] || 'grey'
 }
 
-const getVersionTypeIcon = (type) => {
-  const icons = {
-    draft: 'mdi-file-document-outline',
-    published: 'mdi-check-circle',
-    major: 'mdi-star',
-    minor: 'mdi-circle-small',
-    restoration: 'mdi-backup-restore',
+const getPriorityColor = (priority) => {
+  const colors = {
+    high: 'error',
+    medium: 'warning',
+    low: 'success',
   }
-  return icons[type] || 'mdi-file-document-outline'
+  return colors[priority?.toLowerCase()] || 'grey'
 }
 
 // Lifecycle
@@ -290,50 +308,23 @@ watch([() => props.projectId, () => props.projectType], () => {
     <!-- Header Section -->
     <div class="history-header">
       <div class="header-title">
+        <v-icon class="mr-2">mdi-history</v-icon>
         <h3>Project History</h3>
       </div>
-      <div class="header-actions">
-        <v-btn
-          v-if="canCompare"
-          @click="compareSelectedVersions"
-          size="small"
-          color="primary"
-          variant="flat"
-          prepend-icon="mdi-compare"
-        >
-          Compare
-        </v-btn>
-        <v-btn @click="loadHistory" size="small" variant="text" icon :loading="loading">
-          <v-icon>mdi-refresh</v-icon>
-        </v-btn>
-      </div>
-    </div>
-
-    <!-- Statistics Bar -->
-    <div v-if="statistics.totalVersions > 0" class="history-stats">
-      <div class="stat-item">
-        <v-icon size="small" color="primary">mdi-file-document-multiple</v-icon>
-        <span>{{ statistics.totalVersions }} versions</span>
-      </div>
-      <div class="stat-item">
-        <v-icon size="small" color="secondary">mdi-comment-text-multiple</v-icon>
-        <span>{{ statistics.totalComments }} comments</span>
-      </div>
-      <div class="stat-item">
-        <v-icon size="small" color="info">mdi-text</v-icon>
-        <span>{{ statistics.averageWordsPerVersion }} avg words</span>
-      </div>
+      <v-btn @click="loadHistory" size="small" variant="text" icon :loading="loading">
+        <v-icon>mdi-refresh</v-icon>
+      </v-btn>
     </div>
 
     <!-- Loading State -->
     <div v-if="loading && history.length === 0" class="loading-state">
-      <v-progress-circular indeterminate color="primary" />
+      <v-progress-circular indeterminate color="primary" size="32" />
       <p>Loading project history...</p>
     </div>
 
     <!-- Empty State -->
     <div v-else-if="history.length === 0" class="empty-state">
-      <v-icon size="48" color="grey">mdi-history</v-icon>
+      <v-icon size="48" color="grey-lighten-1">mdi-history</v-icon>
       <p>No project history available</p>
     </div>
 
@@ -343,184 +334,305 @@ watch([() => props.projectId, () => props.projectType], () => {
         v-for="version in activeHistory"
         :key="version.id"
         class="version-item"
-        :class="{
-          selected: selectedVersions.includes(version.id),
-          active: version.isActive,
-          current: version.id === currentVersion?.id,
-        }"
-        @click="selectVersion(version)"
+        :class="{ current: version.id === currentVersion?.id }"
+        @click="viewVersion(version)"
       >
-        <!-- Version Timeline (Google Docs style) -->
-        <div class="version-timeline">
-          <div class="timeline-line" v-if="!version.isActive"></div>
-          <div class="version-avatar" :style="{ backgroundColor: getAvatarColor(version.author) }">
-            {{ getInitials(version.author) }}
-          </div>
+        <!-- Version Avatar -->
+        <div class="version-avatar" :style="{ backgroundColor: getAvatarColor(version.author) }">
+          {{ getInitials(version.author) }}
         </div>
 
         <!-- Version Content -->
         <div class="version-content">
-          <!-- Version Header -->
-          <div class="version-header">
-            <div class="version-main-info">
-              <div class="version-author-row">
-                <span class="version-author-name">{{ version.author }}</span>
-                <v-chip
-                  v-if="version.isActive"
-                  size="x-small"
-                  color="success"
-                  variant="flat"
-                  class="current-badge"
-                >
-                  Current
-                </v-chip>
-              </div>
-              <div class="version-description">
-                <v-icon size="small" :color="getVersionTypeColor(version.versionType)" class="mr-1">
-                  {{ getVersionTypeIcon(version.versionType) }}
-                </v-icon>
-                <span>{{ version.changeDescription }}</span>
-              </div>
+          <div class="version-info">
+            <div class="version-author">
+              {{ version.author }}
+              <v-chip
+                v-if="version.isActive"
+                size="x-small"
+                color="success"
+                variant="flat"
+                class="ml-2"
+              >
+                Current
+              </v-chip>
             </div>
-            <div class="version-meta-actions">
-              <div class="version-time-info">
-                <v-icon size="x-small" class="mr-1">mdi-clock-outline</v-icon>
-                <span class="version-time">{{ formatDate(version.timestamp) }}</span>
-              </div>
-              <div class="version-actions">
-                <v-btn
-                  v-if="!version.isActive"
-                  @click.stop="restoreVersion(version.id)"
-                  size="x-small"
-                  color="primary"
-                  variant="text"
-                  class="action-btn"
-                  icon
-                >
-                  <v-icon size="small">mdi-restore</v-icon>
-                </v-btn>
-                <v-btn
-                  @click.stop="deleteVersion(version.id)"
-                  size="x-small"
-                  color="error"
-                  variant="text"
-                  class="action-btn"
-                  icon
-                >
-                  <v-icon size="small">mdi-delete-outline</v-icon>
-                </v-btn>
-              </div>
+            <div class="version-time">{{ formatDate(version.timestamp) }}</div>
+            <div class="version-summary-text">
+              {{ version.changeDescription }}
             </div>
           </div>
 
-          <!-- Version Metadata -->
-          <div class="version-metadata">
-            <div class="metadata-badge">
-              <v-icon size="x-small" class="mr-1">mdi-text</v-icon>
-              <span>{{ version.data.metadata?.wordCount || 0 }} words</span>
-            </div>
-            <div class="metadata-badge">
-              <v-icon size="x-small" class="mr-1">mdi-file-document-outline</v-icon>
-              <span>{{ version.data.status || 'Draft' }}</span>
-            </div>
-            <div v-if="version.comments.length > 0" class="metadata-badge">
-              <v-icon size="x-small" class="mr-1">mdi-comment-text-outline</v-icon>
-              <span>{{ version.comments.length }}</span>
-            </div>
-          </div>
-
-          <!-- Comments Section -->
-          <div v-if="showComments && version.comments.length > 0" class="version-comments">
-            <div class="comments-header">
-              <v-icon size="small" class="mr-1">mdi-comment-text-outline</v-icon>
-              <span>Comments ({{ version.comments.length }})</span>
-            </div>
-            <div v-for="comment in version.comments" :key="comment.id" class="comment-item">
-              <div class="comment-header">
-                <span class="comment-author">{{ comment.author }}</span>
-                <span class="comment-time">{{ formatDate(comment.timestamp) }}</span>
-              </div>
-              <div class="comment-content">{{ comment.content }}</div>
-            </div>
-          </div>
-
-          <!-- Add Comment -->
-          <div v-if="showComments" class="add-comment">
-            <v-textarea
-              v-model="newComment"
-              placeholder="Add a comment..."
-              rows="2"
-              variant="outlined"
-              density="compact"
-              hide-details
-              class="comment-input"
-              @keydown.enter.ctrl="addComment(version.id)"
-            />
-            <v-btn
-              @click="addComment(version.id)"
-              size="small"
-              color="primary"
-              variant="flat"
-              :disabled="!newComment.trim()"
-              class="comment-submit-btn"
-            >
-              Add
-            </v-btn>
-          </div>
+          <!-- Restore Button -->
+          <v-btn
+            v-if="!version.isActive"
+            @click.stop="restoreVersion(version.id)"
+            size="small"
+            color="primary"
+            variant="text"
+            class="restore-btn"
+          >
+            Restore
+          </v-btn>
         </div>
-        <!-- End version-content -->
       </div>
-      <!-- End version-item -->
     </div>
-    <!-- End history-list -->
 
-    <!-- Version Comparison Dialog -->
-    <v-dialog v-model="showComparison" max-width="1200px">
-      <v-card v-if="selectedVersion">
-        <v-card-title>
-          <v-icon class="mr-2">mdi-compare</v-icon>
-          Version Comparison
+    <!-- Version Details Dialog -->
+    <v-dialog v-model="showVersionDialog" max-width="900px" scrollable>
+      <v-card v-if="selectedVersion" class="version-details-dialog">
+        <v-card-title class="dialog-header">
+          <div class="dialog-title-content">
+            <div
+              class="dialog-avatar"
+              :style="{ backgroundColor: getAvatarColor(selectedVersion.author) }"
+            >
+              {{ getInitials(selectedVersion.author) }}
+            </div>
+            <div class="dialog-info">
+              <div class="dialog-author">{{ selectedVersion.author }}</div>
+              <div class="dialog-time">{{ formatDate(selectedVersion.timestamp) }}</div>
+            </div>
+          </div>
+          <v-btn icon variant="text" @click="closeVersionDialog" size="small">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
         </v-card-title>
 
-        <v-card-text>
-          <div class="comparison-header">
-            <div class="version-info">
-              <h4>Version {{ selectedVersion.version1.versionNumber }}</h4>
-              <p>
-                {{ selectedVersion.version1.author }} -
-                {{ formatDate(selectedVersion.version1.timestamp) }}
-              </p>
-            </div>
-            <div class="vs-divider">
-              <v-icon>mdi-arrow-left-right</v-icon>
-            </div>
-            <div class="version-info">
-              <h4>Version {{ selectedVersion.version2.versionNumber }}</h4>
-              <p>
-                {{ selectedVersion.version2.author }} -
-                {{ formatDate(selectedVersion.version2.timestamp) }}
-              </p>
+        <v-divider></v-divider>
+
+        <v-card-text class="dialog-content">
+          <!-- Editor Information -->
+          <div class="editor-info">
+            <v-icon size="small" color="primary" class="mr-2">mdi-account-edit</v-icon>
+            <span class="editor-label">Edited by:</span>
+            <span class="editor-name">{{ selectedVersion.author }}</span>
+            <span class="editor-time">• {{ formatDate(selectedVersion.timestamp) }}</span>
+          </div>
+
+          <v-divider class="my-4"></v-divider>
+
+          <!-- Changes Made -->
+          <div class="changes-section">
+            <h4 class="section-title">
+              <v-icon size="small" class="mr-2">mdi-file-document-edit</v-icon>
+              What Changed
+            </h4>
+
+            <template v-if="!getVersionChanges(selectedVersion).isFirstVersion">
+              <!-- Added Fields -->
+              <div v-if="getVersionChanges(selectedVersion).added.length > 0" class="change-group">
+                <div
+                  class="change-group-header added clickable"
+                  @click="toggleChangeGroup(`added-${selectedVersion.id}`)"
+                >
+                  <v-icon size="small" class="mr-1">mdi-plus-circle</v-icon>
+                  Added ({{ getVersionChanges(selectedVersion).added.length }})
+                  <v-icon size="small" class="ml-auto">
+                    {{
+                      isChangeExpanded(`added-${selectedVersion.id}`)
+                        ? 'mdi-chevron-up'
+                        : 'mdi-chevron-down'
+                    }}
+                  </v-icon>
+                </div>
+                <div v-show="isChangeExpanded(`added-${selectedVersion.id}`)">
+                  <div
+                    v-for="change in getVersionChanges(selectedVersion).added"
+                    :key="change.field"
+                    class="change-item added-item"
+                  >
+                    <div class="change-field">{{ formatFieldName(change.field) }}</div>
+                    <div class="change-value new-value scrollable-content">
+                      <v-icon size="small" class="mr-1">mdi-plus</v-icon>
+                      <span>{{ stripHtml(String(change.value)) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Modified Fields -->
+              <div
+                v-if="getVersionChanges(selectedVersion).modified.length > 0"
+                class="change-group"
+              >
+                <div
+                  class="change-group-header modified clickable"
+                  @click="toggleChangeGroup(`modified-${selectedVersion.id}`)"
+                >
+                  <v-icon size="small" class="mr-1">mdi-pencil-circle</v-icon>
+                  Modified ({{ getVersionChanges(selectedVersion).modified.length }})
+                  <v-icon size="small" class="ml-auto">
+                    {{
+                      isChangeExpanded(`modified-${selectedVersion.id}`)
+                        ? 'mdi-chevron-up'
+                        : 'mdi-chevron-down'
+                    }}
+                  </v-icon>
+                </div>
+                <div v-show="isChangeExpanded(`modified-${selectedVersion.id}`)">
+                  <div
+                    v-for="change in getVersionChanges(selectedVersion).modified"
+                    :key="change.field"
+                    class="change-item modified-item"
+                  >
+                    <div class="change-field">{{ formatFieldName(change.field) }}</div>
+                    <div class="change-comparison">
+                      <div class="change-value old-value scrollable-content">
+                        <v-icon size="small" class="mr-1">mdi-minus</v-icon>
+                        <span>{{ stripHtml(String(change.oldValue)) }}</span>
+                      </div>
+                      <div class="change-arrow">
+                        <v-icon size="small" color="grey">mdi-arrow-down</v-icon>
+                      </div>
+                      <div class="change-value new-value scrollable-content">
+                        <v-icon size="small" class="mr-1">mdi-plus</v-icon>
+                        <span>{{ stripHtml(String(change.newValue)) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Removed Fields -->
+              <div
+                v-if="getVersionChanges(selectedVersion).removed.length > 0"
+                class="change-group"
+              >
+                <div
+                  class="change-group-header removed clickable"
+                  @click="toggleChangeGroup(`removed-${selectedVersion.id}`)"
+                >
+                  <v-icon size="small" class="mr-1">mdi-minus-circle</v-icon>
+                  Removed ({{ getVersionChanges(selectedVersion).removed.length }})
+                  <v-icon size="small" class="ml-auto">
+                    {{
+                      isChangeExpanded(`removed-${selectedVersion.id}`)
+                        ? 'mdi-chevron-up'
+                        : 'mdi-chevron-down'
+                    }}
+                  </v-icon>
+                </div>
+                <div v-show="isChangeExpanded(`removed-${selectedVersion.id}`)">
+                  <div
+                    v-for="change in getVersionChanges(selectedVersion).removed"
+                    :key="change.field"
+                    class="change-item removed-item"
+                  >
+                    <div class="change-field">{{ formatFieldName(change.field) }}</div>
+                    <div class="change-value old-value scrollable-content">
+                      <v-icon size="small" class="mr-1">mdi-minus</v-icon>
+                      <span>{{ stripHtml(String(change.value)) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- No Changes -->
+              <div
+                v-if="
+                  getVersionChanges(selectedVersion).added.length === 0 &&
+                  getVersionChanges(selectedVersion).modified.length === 0 &&
+                  getVersionChanges(selectedVersion).removed.length === 0
+                "
+                class="no-changes"
+              >
+                <v-icon size="large" color="grey-lighten-1">mdi-information-outline</v-icon>
+                <p>No detectable changes in this version</p>
+              </div>
+            </template>
+
+            <!-- First Version -->
+            <div v-else class="first-version-notice">
+              <v-icon size="large" color="primary">mdi-file-star</v-icon>
+              <p>This is the first version - initial creation</p>
+              <p class="text-caption">{{ selectedVersion.changeDescription }}</p>
             </div>
           </div>
 
-          <div v-if="selectedVersion.comparison.hasChanges" class="changes-list">
-            <h5>Changes Detected:</h5>
-            <ul>
-              <li v-for="field in selectedVersion.comparison.changedFields" :key="field">
-                {{ field.charAt(0).toUpperCase() + field.slice(1) }}
-              </li>
-            </ul>
-          </div>
+          <v-divider class="my-4"></v-divider>
 
-          <div v-else class="no-changes">
-            <v-icon color="success">mdi-check-circle</v-icon>
-            <p>No differences found between these versions</p>
+          <!-- Current Content Snapshot -->
+          <div class="content-snapshot">
+            <h4 class="section-title">
+              <v-icon size="small" class="mr-2">mdi-file-document</v-icon>
+              Content Snapshot
+            </h4>
+
+            <div class="snapshot-fields">
+              <!-- Title -->
+              <div v-if="selectedVersion.data.title" class="snapshot-field">
+                <label>Title</label>
+                <div class="snapshot-value">{{ selectedVersion.data.title }}</div>
+              </div>
+
+              <!-- Description -->
+              <div v-if="selectedVersion.data.description" class="snapshot-field">
+                <label>Description</label>
+                <div class="snapshot-value description-content">
+                  {{ stripHtml(selectedVersion.data.description) }}
+                </div>
+              </div>
+
+              <!-- Status -->
+              <div v-if="selectedVersion.data.status" class="snapshot-field">
+                <label>Status</label>
+                <v-chip size="small" :color="getStatusColor(selectedVersion.data.status)">
+                  {{ selectedVersion.data.status }}
+                </v-chip>
+              </div>
+
+              <!-- Timeline -->
+              <div
+                v-if="selectedVersion.data.startDate || selectedVersion.data.endDate"
+                class="snapshot-field"
+              >
+                <label>Timeline</label>
+                <div class="snapshot-value">
+                  {{
+                    selectedVersion.data.startDate
+                      ? new Date(selectedVersion.data.startDate).toLocaleDateString()
+                      : 'Not set'
+                  }}
+                  →
+                  {{
+                    selectedVersion.data.endDate
+                      ? new Date(selectedVersion.data.endDate).toLocaleDateString()
+                      : 'Not set'
+                  }}
+                </div>
+              </div>
+
+              <!-- Priority -->
+              <div v-if="selectedVersion.data.priority" class="snapshot-field">
+                <label>Priority</label>
+                <v-chip size="small" :color="getPriorityColor(selectedVersion.data.priority)">
+                  {{ selectedVersion.data.priority }}
+                </v-chip>
+              </div>
+            </div>
           </div>
         </v-card-text>
 
-        <v-card-actions>
+        <v-divider></v-divider>
+
+        <v-card-actions class="dialog-actions">
           <v-spacer />
-          <v-btn @click="showComparison = false" color="primary"> Close </v-btn>
+          <v-btn variant="text" @click="closeVersionDialog">Close</v-btn>
+          <v-btn
+            v-if="!selectedVersion.isActive"
+            color="primary"
+            variant="flat"
+            @click="
+              () => {
+                restoreVersion(selectedVersion.id)
+                closeVersionDialog()
+              }
+            "
+          >
+            <v-icon class="mr-1">mdi-restore</v-icon>
+            Restore This Version
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -535,23 +647,11 @@ watch([() => props.projectId, () => props.projectType], () => {
       >
         <div class="notification-content">
           <v-icon
-            :color="
-              notificationType === 'success'
-                ? 'success'
-                : notificationType === 'error'
-                  ? 'error'
-                  : 'warning'
-            "
-            size="24"
+            :color="notificationType === 'success' ? 'success' : 'error'"
+            size="20"
             class="notification-icon"
           >
-            {{
-              notificationType === 'success'
-                ? 'mdi-check-circle'
-                : notificationType === 'error'
-                  ? 'mdi-alert-circle'
-                  : 'mdi-alert'
-            }}
+            {{ notificationType === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle' }}
           </v-icon>
           <span class="notification-message">{{ notificationMessage }}</span>
           <v-btn
@@ -561,26 +661,23 @@ watch([() => props.projectId, () => props.projectType], () => {
             @click="showNotificationCard = false"
             class="notification-close"
           >
-            <v-icon size="20">mdi-close</v-icon>
+            <v-icon size="18">mdi-close</v-icon>
           </v-btn>
         </div>
       </v-card>
     </transition>
 
     <!-- Confirmation Dialog -->
-    <v-dialog v-model="showConfirmDialog" max-width="500px" persistent>
+    <v-dialog v-model="showConfirmDialog" max-width="400px" persistent>
       <v-card>
-        <v-card-title class="d-flex align-center">
-          <v-icon color="warning" class="mr-2">mdi-alert</v-icon>
-          <span>Confirm Action</span>
-        </v-card-title>
+        <v-card-title class="text-h6">Confirm Restore</v-card-title>
         <v-card-text>
-          <p class="text-body-1">{{ confirmMessage }}</p>
+          <p>{{ confirmMessage }}</p>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="cancelConfirm">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" @click="handleConfirm">Confirm</v-btn>
+          <v-btn color="primary" variant="flat" @click="handleConfirm">Restore</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -590,55 +687,32 @@ watch([() => props.projectId, () => props.projectType], () => {
 <style scoped>
 .project-history {
   background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  max-width: 430px;
 }
 
 .history-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  padding: 14px 16px;
   border-bottom: 1px solid #e5e7eb;
+  background: white;
 }
 
 .header-title {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .header-title h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   color: #1f2937;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.history-stats {
-  display: flex;
-  gap: 24px;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #ffffff;
-  flex-wrap: wrap;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #6b7280;
-  font-weight: 500;
 }
 
 .loading-state,
@@ -647,348 +721,446 @@ watch([() => props.projectId, () => props.projectType], () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: 48px 20px;
   color: #6b7280;
+  gap: 12px;
 }
 
 .loading-state p,
 .empty-state p {
-  margin: 12px 0 0 0;
-  font-size: 14px;
+  margin: 0;
+  font-size: 13px;
 }
 
 .history-list {
-  max-height: 500px; /* Adjust this value as needed */
+  max-height: 300px;
   overflow-y: auto;
-  padding: 16px;
-  background: #fafbfc;
+  background: white;
 }
 
 .history-list::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .history-list::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+  background: #f9fafb;
 }
 
 .history-list::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: #d1d5db;
+  border-radius: 3px;
 }
 
 .history-list::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #9ca3af;
 }
 
 .version-item {
   display: flex;
-  padding: 0;
-  margin-bottom: 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  cursor: pointer;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
   transition: all 0.2s ease;
   position: relative;
-  background: #ffffff;
-  overflow: hidden;
+  cursor: pointer;
 }
 
 .version-item:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transform: translateY(-1px);
-}
-
-.version-item.selected {
-  border-color: #3b82f6;
-  border-left: 4px solid #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
-}
-
-.version-item.active {
-  border-color: #10b981;
+  background-color: #f8fafc;
 }
 
 .version-item.current {
-  border-left: 4px solid #10b981;
-  border-color: #10b981;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  background-color: #f0fdf4;
 }
 
-.version-timeline {
-  position: relative;
-  width: 60px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px 12px;
-  background: #fafbfc;
-  border-right: 1px solid #f3f4f6;
-  flex-shrink: 0;
-}
-
-.timeline-line {
-  width: 2px;
-  height: calc(100% - 20px);
-  background: #e5e7eb;
-  position: absolute;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 0;
+.version-item:last-child {
+  border-bottom: none;
 }
 
 .version-avatar {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   font-weight: 600;
-  font-size: 16px;
-  position: relative;
-  z-index: 1;
-  border: 3px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
   flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .version-content {
   flex: 1;
   min-width: 0;
-  padding: 20px 24px;
-}
-
-.version-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  gap: 16px;
+  align-items: center;
+  gap: 8px;
 }
 
-.version-main-info {
+.version-info {
   flex: 1;
   min-width: 0;
 }
 
-.version-author-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-
-.version-author-name {
+.version-author {
   font-weight: 600;
   color: #1f2937;
-  font-size: 15px;
-}
-
-.current-badge {
-  font-size: 11px;
-  height: 20px;
-  padding: 0 8px;
-}
-
-.version-description {
-  color: #4b5563;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-bottom: 2px;
 }
 
-.version-meta-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
+.version-time {
+  color: #6b7280;
+  font-size: 11px;
+  display: block;
+}
+
+.version-summary-text {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.restore-btn {
+  opacity: 0;
+  transition: opacity 0.2s ease;
   flex-shrink: 0;
 }
 
-.version-time-info {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #9ca3af;
-}
-
-.version-actions {
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.version-item:hover .version-actions,
-.version-item.selected .version-actions,
-.version-item.current .version-actions {
+.version-item:hover .restore-btn {
   opacity: 1;
 }
 
-.action-btn {
-  min-width: auto;
-}
-
-.version-metadata {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #f3f4f6;
-  align-items: center;
-}
-
-.metadata-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  background: #f3f4f6;
+/* Version Details Dialog */
+.version-details-dialog {
   border-radius: 12px;
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 500;
 }
 
-.version-comments {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #f3f4f6;
-}
-
-.comments-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #4b5563;
-}
-
-.comment-item {
-  margin-bottom: 10px;
-  padding: 12px;
-  background: #f9fafb;
-  border-radius: 8px;
-  border-left: 3px solid #e5e7eb;
-}
-
-.comment-item:last-child {
-  margin-bottom: 0;
-}
-
-.comment-header {
+.dialog-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  padding: 20px 24px;
+  background: #fafafa;
 }
 
-.comment-author {
-  font-weight: 600;
-  font-size: 12px;
-  color: #1f2937;
-}
-
-.comment-time {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-.comment-content {
-  font-size: 13px;
-  color: #4b5563;
-  line-height: 1.5;
-}
-
-.add-comment {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #f3f4f6;
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.comment-input {
-  flex: 1;
-}
-
-.comment-submit-btn {
-  margin-top: 4px;
-  min-width: 80px;
-}
-
-.comparison-header {
+.dialog-title-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 8px;
+  gap: 12px;
 }
 
-.version-info h4 {
-  margin: 0 0 4px 0;
+.dialog-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dialog-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dialog-author {
+  font-weight: 600;
   font-size: 16px;
   color: #1f2937;
 }
 
-.version-info p {
-  margin: 0;
-  font-size: 12px;
+.dialog-time {
+  font-size: 13px;
   color: #6b7280;
 }
 
-.vs-divider {
-  padding: 0 20px;
+.dialog-content {
+  padding: 24px;
+  max-height: 500px;
+}
+
+/* Editor Information */
+.editor-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 13px;
   color: #6b7280;
 }
 
-.changes-list {
-  margin-top: 16px;
+.editor-label {
+  font-weight: 500;
 }
 
-.changes-list h5 {
-  margin: 0 0 8px 0;
-  font-size: 14px;
+.editor-name {
+  font-weight: 600;
   color: #1f2937;
 }
 
-.changes-list ul {
-  margin: 0;
-  padding-left: 20px;
+.editor-time {
+  color: #9ca3af;
 }
 
-.changes-list li {
+/* Section Titles */
+.section-title {
+  margin: 0 0 16px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+}
+
+/* Changes Section */
+.changes-section {
+  margin-bottom: 24px;
+}
+
+.change-group {
+  margin-bottom: 20px;
+}
+
+.change-group:last-child {
+  margin-bottom: 0;
+}
+
+.change-group-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
   font-size: 13px;
-  color: #374151;
-  margin-bottom: 4px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  user-select: none;
 }
 
-.no-changes {
+.change-group-header.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.change-group-header.clickable:hover {
+  opacity: 0.8;
+  transform: translateY(-1px);
+}
+
+.change-group-header .ml-auto {
+  margin-left: auto;
+}
+
+.change-group-header.added {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.change-group-header.modified {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.change-group-header.removed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.change-item {
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.change-item:last-child {
+  margin-bottom: 0;
+}
+
+.added-item {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.modified-item {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.removed-item {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.change-field {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.change-value {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.change-value.scrollable-content {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.change-value::-webkit-scrollbar {
+  width: 4px;
+}
+
+.change-value::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.change-value::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+.old-value {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.new-value {
+  background: #f0fdf4;
+  color: #065f46;
+  border: 1px solid #86efac;
+}
+
+.change-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.change-arrow {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.no-changes,
+.first-version-notice {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px;
-  color: #10b981;
+  justify-content: center;
+  padding: 32px;
+  color: #6b7280;
+  text-align: center;
+  gap: 8px;
 }
 
-.no-changes p {
-  margin: 8px 0 0 0;
+.first-version-notice {
+  color: #3b82f6;
+}
+
+.first-version-notice p {
+  margin: 0;
   font-size: 14px;
+}
+
+.first-version-notice .text-caption {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Content Snapshot */
+.content-snapshot {
+  margin-top: 24px;
+}
+
+.snapshot-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.snapshot-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.snapshot-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.snapshot-value {
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.6;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.description-content {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.description-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.description-content::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 3px;
+}
+
+.description-content::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 3px;
+}
+
+.dialog-actions {
+  padding: 16px 24px;
+  background: #fafafa;
 }
 
 /* Notification Card Styles */
@@ -1002,29 +1174,23 @@ watch([() => props.projectId, () => props.projectType], () => {
   max-width: 400px;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-  border: 2px solid #353535 !important;
 }
 
 .notification-success {
   background: #f0fdf4 !important;
-  border-color: #10b981 !important;
+  border-left: 4px solid #10b981 !important;
 }
 
 .notification-error {
   background: #fef2f2 !important;
-  border-color: #ef4444 !important;
-}
-
-.notification-warning {
-  background: #fff7ed !important;
-  border-color: #f59e0b !important;
+  border-left: 4px solid #ef4444 !important;
 }
 
 .notification-content {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
+  padding: 14px 16px;
 }
 
 .notification-icon {
@@ -1036,7 +1202,7 @@ watch([() => props.projectId, () => props.projectType], () => {
   font-size: 14px;
   font-weight: 500;
   color: #1f2937;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .notification-close {
@@ -1070,22 +1236,42 @@ watch([() => props.projectId, () => props.projectType], () => {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .version-header {
+  .project-history {
+    max-width: 100%;
+  }
+
+  .version-item {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .version-content {
     flex-direction: column;
+    align-items: flex-start;
     gap: 8px;
   }
 
-  .version-actions {
+  .restore-btn {
+    opacity: 1;
     align-self: flex-start;
   }
 
-  .comparison-header {
-    flex-direction: column;
-    gap: 16px;
+  .dialog-content {
+    padding: 16px;
   }
 
-  .vs-divider {
-    transform: rotate(90deg);
+  .change-comparison {
+    gap: 4px;
+  }
+
+  .change-value {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .snapshot-value {
+    padding: 10px;
+    font-size: 13px;
   }
 }
 </style>
