@@ -603,7 +603,7 @@ const performClearClientData = async () => {
                   </v-col>
 
                   <v-col cols="12" sm="6" md="3">
-                    <v-card class="stat-card stat-card-info" elevation="0">
+                    <v-card class="stat-card stat-card-light" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
                           <v-icon size="40" color="white">mdi-book-open-page-variant</v-icon>
@@ -1203,6 +1203,12 @@ const performClearClientData = async () => {
   box-shadow: 0 2px 8px rgba(117, 117, 117, 0.2);
 }
 
+.stat-card-light {
+  background: #747474;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
 .stat-card-content {
   display: flex;
   align-items: center;
@@ -1228,6 +1234,10 @@ const performClearClientData = async () => {
 .stat-card-info .stat-icon-wrapper,
 .stat-card-warning .stat-icon-wrapper {
   background: rgba(255, 255, 255, 0.15);
+}
+
+.stat-card-light .stat-icon-wrapper {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .stat-info {
