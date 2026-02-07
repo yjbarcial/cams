@@ -17,6 +17,8 @@ const router = useRouter()
 const notifications = ref([])
 // Restore visible count from localStorage, default to 10
 const visibleCount = ref(parseInt(localStorage.getItem('notifications_visible_count')) || 10)
+const loading = ref(false)
+const markingAllRead = ref(false)
 
 // Archive viewer state
 const viewerVisible = ref(false)
@@ -197,16 +199,28 @@ const handleDelete = async (notificationId, event) => {
 }
 
 const handleMarkAllRead = async () => {
-  await markAllAsRead()
-  await loadNotifications()
+  markingAllRead.value = true
+  try {
+    await markAllAsRead()
+    await loadNotifications()
+    // Show success message briefly
+    setTimeout(() => {
+      markingAllRead.value = false
+    }, 500)
+  } catch (error) {
+    console.error('Error marking all as read:', error)
+    markingAllRead.value = false
+  }
 }
 
 const unreadCount = computed(() => {
   return notifications.value.filter((n) => !n.isRead).length
 })
 
-onMounted(() => {
-  loadNotifications()
+onMounted(async () => {
+  loading.value = true
+  await loadNotifications()
+  loading.value = false
 })
 </script>
 
@@ -218,11 +232,17 @@ onMounted(() => {
       <v-container class="notifications-container">
         <div class="notifications-header">
           <div class="header-content">
-            <h1 class="page-title">Notifications</h1>
+            <div class="title-section">
+              <h1 class="page-title">Notifications</h1>
+            </div>
             <div class="header-actions">
               <v-chip v-if="unreadCount > 0" color="error" size="small" class="unread-chip">
                 <v-icon start size="16">mdi-circle</v-icon>
                 {{ unreadCount }} unread
+              </v-chip>
+              <v-chip v-else color="success" size="small" class="all-read-chip">
+                <v-icon start size="16">mdi-check-circle</v-icon>
+                All read
               </v-chip>
               <v-btn
                 v-if="unreadCount > 0"
@@ -231,15 +251,25 @@ onMounted(() => {
                 @click="handleMarkAllRead"
                 class="mark-read-btn"
                 prepend-icon="mdi-check-all"
+                :loading="markingAllRead"
+                :disabled="markingAllRead"
               >
                 Mark all as read
               </v-btn>
             </div>
           </div>
+          <v-divider class="header-divider"></v-divider>
         </div>
 
         <div class="notifications-content">
-          <div v-if="notifications.length === 0" class="no-notifications">
+          <!-- Loading State -->
+          <div v-if="loading" class="loading-state">
+            <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
+            <p class="loading-text">Loading notifications...</p>
+          </div>
+
+          <!-- Empty State -->
+          <div v-else-if="notifications.length === 0" class="no-notifications">
             <v-icon size="80" color="grey-lighten-1">mdi-bell-off-outline</v-icon>
             <h3 class="no-notifications-title">No notifications yet</h3>
             <p class="no-notifications-text">When you receive notifications, they'll appear here</p>
@@ -424,6 +454,13 @@ onMounted(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 16px;
+  padding-bottom: 20px;
+}
+
+.title-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .page-title {
@@ -431,13 +468,11 @@ onMounted(() => {
   font-weight: 700;
   color: #1f2937;
   margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
-.title-icon {
-  color: #353535;
+.header-divider {
+  margin-top: 4px;
+  border-color: #e5e7eb;
 }
 
 .header-actions {
@@ -448,16 +483,58 @@ onMounted(() => {
 
 .unread-chip {
   font-weight: 600;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.all-read-chip {
+  font-weight: 600;
 }
 
 .mark-read-btn {
   border-color: #353535;
   color: #353535;
   font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.mark-read-btn:hover {
+  background-color: #353535;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(53, 53, 53, 0.3);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .notifications-content {
   background: transparent;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 80px 24px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.loading-text {
+  font-size: 16px;
+  color: #6b7280;
+  margin: 0;
+  font-weight: 500;
 }
 
 .no-notifications {

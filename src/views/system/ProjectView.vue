@@ -17,8 +17,9 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import {
-  createStatusChangeNotification,
-  createCommentNotification,
+  notifyStatusChange,
+  notifyProjectUpdate,
+  notifyNewComment,
 } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
 
@@ -275,6 +276,30 @@ const saveContent = async (showNotif = false) => {
         // Don't fail the save if version history fails
       }
 
+      // Notify all involved users about the update (only on manual save, not auto-save)
+      if (showNotif) {
+        try {
+          const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+          const fullName = currentUserProfile.value
+            ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+            : ''
+          const profile = currentUserProfile.value
+            ? { ...currentUserProfile.value, full_name: fullName }
+            : { full_name: fullName }
+          const displayName = getDisplayName(userEmail, profile, true)
+
+          await notifyProjectUpdate({
+            project: project.value,
+            updatedBy: displayName,
+            changes: 'Content updated',
+          })
+          console.log('✅ Notified all involved users about content update')
+        } catch (notifError) {
+          console.error('Error sending notifications:', notifError)
+          // Don't fail the save if notifications fail
+        }
+      }
+
       // Update previous content for next comparison
       previousContent.value = content
 
@@ -385,6 +410,8 @@ const confirmSubmitForApproval = async () => {
       return
     }
 
+    const oldStatus = project.value.status
+
     // Update via Supabase
     await projectsService.update(projectId, {
       status: 'to_section_head',
@@ -400,15 +427,25 @@ const confirmSubmitForApproval = async () => {
     project.value.status = 'to_section_head'
     hasUnsavedChanges.value = false
 
-    // Create notification for Section Head
-    createStatusChangeNotification({
-      projectId: projectId,
-      projectType: projectType.value,
-      projectTitle: project.value.title,
-      oldStatus: 'draft',
+    // Get updated project with all relationships for notification
+    const updatedProject = await projectsService.getById(projectId)
+
+    // Get user display name for notification
+    const userEmail = user.email || localStorage.getItem('userEmail') || 'Current User'
+    const fullName = currentUserProfile.value
+      ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+      : ''
+    const profile = currentUserProfile.value
+      ? { ...currentUserProfile.value, full_name: fullName }
+      : { full_name: fullName }
+    const displayName = getDisplayName(userEmail, profile, true)
+
+    // Notify all involved users about status change
+    await notifyStatusChange({
+      project: updatedProject,
+      oldStatus: oldStatus,
       newStatus: 'to_section_head',
-      actionBy: user.email || 'Current User',
-      recipient: 'Section Head',
+      actionBy: displayName,
       comments: submitComments.value,
     })
 
@@ -674,7 +711,7 @@ const loadProjectData = async () => {
 }
 
 // Comment functions
-const addComment = () => {
+const addComment = async () => {
   if (newComment.value.trim()) {
     try {
       const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
@@ -694,15 +731,18 @@ const addComment = () => {
       )
       comments.value.unshift(comment)
 
-      // Create notification for comment
-      createCommentNotification({
-        projectId: projectId,
-        projectType: projectType.value,
-        projectTitle: project.value.title,
-        commentAuthor: displayName,
-        commentText: newComment.value.trim(),
-        recipient: null, // Can be set to specific recipient if needed
-      })
+      // Notify all involved users about the new comment
+      try {
+        await notifyNewComment({
+          project: project.value,
+          commentAuthor: displayName,
+          commentText: newComment.value.trim(),
+        })
+        console.log('✅ Notified all involved users about new comment')
+      } catch (notifError) {
+        console.error('Error sending comment notifications:', notifError)
+        // Don't fail the comment addition if notifications fail
+      }
 
       newComment.value = ''
       showNotification('Comment added successfully')
