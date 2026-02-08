@@ -253,6 +253,12 @@ const router = createRouter({
       component: ProfileView,
       beforeEnter: requireAuth,
     },
+    {
+      path: '/profile/:userId',
+      name: 'userProfile',
+      component: ProfileView,
+      beforeEnter: requireAuth,
+    },
 
     // System Admin Routes
     {

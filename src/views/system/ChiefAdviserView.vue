@@ -72,6 +72,11 @@ const project = ref({
   department: '',
 })
 
+// Member profiles for clickable links
+const writerProfiles = ref([])
+const artistProfiles = ref([])
+const sectionHeadProfile = ref(null)
+
 // Rich text editor state
 const editorContent = ref('')
 const quillEditorRef = ref(null)
@@ -392,6 +397,11 @@ const goBack = () => {
   }
 }
 
+// Function to navigate to a user's profile
+const viewUserProfile = (userId) => {
+  router.push(`/profile/${userId}`)
+}
+
 const loadProjectComments = async () => {
   try {
     comments.value = await getProjectComments(projectType.value, projectId)
@@ -415,42 +425,51 @@ const loadProjectData = async () => {
 
     // Load section head profile
     let sectionHeadName = 'Not assigned'
+    sectionHeadProfile.value = null
     if (foundProject.section_head_id) {
-      const sectionHeadProfile = await profilesService.getById(foundProject.section_head_id)
-      if (sectionHeadProfile) {
+      const sectionHeadProfileData = await profilesService.getById(foundProject.section_head_id)
+      if (sectionHeadProfileData && sectionHeadProfileData.id) {
         sectionHeadName =
-          `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim() ||
-          sectionHeadProfile.email ||
+          `${sectionHeadProfileData.first_name || ''} ${sectionHeadProfileData.last_name || ''}`.trim() ||
+          sectionHeadProfileData.email ||
           'Not assigned'
+        sectionHeadProfile.value = {
+          id: sectionHeadProfileData.id,
+          displayName: sectionHeadName,
+        }
       }
     }
 
     // Get writers and artists from members
-    const writers =
-      members
-        .filter((m) => m.role === 'writer')
-        .map((m) => {
-          const profile = m.profiles
-          if (profile) {
-            const name = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-            return name || profile.email || 'Unknown'
-          }
-          return 'Unknown'
-        })
-        .join(', ') || 'Not assigned'
+    const writersArray = members
+      .filter((m) => m.role === 'writer')
+      .map((m) => {
+        const profile = m.profiles
+        if (profile) {
+          const displayName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+          const name = displayName || profile.email || 'Unknown'
+          return { id: profile?.id || null, displayName: name }
+        }
+        return { id: null, displayName: 'Unknown' }
+      })
+      .filter((w) => w.id)
+    const writers = writersArray.map((w) => w.displayName).join(', ') || 'Not assigned'
+    writerProfiles.value = writersArray
 
-    const artists =
-      members
-        .filter((m) => m.role === 'artist')
-        .map((m) => {
-          const profile = m.profiles
-          if (profile) {
-            const name = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-            return name || profile.email || 'Unknown'
-          }
-          return 'Unknown'
-        })
-        .join(', ') || 'Not assigned'
+    const artistsArray = members
+      .filter((m) => m.role === 'artist')
+      .map((m) => {
+        const profile = m.profiles
+        if (profile) {
+          const displayName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+          const name = displayName || profile.email || 'Unknown'
+          return { id: profile?.id || null, displayName: name }
+        }
+        return { id: null, displayName: 'Unknown' }
+      })
+      .filter((a) => a.id)
+    const artists = artistsArray.map((a) => a.displayName).join(', ') || 'Not assigned'
+    artistProfiles.value = artistsArray
 
     project.value = {
       ...foundProject,
@@ -658,7 +677,14 @@ onMounted(async () => {
                 </div>
                 <div class="metadata-item">
                   <span class="label">Section Head:</span>
-                  <span class="value">{{ project.sectionHead || 'Not assigned' }}</span>
+                  <span class="value">
+                    <template v-if="sectionHeadProfile">
+                      <span @click="viewUserProfile(sectionHeadProfile.id)" class="profile-link">
+                        {{ sectionHeadProfile.displayName }}
+                      </span>
+                    </template>
+                    <template v-else>{{ project.sectionHead }}</template>
+                  </span>
                 </div>
               </div>
 
@@ -669,9 +695,22 @@ onMounted(async () => {
                 </div>
                 <div class="metadata-item">
                   <span class="label">Writer:</span>
-                  <span class="value">{{
-                    project.writers || project.submittedBy || 'Not assigned'
-                  }}</span>
+                  <span class="value">
+                    <template v-if="writerProfiles.length > 0">
+                      <span
+                        v-for="(writer, index) in writerProfiles"
+                        :key="writer.id"
+                        @click="viewUserProfile(writer.id)"
+                        class="profile-link"
+                      >
+                        {{ writer.displayName
+                        }}<span v-if="index < writerProfiles.length - 1">, </span>
+                      </span>
+                    </template>
+                    <template v-else>{{
+                      project.writers || project.submittedBy || 'Not assigned'
+                    }}</template>
+                  </span>
                 </div>
               </div>
 
@@ -682,7 +721,20 @@ onMounted(async () => {
                 </div>
                 <div class="metadata-item">
                   <span class="label">Artist:</span>
-                  <span class="value">{{ project.artists || 'Not assigned' }}</span>
+                  <span class="value">
+                    <template v-if="artistProfiles.length > 0">
+                      <span
+                        v-for="(artist, index) in artistProfiles"
+                        :key="artist.id"
+                        @click="viewUserProfile(artist.id)"
+                        class="profile-link"
+                      >
+                        {{ artist.displayName
+                        }}<span v-if="index < artistProfiles.length - 1">, </span>
+                      </span>
+                    </template>
+                    <template v-else>{{ project.artists || 'Not assigned' }}</template>
+                  </span>
                 </div>
               </div>
 
@@ -1513,5 +1565,14 @@ onMounted(async () => {
 .slide-down-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(-20px);
+}
+
+.profile-link {
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.profile-link:hover {
+  opacity: 0.7;
 }
 </style>

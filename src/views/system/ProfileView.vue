@@ -1,13 +1,15 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '@/utils/supabase'
 import { profilesService } from '@/services/supabaseService'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 
 const router = useRouter()
+const route = useRoute()
 const profile = ref(null)
+const currentUser = ref(null)
 const loading = ref(true)
 const error = ref(null)
 const editMode = ref(false)
@@ -28,6 +30,12 @@ const editForm = ref({
   avatar_url: '',
 })
 
+// Check if viewing own profile
+const isOwnProfile = computed(() => {
+  if (!currentUser.value || !profile.value) return false
+  return currentUser.value.id === profile.value.id
+})
+
 // Display notification
 const displayNotification = (message, type = 'success') => {
   notificationMessage.value = message
@@ -39,12 +47,13 @@ const displayNotification = (message, type = 'success') => {
   }, 4000)
 }
 
-// Get current user's profile
+// Get user profile (own or other user)
 async function loadProfile() {
   loading.value = true
   error.value = null
 
   try {
+    // Get current authenticated user
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -54,8 +63,23 @@ async function loadProfile() {
       return
     }
 
-    // Get profile from database
-    const userProfile = await profilesService.getByEmail(user.email)
+    // Get current user's profile
+    const currUserProfile = await profilesService.getByEmail(user.email)
+    if (currUserProfile) {
+      currentUser.value = currUserProfile
+    }
+
+    // Check if viewing another user's profile
+    const userId = route.params.userId
+    let userProfile
+
+    if (userId) {
+      // Load specific user's profile by ID
+      userProfile = await profilesService.getById(userId)
+    } else {
+      // Load current user's profile
+      userProfile = currUserProfile
+    }
 
     if (userProfile) {
       profile.value = userProfile
@@ -174,6 +198,15 @@ function cancelEdit() {
     phone: profile.value.phone || '',
     avatar_url: profile.value.avatar_url || '',
   }
+}
+
+// Guard to prevent editing other users' profiles
+function startEdit() {
+  if (!isOwnProfile.value) {
+    displayNotification('You can only edit your own profile', 'error')
+    return
+  }
+  editMode.value = true
 }
 
 // Computed properties
@@ -308,12 +341,12 @@ onMounted(() => {
                         </div>
 
                         <v-btn
-                          v-if="!editMode"
+                          v-if="!editMode && isOwnProfile"
                           color="#f5c52b"
                           variant="flat"
                           prepend-icon="mdi-pencil"
                           class="edit-profile-btn"
-                          @click="editMode = true"
+                          @click="startEdit()"
                         >
                           Edit Profile
                         </v-btn>
@@ -407,7 +440,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Edit Mode -->
-                <v-form v-else @submit.prevent="saveProfile">
+                <v-form v-if="editMode && isOwnProfile" @submit.prevent="saveProfile">
                   <v-row>
                     <v-col cols="12" md="6">
                       <v-text-field

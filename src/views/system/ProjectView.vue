@@ -89,6 +89,11 @@ const quillEditorRef = ref(null)
 // Project members for permission checking
 const projectMemberIds = ref([])
 
+// Member profiles for clickable links
+const writerProfiles = ref([]) // Array of { id, displayName }
+const artistProfiles = ref([]) // Array of { id, displayName }
+const sectionHeadProfile = ref(null) // { id, displayName }
+
 // Auto-save state
 const lastSaveTime = ref(null)
 const saveTimeout = ref(null)
@@ -533,6 +538,11 @@ const cancelLeave = () => {
   showUnsavedChangesDialog.value = false
 }
 
+// Function to navigate to a user's profile
+const viewUserProfile = (userId) => {
+  router.push(`/profile/${userId}`)
+}
+
 const projectTypeMap = {
   magazine: '/magazine',
   newsletter: '/newsletter',
@@ -619,14 +629,19 @@ const loadProjectData = async () => {
 
     // Get section head name from section_head_id
     let sectionHeadName = 'Not assigned'
+    sectionHeadProfile.value = null
     if (foundProject.section_head_id) {
       try {
-        const sectionHeadProfile = await profilesService.getById(foundProject.section_head_id)
-        if (sectionHeadProfile) {
+        const sectionHeadProfileData = await profilesService.getById(foundProject.section_head_id)
+        if (sectionHeadProfileData && sectionHeadProfileData.id) {
           const fullName =
-            `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim()
-          const profile = { ...sectionHeadProfile, full_name: fullName }
-          sectionHeadName = getDisplayName(sectionHeadProfile.email, profile, true)
+            `${sectionHeadProfileData.first_name || ''} ${sectionHeadProfileData.last_name || ''}`.trim()
+          const profile = { ...sectionHeadProfileData, full_name: fullName }
+          sectionHeadName = getDisplayName(sectionHeadProfileData.email, profile, true)
+          sectionHeadProfile.value = {
+            id: sectionHeadProfileData.id,
+            displayName: sectionHeadName,
+          }
         }
       } catch (error) {
         console.error('Error loading section head profile:', error)
@@ -634,25 +649,33 @@ const loadProjectData = async () => {
     }
 
     // Get writers and artists from project_members
-    const writers = members
+    const writersArray = members
       .filter((m) => m.role === 'writer')
       .map((m) => {
         const profile = m.profiles
         const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
         const fullProfile = { ...profile, full_name: fullName }
-        return getDisplayName(profile.email, fullProfile, false)
+        const displayName = getDisplayName(profile.email, fullProfile, false)
+        return { id: profile?.id || null, displayName, fullProfile }
       })
-    const writersText = writers.length > 0 ? writers.join(', ') : 'Not assigned'
+      .filter((w) => w.id)
+    const writersText =
+      writersArray.length > 0 ? writersArray.map((w) => w.displayName).join(', ') : 'Not assigned'
+    writerProfiles.value = writersArray
 
-    const artists = members
+    const artistsArray = members
       .filter((m) => m.role === 'artist')
       .map((m) => {
         const profile = m.profiles
         const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
         const fullProfile = { ...profile, full_name: fullName }
-        return getDisplayName(profile.email, fullProfile, false)
+        const displayName = getDisplayName(profile.email, fullProfile, false)
+        return { id: profile?.id || null, displayName, fullProfile }
       })
-    const artistsText = artists.length > 0 ? artists.join(', ') : 'Not assigned'
+      .filter((a) => a.id)
+    const artistsText =
+      artistsArray.length > 0 ? artistsArray.map((a) => a.displayName).join(', ') : 'Not assigned'
+    artistProfiles.value = artistsArray
 
     // Normalize status for draft projects
     let normalizedStatus = foundProject.status || 'draft'
@@ -1035,7 +1058,14 @@ const getBackButtonText = computed(() => {
                 </div>
                 <div class="metadata-item">
                   <span class="label">Section Head:</span>
-                  <span class="value">{{ project.sectionHead }}</span>
+                  <span class="value">
+                    <template v-if="sectionHeadProfile">
+                      <span @click="viewUserProfile(sectionHeadProfile.id)" class="profile-link">
+                        {{ sectionHeadProfile.displayName }}
+                      </span>
+                    </template>
+                    <template v-else>{{ project.sectionHead }}</template>
+                  </span>
                 </div>
               </div>
 
@@ -1046,7 +1076,20 @@ const getBackButtonText = computed(() => {
                 </div>
                 <div class="metadata-item">
                   <span class="label">Writer:</span>
-                  <span class="value">{{ project.writers || 'Not assigned' }}</span>
+                  <span class="value">
+                    <template v-if="writerProfiles.length > 0">
+                      <span
+                        v-for="(writer, index) in writerProfiles"
+                        :key="writer.id"
+                        @click="viewUserProfile(writer.id)"
+                        class="profile-link"
+                      >
+                        {{ writer.displayName
+                        }}<span v-if="index < writerProfiles.length - 1">, </span>
+                      </span>
+                    </template>
+                    <template v-else>{{ project.writers || 'Not assigned' }}</template>
+                  </span>
                 </div>
               </div>
 
@@ -1057,7 +1100,20 @@ const getBackButtonText = computed(() => {
                 </div>
                 <div class="metadata-item">
                   <span class="label">Artist:</span>
-                  <span class="value">{{ project.artists || 'Not assigned' }}</span>
+                  <span class="value">
+                    <template v-if="artistProfiles.length > 0">
+                      <span
+                        v-for="(artist, index) in artistProfiles"
+                        :key="artist.id"
+                        @click="viewUserProfile(artist.id)"
+                        class="profile-link"
+                      >
+                        {{ artist.displayName
+                        }}<span v-if="index < artistProfiles.length - 1">, </span>
+                      </span>
+                    </template>
+                    <template v-else>{{ project.artists || 'Not assigned' }}</template>
+                  </span>
                 </div>
               </div>
 
@@ -2507,5 +2563,14 @@ const getBackButtonText = computed(() => {
 .comments-text {
   color: #6b7280;
   margin-left: 6px;
+}
+
+.profile-link {
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.profile-link:hover {
+  opacity: 0.7;
 }
 </style>
