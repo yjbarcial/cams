@@ -135,6 +135,7 @@ export const getUnreadCount = async () => {
  * @param {string} notificationData.recipientEmail - Recipient email (for filtering)
  * @param {number} notificationData.recipientUserId - Recipient user ID (for filtering, more reliable)
  * @param {string} notificationData.createdBy - Creator name (optional)
+ * @param {string} notificationData.workflowLabel - Workflow transition label (for admin visibility, e.g., "Draft → Section Head")
  * @returns {Object} Created notification object
  */
 export const createNotification = async (notificationData) => {
@@ -166,6 +167,7 @@ export const createNotification = async (notificationData) => {
       recipientEmail: notificationData.recipientEmail || null,
       recipientUserId: notificationData.recipientUserId || null, // Add user ID
       createdBy: notificationData.createdBy || 'System',
+      workflowLabel: notificationData.workflowLabel || null, // Workflow label for admins
     }
 
     // Get ALL notifications from localStorage (not filtered)
@@ -626,6 +628,7 @@ const getDesignationsByStatus = (status) => {
     to_creative_director: ['Creative Director'],
     to_editor_in_chief: ['Editor-in-Chief'],
     to_chief_adviser: ['Chief Adviser'],
+    to_archival_manager: ['Archival Manager', 'Circulations Manager'],
     for_publish: ['Archival Manager', 'Circulations Manager'],
     published: ['Admin', 'Archival Manager'],
   }
@@ -640,9 +643,17 @@ const getDesignationsByStatus = (status) => {
  * @param {string} params.title - Notification title
  * @param {string} params.description - Notification description
  * @param {string} params.actionBy - User who performed the action
+ * @param {string} params.workflowLabel - Workflow transition label for admins (optional)
  * @returns {Promise<Array>} Array of created notifications
  */
-export const notifyAllInvolvedUsers = async ({ project, type, title, description, actionBy }) => {
+export const notifyAllInvolvedUsers = async ({
+  project,
+  type,
+  title,
+  description,
+  actionBy,
+  workflowLabel,
+}) => {
   try {
     const involvedEmails = await getProjectInvolvedUsers(project)
     const { profilesService } = await import('./supabaseService.js')
@@ -674,6 +685,7 @@ export const notifyAllInvolvedUsers = async ({ project, type, title, description
         recipientEmail: email,
         recipientUserId,
         createdBy: actionBy,
+        workflowLabel,
       })
 
       if (notification) {
@@ -753,12 +765,55 @@ export const notifyNewComment = async ({ project, commentAuthor, commentText }) 
  * @param {string} params.actionBy - User who changed status
  * @param {string} params.comments - Additional comments (optional)
  */
-export const notifyStatusChange = async ({ project, oldStatus, newStatus, actionBy, comments }) => {
+/**
+ * Generate workflow label for admin visibility
+ * @param {string} oldStatus - Previous status
+ * @param {string} newStatus - New status
+ * @returns {string} Workflow label like "Draft → Section Head"
+ */
+const getWorkflowLabel = (oldStatus, newStatus) => {
+  const statusMap = {
+    draft: 'Draft',
+    to_section_head: 'Section Head Review',
+    to_technical_editor: 'Technical Editor Review',
+    to_creative_director: 'Creative Director Review',
+    to_editor_in_chief: 'Editor-in-Chief Review',
+    to_chief_adviser: 'Chief Adviser Review',
+    to_archival_manager: 'Archival Manager Review',
+    for_publish: 'Ready for Publishing',
+    published: 'Published',
+    // Returned statuses
+    returned_by_section_head: 'Returned by Section Head',
+    returned_by_technical_editor: 'Returned by Technical Editor',
+    returned_by_creative_director: 'Returned by Creative Director',
+    returned_by_editor_in_chief: 'Returned by Editor-in-Chief',
+    returned_by_chief_adviser: 'Returned by Chief Adviser',
+  }
+
+  // Clean status strings for comparison
+  const oldStatusClean = oldStatus?.toLowerCase()?.replace(/\s+/g, '_')
+  const newStatusClean = newStatus?.toLowerCase()?.replace(/\s+/g, '_')
+
+  const oldDisplay = statusMap[oldStatusClean] || 'Previous Stage'
+  const newDisplay = statusMap[newStatusClean] || 'Next Stage'
+
+  return `${oldDisplay} → ${newDisplay}`
+}
+
+export const notifyStatusChange = async ({
+  project,
+  oldStatus,
+  newStatus,
+  actionBy,
+  comments,
+  action,
+}) => {
   console.log('📬 notifyStatusChange called:', {
     projectId: project?.id,
     projectTitle: project?.title,
     oldStatus,
     newStatus,
+    action,
     actionBy,
     comments,
   })
@@ -769,8 +824,18 @@ export const notifyStatusChange = async ({ project, oldStatus, newStatus, action
   // Get human-readable status name
   const statusDisplay = getStatusDisplayName(newStatus)
 
+  // Generate workflow label for admins to see the full flow
+  const workflowLabel = getWorkflowLabel(oldStatus, newStatus)
+
   // Determine notification type and description
-  if (newStatus?.includes('returned') || newStatus?.includes('Returned')) {
+  if (action === 'return' || action === 'edit') {
+    type = 'Returned'
+    const actionText = action === 'return' ? 'returned' : 'requested edit on'
+    description = `${actionBy} ${actionText} "${project.title}" back to writer/artist.`
+    if (comments) {
+      description += ` Comment: ${comments}`
+    }
+  } else if (newStatus?.includes('returned') || newStatus?.includes('Returned')) {
     type = 'Returned'
     description = `${actionBy} returned "${project.title}" for edits.`
     if (comments) {
@@ -799,6 +864,7 @@ export const notifyStatusChange = async ({ project, oldStatus, newStatus, action
     newStatus === 'to_creative_director' ||
     newStatus === 'to_editor_in_chief' ||
     newStatus === 'to_chief_adviser' ||
+    newStatus === 'to_archival_manager' ||
     newStatus === 'To Chief Adviser'
   ) {
     type = 'Forwarded'
@@ -820,7 +886,7 @@ export const notifyStatusChange = async ({ project, oldStatus, newStatus, action
     }
   }
 
-  console.log('📬 Notification details:', { type, description })
+  console.log('📬 Notification details:', { type, description, workflowLabel })
 
   const result = await notifyAllInvolvedUsers({
     project,
@@ -828,6 +894,7 @@ export const notifyStatusChange = async ({ project, oldStatus, newStatus, action
     title: `Status changed: "${project.title}"`,
     description,
     actionBy,
+    workflowLabel,
   })
 
   console.log('📬 Notifications sent:', result?.length || 0)

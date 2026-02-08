@@ -15,8 +15,9 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
-import { createStatusChangeNotification } from '@/services/notificationsService.js'
+import { notifyStatusChange } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
+import { formatStatus } from '@/utils/statusFormatter.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -234,17 +235,22 @@ const submitApproval = async () => {
 
     project.value.status = newStatus
 
-    // Create notification
-    createStatusChangeNotification({
-      projectId: projectId,
-      projectType: projectType.value,
-      projectTitle: project.value.title,
-      oldStatus: 'For Publish',
-      newStatus: 'Published',
-      actionBy: user.id,
-      recipient: 'All',
-      comments: approvalComments.value,
-    })
+    // Create notification for publishing with workflow labels
+    try {
+      const displayName = getDisplayName(currentUserProfile.value)
+      await notifyStatusChange({
+        project: project.value,
+        oldStatus: 'for_publish',
+        newStatus: 'published',
+        actionBy: displayName,
+        comments: approvalComments.value,
+        action: 'publish',
+      })
+      console.log('✅ Notification created successfully')
+    } catch (notifError) {
+      console.warn('⚠️ Notification creation failed (non-critical):', notifError)
+      // Continue execution even if notification fails
+    }
 
     // Try to save to Supabase
     try {
@@ -466,18 +472,6 @@ const formatDate = (dateString) => {
     month: 'short',
     day: 'numeric',
   })
-}
-
-const formatStatus = (status) => {
-  if (!status) return 'Draft'
-  let formatted = status
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-  formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
-  formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
-  formatted = formatted.replace(/For Publish/gi, 'For Publish')
-  return formatted
 }
 
 onUnmounted(() => {

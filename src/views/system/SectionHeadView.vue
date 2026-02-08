@@ -17,6 +17,7 @@ import {
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import { notifyStatusChange } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
+import { formatStatus } from '@/utils/statusFormatter.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -339,6 +340,7 @@ const submitApproval = async () => {
         project: updatedProject,
         oldStatus: 'to_section_head',
         newStatus: 'draft',
+        action: action,
         actionBy: displayName,
         comments: approvalComments.value,
       })
@@ -598,18 +600,6 @@ const formatDate = (dateString) => {
     month: 'short',
     day: 'numeric',
   })
-}
-
-const formatStatus = (status) => {
-  if (!status) return 'Draft'
-  let formatted = status
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-  formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
-  formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
-  formatted = formatted.replace(/For Publish/gi, 'For Publish')
-  return formatted
 }
 
 onUnmounted(() => {

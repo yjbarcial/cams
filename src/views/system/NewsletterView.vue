@@ -149,16 +149,14 @@ const handleView = (projectId) => {
     router.push(`/technical-editor/${projectId}?type=newsletter`)
   } else if (
     project.status === 'to_editor_in_chief' ||
-    project.status === 'EIC Review' ||
-    project.status === 'Returned by EIC' ||
-    project.status === 'Returned by Chief Adviser'
+    project.status === 'returned_by_chief_adviser'
   ) {
     router.push(`/editor-in-chief/${projectId}?type=newsletter`)
-  } else if (project.status === 'For Publish') {
+  } else if (project.status === 'for_publish' || project.status === 'For Publish') {
     router.push(`/archival-manager/${projectId}?type=newsletter`)
-  } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
+  } else if (project.status === 'to_chief_adviser') {
     router.push(`/chief-adviser/${projectId}?type=newsletter`)
-  } else if (project.status === 'Published' || project.status === 'EIC Approved') {
+  } else if (project.status === 'published') {
     router.push(`/project/${projectId}?type=newsletter`)
   } else {
     router.push(`/project/${projectId}?type=newsletter`)

@@ -17,6 +17,7 @@ import {
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import { notifyStatusChange } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
+import { formatStatus } from '@/utils/statusFormatter.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -295,11 +296,19 @@ const submitApproval = async () => {
       updated_at: new Date().toISOString(),
     }
 
-    if (approvalAction.value === 'return') {
-      updateData.returned_by_technical_editor = true
-      updateData.returned_by_technical_editor_date = new Date().toISOString()
-      updateData.returned_by_technical_editor_comments = approvalComments.value
-      updateData.returned_by_technical_editor_user = user.id
+    if (approvalAction.value === 'approve') {
+      // Track who approved and when
+      const roleLabel =
+        currentUserRole === 'Creative Director' ? 'creative_director' : 'technical_editor'
+      updateData[`${roleLabel}_approved_by`] = user.id
+      updateData[`${roleLabel}_approved_date`] = new Date().toISOString()
+    } else if (approvalAction.value === 'return' || approvalAction.value === 'edit') {
+      const roleLabel =
+        currentUserRole === 'Creative Director' ? 'creative_director' : 'technical_editor'
+      updateData[`returned_by_${roleLabel}`] = true
+      updateData[`returned_by_${roleLabel}_date`] = new Date().toISOString()
+      updateData[`returned_by_${roleLabel}_comments`] = approvalComments.value
+      updateData[`returned_by_${roleLabel}_user`] = user.id
     }
 
     await projectsService.update(projectId, updateData)
@@ -339,6 +348,7 @@ const submitApproval = async () => {
             ? 'to_creative_director'
             : 'to_technical_editor',
         newStatus: 'draft',
+        action: approvalAction.value,
         actionBy: displayName,
         comments: approvalComments.value,
       })
@@ -590,19 +600,6 @@ const formatDate = (dateString) => {
     month: 'short',
     day: 'numeric',
   })
-}
-
-const formatStatus = (status) => {
-  if (!status) return 'Draft'
-  let formatted = status
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-  formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
-  formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
-  formatted = formatted.replace(/For Publish/gi, 'For Publish')
-  formatted = formatted.replace(/Creative Director/gi, 'Creative Director')
-  return formatted
 }
 
 const getProjectStatus = (action) => {

@@ -93,40 +93,47 @@ const handleNotificationClick = async (notification) => {
 
       if (project) {
         // If project is published, show in archive viewer
-        if (project.status === 'Published') {
+        if (project.status === 'Published' || project.status === 'published') {
+          console.log('📌 Project status:', project.status, '→ Opening archive viewer')
           openProjectViewer(project, notification.projectType)
         } else {
           // Route based on project status to the correct view
           const projectId = notification.projectId
           const projectType = project.project_type || notification.projectType
 
+          console.log('📌 Project status:', project.status, '→ Routing to appropriate view')
+
           if (project.status === 'draft' || project.status === 'returned_by_section_head') {
+            console.log('   Routes to: ProjectView')
             router.push(`/project/${projectId}?type=${projectType}`)
           } else if (
             project.status === 'to_section_head' ||
             project.status === 'returned_by_technical_editor' ||
             project.status === 'returned_by_creative_director'
           ) {
+            console.log('   Routes to: SectionHeadView')
             router.push(`/section-head/${projectId}?type=${projectType}`)
           } else if (
             project.status === 'to_technical_editor' ||
             project.status === 'to_creative_director'
           ) {
+            console.log('   Routes to: TechnicalEditorView')
             router.push(`/technical-editor/${projectId}?type=${projectType}`)
           } else if (
             project.status === 'to_editor_in_chief' ||
-            project.status === 'returned_by_chief_adviser' ||
-            project.status === 'Returned by Chief Adviser'
+            project.status === 'returned_by_chief_adviser'
           ) {
+            console.log('   Routes to: EditorInChiefView')
             router.push(`/editor-in-chief/${projectId}?type=${projectType}`)
-          } else if (project.status === 'For Publish') {
+          } else if (project.status === 'for_publish' || project.status === 'For Publish') {
+            console.log('   Routes to: ArchivalManagerView')
             router.push(`/archival-manager/${projectId}?type=${projectType}`)
-          } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
+          } else if (project.status === 'to_chief_adviser') {
+            console.log('   Routes to: ChiefAdviserView')
             router.push(`/chief-adviser/${projectId}?type=${projectType}`)
-          } else if (project.status === 'EIC Approved') {
-            router.push(`/project/${projectId}?type=${projectType}`)
           } else {
             // Default to project view
+            console.log('   Routes to: ProjectView (default)', project.status)
             router.push(`/project/${projectId}?type=${projectType}`)
           }
         }
@@ -315,7 +322,18 @@ onMounted(async () => {
                 </div>
 
                 <div class="notification-body-content">
-                  <h3 class="notification-title">{{ notification.title }}</h3>
+                  <div class="notification-title-section">
+                    <h3 class="notification-title">{{ notification.title }}</h3>
+                    <v-chip
+                      v-if="notification.workflowLabel"
+                      size="small"
+                      class="workflow-label-chip"
+                      variant="outlined"
+                      color="primary"
+                    >
+                      {{ notification.workflowLabel }}
+                    </v-chip>
+                  </div>
                   <p class="notification-description">{{ notification.description }}</p>
                 </div>
 
@@ -666,12 +684,32 @@ onMounted(async () => {
   margin-bottom: 18px;
 }
 
+.notification-title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
 .notification-title {
   font-size: 17px;
   font-weight: 700;
   color: #111827;
-  margin: 0 0 10px 0;
+  margin: 0;
   line-height: 1.5;
+  flex: 1;
+}
+
+.workflow-label-chip {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 4px 12px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0.02));
+  border-color: #3b82f6 !important;
+  color: #3b82f6 !important;
 }
 
 .notification-description {

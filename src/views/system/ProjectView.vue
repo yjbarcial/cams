@@ -22,6 +22,8 @@ import {
   notifyNewComment,
 } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
+import { formatStatus } from '@/utils/statusFormatter.js'
+import { getApprovalHistory, formatApprovalTimestamp } from '@/utils/approvalHistory.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -881,16 +883,7 @@ const getStatusColor = (status) => {
 
 // Get status text for display
 const getStatusDisplay = (status) => {
-  const statusLabels = {
-    draft: 'Draft',
-    to_section_head: 'To Section Head',
-    to_technical_editor: 'To Technical Editor',
-    to_editor_in_chief: 'To Editor-in-Chief',
-    'To Chief Adviser': 'To Chief Adviser',
-    published: 'Published',
-    rejected: 'Rejected',
-  }
-  return statusLabels[status] || status
+  return formatStatus(status)
 }
 
 // Watch for editor content changes to keep QuillEditor in sync
@@ -942,6 +935,10 @@ onUnmounted(() => {
 })
 
 // Add this computed property after the other computed properties
+const approvalHistory = computed(() => {
+  return getApprovalHistory(project.value)
+})
+
 const getBackButtonText = computed(() => {
   const typeNames = {
     magazine: 'Magazine',
@@ -1068,6 +1065,45 @@ const getBackButtonText = computed(() => {
                 <div class="metadata-item">
                   <span class="label">Media Uploaded:</span>
                   <span class="value">{{ project.mediaUploaded }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Approval History Section -->
+            <div v-if="approvalHistory.length > 0" class="approval-history-section">
+              <h3 class="approval-history-title">Approval History</h3>
+              <div class="approval-timeline">
+                <div
+                  v-for="(approval, index) in approvalHistory"
+                  :key="index"
+                  class="approval-item"
+                >
+                  <div class="approval-marker">
+                    <v-icon size="20" :color="approval.type === 'publish' ? 'success' : 'primary'">
+                      {{
+                        approval.type === 'publish'
+                          ? 'mdi-check-circle'
+                          : approval.type === 'forward'
+                            ? 'mdi-arrow-right-circle'
+                            : 'mdi-checkmark-circle'
+                      }}
+                    </v-icon>
+                  </div>
+                  <div class="approval-content">
+                    <div class="approval-header">
+                      <span class="stage-name">{{ approval.stage }}</span>
+                      <span class="timestamp">{{
+                        formatApprovalTimestamp(approval.timestamp)
+                      }}</span>
+                    </div>
+                    <div class="approval-meta">
+                      <span class="user-id">By: {{ approval.approvedBy.substring(0, 8) }}</span>
+                    </div>
+                    <div v-if="approval.comments" class="approval-comments">
+                      <span class="comments-label">Notes:</span>
+                      <span class="comments-text">{{ approval.comments }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2382,5 +2418,94 @@ const getBackButtonText = computed(() => {
 .slide-down-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(-20px);
+}
+
+/* Approval History Styles */
+.approval-history-section {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.approval-history-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 20px 0;
+}
+
+.approval-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.approval-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background-color: white;
+  border-left: 3px solid #0ea5e9;
+  border-radius: 4px;
+}
+
+.approval-marker {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.approval-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.approval-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stage-name {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.timestamp {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.approval-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.user-id {
+  font-family: monospace;
+  background-color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.approval-comments {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.comments-label {
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.comments-text {
+  color: #6b7280;
+  margin-left: 6px;
 }
 </style>

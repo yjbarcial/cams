@@ -15,8 +15,9 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
-import { createStatusChangeNotification } from '@/services/notificationsService.js'
+import { notifyStatusChange } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
+import { formatStatus } from '@/utils/statusFormatter.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -296,40 +297,21 @@ const submitApproval = async () => {
 
     project.value.status = newStatus
 
-    // Create notification based on action
-    if (action === 'approve') {
-      createStatusChangeNotification({
-        projectId: projectId,
-        projectType: project.value.type,
-        projectTitle: project.value.title,
-        oldStatus: 'To Chief Adviser',
-        newStatus: 'For Publish',
-        actionBy: currentUser.value,
-        recipient: 'Archival Manager',
+    // Create notification based on action with workflow labels
+    try {
+      const displayName = getDisplayName(currentUserProfile.value)
+      await notifyStatusChange({
+        project: project.value,
+        oldStatus: 'to_chief_adviser',
+        newStatus: newStatus,
+        actionBy: displayName,
         comments: approvalComments.value,
+        action: action,
       })
-    } else if (action === 'return') {
-      createStatusChangeNotification({
-        projectId: projectId,
-        projectType: project.value.type,
-        projectTitle: project.value.title,
-        oldStatus: 'To Chief Adviser',
-        newStatus: 'Returned by Chief Adviser',
-        actionBy: currentUser.value,
-        recipient: 'Editor-in-Chief',
-        comments: approvalComments.value,
-      })
-    } else if (action === 'reject') {
-      createStatusChangeNotification({
-        projectId: projectId,
-        projectType: project.value.type,
-        projectTitle: project.value.title,
-        oldStatus: 'To Chief Adviser',
-        newStatus: 'returned_by_section_head',
-        actionBy: currentUser.value,
-        recipient: 'Artist and Writer',
-        comments: approvalComments.value,
-      })
+      console.log('✅ Notification created successfully')
+    } catch (notifError) {
+      console.warn('⚠️ Notification creation failed (non-critical):', notifError)
+      // Continue execution even if notification fails
     }
 
     // Try to save to Supabase (non-blocking)
@@ -421,7 +403,7 @@ const loadProjectComments = async () => {
 
 const loadProjectData = async () => {
   try {
-    console.log('🔍 Loading project from Supabase:', projectId)
+    console.log('🔍 [ChiefAdviserView] Loading project from Supabase:', projectId)
 
     const foundProject = await projectsService.getById(projectId)
 
@@ -628,18 +610,6 @@ const formatDate = (dateString) => {
   })
 }
 
-const formatStatus = (status) => {
-  if (!status) return 'Draft'
-  let formatted = status
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-  formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
-  formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
-  formatted = formatted.replace(/For Publish/gi, 'For Publish')
-  return formatted
-}
-
 onUnmounted(() => {
   if (saveTimeout.value) {
     clearTimeout(saveTimeout.value)
@@ -790,10 +760,7 @@ onMounted(async () => {
 
           <v-col cols="12" lg="4" class="right-panel">
             <div class="history-section mb-4">
-              <ProjectHistory
-                :project-id="projectId"
-                :project-type="projectType"
-              />
+              <ProjectHistory :project-id="projectId" :project-type="projectType" />
             </div>
 
             <HighlightComments

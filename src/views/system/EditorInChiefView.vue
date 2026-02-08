@@ -15,8 +15,9 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
-import { createStatusChangeNotification } from '@/services/notificationsService.js'
+import { notifyStatusChange } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
+import { formatStatus } from '@/utils/statusFormatter.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -269,18 +270,18 @@ const submitApproval = async () => {
       updated_at: new Date().toISOString(),
     }
 
-    // Only add EIC-specific fields if they're actually needed
-    // if (action === 'approve') {
-    //   updateData.eic_approved_by = user.id
-    //   updateData.eic_approved_date = new Date().toISOString()
-    //   updateData.eic_comments = approvalComments.value
-    //   updateData.priority = approvalPriority.value
-    // } else if (action === 'forward') {
-    //   updateData.forwarded_to_adviser_by = user.id
-    //   updateData.forwarded_to_adviser_date = new Date().toISOString()
-    //   updateData.forward_notes = approvalComments.value
-    //   updateData.priority = approvalPriority.value
-    // }
+    // Track who approved and when
+    if (action === 'approve') {
+      updateData.eic_approved_by = user.id
+      updateData.eic_approved_date = new Date().toISOString()
+      updateData.eic_comments = approvalComments.value
+      updateData.priority = approvalPriority.value
+    } else if (action === 'forward') {
+      updateData.forwarded_to_adviser_by = user.id
+      updateData.forwarded_to_adviser_date = new Date().toISOString()
+      updateData.forward_notes = approvalComments.value
+      updateData.priority = approvalPriority.value
+    }
 
     console.log('📝 Update data:', updateData)
 
@@ -290,35 +291,18 @@ const submitApproval = async () => {
 
     project.value.status = newStatus
 
-    // Create notification based on action - wrap in try-catch to isolate errors
+    // Create notification based on action with workflow labels
     try {
-      if (action === 'approve') {
-        console.log('📬 Creating notification for Archival Manager...')
-        await createStatusChangeNotification({
-          projectId: projectId,
-          projectType: project.value.type,
-          projectTitle: project.value.title,
-          oldStatus: 'to_editor_in_chief',
-          newStatus: 'For Publish',
-          actionBy: currentUser.value,
-          recipient: 'Archival Manager',
-          comments: approvalComments.value,
-        })
-        console.log('✅ Notification created successfully')
-      } else if (action === 'forward') {
-        console.log('📬 Creating notification for Chief Adviser...')
-        await createStatusChangeNotification({
-          projectId: projectId,
-          projectType: project.value.type,
-          projectTitle: project.value.title,
-          oldStatus: 'to_editor_in_chief',
-          newStatus: 'to_chief_adviser',
-          actionBy: currentUser.value,
-          recipient: 'Chief Adviser',
-          comments: approvalComments.value,
-        })
-        console.log('✅ Notification created successfully')
-      }
+      const displayName = getDisplayName(currentUserProfile.value)
+      await notifyStatusChange({
+        project: project.value,
+        oldStatus: 'to_editor_in_chief',
+        newStatus: newStatus,
+        actionBy: displayName,
+        comments: approvalComments.value,
+        action: action === 'forward' ? 'forward' : 'approve',
+      })
+      console.log('✅ Notification created successfully')
     } catch (notifError) {
       console.warn('⚠️ Notification creation failed (non-critical):', notifError)
       // Continue execution even if notification fails
@@ -601,27 +585,6 @@ const formatDate = (dateString) => {
     month: 'short',
     day: 'numeric',
   })
-}
-
-const formatStatus = (status) => {
-  if (!status) return 'Draft'
-
-  // Replace underscores with spaces and capitalize each word
-  let formatted = status
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-
-  // Special case: "To Editor In Chief" should be "To Editor-in-Chief"
-  formatted = formatted.replace(/Editor In Chief/g, 'Editor-in-Chief')
-
-  // Ensure proper capitalization for Chief Adviser
-  formatted = formatted.replace(/Chief Adviser/gi, 'Chief Adviser')
-
-  // Ensure proper capitalization for For Publish
-  formatted = formatted.replace(/For Publish/gi, 'For Publish')
-
-  return formatted
 }
 
 onUnmounted(() => {
