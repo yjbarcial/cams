@@ -15,7 +15,7 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
-import { createStatusChangeNotification } from '@/services/notificationsService.js'
+import { notifyStatusChange } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
 
 const route = useRoute()
@@ -161,13 +161,15 @@ const debouncedSave = () => {
 // SECTION HEAD ONLY - Simple approval actions
 const approvalActions = computed(() => {
   return [
-    { value: 'return', text: 'Request to Edit', color: 'warning', icon: 'mdi-pencil' },
-    { value: 'approve', text: 'Approve', color: 'success', icon: 'mdi-check' },
+    // Return to writer button available to all
+    { value: 'return', text: 'Return to Writer/Artist', color: 'warning' },
+    // Request to edit for text changes
+    { value: 'edit', text: 'Request to Edit', color: 'dark' },
+    { value: 'approve', text: 'Approve', color: 'success' },
     {
       value: 'publish',
       text: 'Publish',
       color: 'primary',
-      icon: 'mdi-lock',
       disabled: true,
       tooltip: 'Only Editor-in-Chief can publish after approval',
     },
@@ -193,7 +195,7 @@ const getNextStatus = (action) => {
     }
     return 'to_technical_editor' // Default for writers
   }
-  if (action === 'return') return 'returned_by_section_head'
+  if (action === 'return' || action === 'edit') return 'draft' // Return to draft for writer/artist to edit
   return project.value.status
 }
 
@@ -211,7 +213,7 @@ const getCommentPlaceholder = () => {
     const recipient = hasArtist && !hasWriter ? 'Creative Director' : 'Technical Editor'
     return `Add any comments or notes for the ${recipient}...`
   }
-  if (approvalAction.value === 'return') {
+  if (approvalAction.value === 'return' || approvalAction.value === 'edit') {
     return 'Explain what needs to be edited or improved...'
   }
   return 'Add your comments...'
@@ -289,50 +291,55 @@ const submitApproval = async () => {
       await saveContentChanges()
     }
 
-    // Update status via Supabase
-    await projectsService.update(projectId, {
+    // Update status via Supabase with metadata tracking
+    const updateData = {
       status: newStatus,
       updated_at: new Date().toISOString(),
-      section_head_approved_by: action === 'approve' ? user.id : undefined,
-      section_head_approved_date: action === 'approve' ? new Date().toISOString() : undefined,
-      section_head_comments: action === 'approve' ? approvalComments.value : undefined,
-      priority_level: action === 'approve' ? approvalPriority.value : undefined,
-    })
+    }
+
+    if (action === 'approve') {
+      updateData.section_head_approved_by = user.id
+      updateData.section_head_approved_date = new Date().toISOString()
+      updateData.section_head_comments = approvalComments.value
+      updateData.priority_level = approvalPriority.value
+    } else if (action === 'return' || action === 'edit') {
+      updateData.returned_by_section_head = true
+      updateData.returned_by_section_head_date = new Date().toISOString()
+      updateData.returned_by_section_head_comments = approvalComments.value
+      updateData.returned_by_section_head_user = user.id
+    }
+
+    await projectsService.update(projectId, updateData)
 
     console.log('✅ Project status updated via Supabase')
 
     project.value.status = newStatus
 
     // Create notification based on action
+    const updatedProject = await projectsService.getById(projectId)
+    const userEmail = user.email || localStorage.getItem('userEmail') || 'Current User'
+    const fullName = currentUserProfile.value
+      ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+      : ''
+    const profile = currentUserProfile.value
+      ? { ...currentUserProfile.value, full_name: fullName }
+      : { full_name: fullName }
+    const displayName = getDisplayName(userEmail, profile, true)
+
     if (action === 'approve') {
-      const hasWriter =
-        project.value?.writers &&
-        project.value.writers !== 'Not assigned' &&
-        project.value.writers.trim() !== ''
-      const hasArtist =
-        project.value?.artists &&
-        project.value.artists !== 'Not assigned' &&
-        project.value.artists.trim() !== ''
-      const isCreativeDirector = hasArtist && !hasWriter
-      createStatusChangeNotification({
-        projectId: projectId,
-        projectType: projectType.value,
-        projectTitle: project.value.title,
+      await notifyStatusChange({
+        project: updatedProject,
         oldStatus: 'to_section_head',
-        newStatus: isCreativeDirector ? 'to_creative_director' : 'to_technical_editor',
-        actionBy: currentUser.value,
-        recipient: isCreativeDirector ? 'Creative Director' : 'Technical Editor',
+        newStatus: updatedProject.status,
+        actionBy: displayName,
         comments: approvalComments.value,
       })
-    } else if (action === 'return') {
-      createStatusChangeNotification({
-        projectId: projectId,
-        projectType: projectType.value,
-        projectTitle: project.value.title,
+    } else if (action === 'return' || action === 'edit') {
+      await notifyStatusChange({
+        project: updatedProject,
         oldStatus: 'to_section_head',
-        newStatus: 'returned_by_section_head',
-        actionBy: currentUser.value,
-        recipient: 'Writer',
+        newStatus: 'draft',
+        actionBy: displayName,
         comments: approvalComments.value,
       })
     }
@@ -744,16 +751,13 @@ onMounted(async () => {
                       @click="startApproval(action.value)"
                       variant="outlined"
                       :class="{
-                        'return-btn': action.value === 'return',
+                        'edit-btn': action.value === 'edit',
                         'approve-btn': action.value === 'approve',
                         'publish-btn': action.value === 'publish',
                         locked: action.disabled,
                       }"
                       :disabled="action.disabled"
                       v-bind="props"
-                      :prepend-icon="
-                        action.value === 'publish' && action.disabled ? 'mdi-lock' : undefined
-                      "
                     >
                       {{ action.text }}
                     </v-btn>
@@ -765,7 +769,7 @@ onMounted(async () => {
                   @click="startApproval(action.value)"
                   variant="outlined"
                   :class="{
-                    'return-btn': action.value === 'return',
+                    'edit-btn': action.value === 'edit',
                     'approve-btn': action.value === 'approve',
                     'publish-btn': action.value === 'publish',
                   }"
@@ -1190,6 +1194,7 @@ onMounted(async () => {
 }
 
 .return-btn,
+.edit-btn,
 .approve-btn,
 .publish-btn {
   background: #353535 !important;

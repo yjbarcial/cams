@@ -165,15 +165,20 @@ const approvalActions = computed(() => {
       value: 'forward',
       text: 'Forward to Chief Adviser',
       color: 'purple',
-      icon: null,
       disabled: false,
     },
     {
       value: 'approve',
       text: 'Approve',
       color: 'success',
-      icon: null,
       disabled: false,
+    },
+    {
+      value: 'publish',
+      text: 'Publish',
+      color: 'primary',
+      disabled: true,
+      tooltip: 'Only Editor-in-Chief can publish after approval',
     },
   ]
 })
@@ -752,18 +757,36 @@ onMounted(async () => {
 
             <div class="action-buttons">
               <template v-for="action in approvalActions" :key="action.value">
+                <v-tooltip v-if="action.tooltip" location="top">
+                  <template v-slot:activator="{ props }">
+                    <v-btn
+                      @click="startApproval(action.value)"
+                      variant="outlined"
+                      :class="{
+                        'forward-btn': action.value === 'forward',
+                        'approve-btn': action.value === 'approve',
+                        'publish-btn': action.value === 'publish',
+                        locked: action.disabled,
+                      }"
+                      :disabled="action.disabled"
+                      v-bind="props"
+                    >
+                      {{ action.text }}
+                    </v-btn>
+                  </template>
+                  <span>{{ action.tooltip }}</span>
+                </v-tooltip>
                 <v-btn
+                  v-else
                   @click="startApproval(action.value)"
-                  variant="flat"
-                  :disabled="action.disabled"
+                  variant="outlined"
                   :class="{
                     'forward-btn': action.value === 'forward',
                     'approve-btn': action.value === 'approve',
                     'publish-btn': action.value === 'publish',
-                    'publish-btn-locked': action.value === 'publish' && action.disabled,
                   }"
+                  :disabled="action.disabled"
                 >
-                  <v-icon v-if="action.icon" left>{{ action.icon }}</v-icon>
                   {{ action.text }}
                 </v-btn>
               </template>
@@ -1238,6 +1261,21 @@ onMounted(async () => {
 .approve-btn:hover {
   background: #d4a825 !important;
   border: 2px solid #353535 !important;
+}
+
+.publish-btn {
+  background: transparent !important;
+  border: 1px solid #9ca3af !important;
+  color: #9ca3af !important;
+  text-transform: uppercase !important;
+  font-weight: bold !important;
+  height: 36px !important;
+  padding: 8px 16px !important;
+}
+
+.publish-btn.locked {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .comments-section {

@@ -529,14 +529,14 @@ export const getProjectInvolvedUsers = async (project) => {
     try {
       const { data: members } = await supabase
         .from('project_members')
-        .select('profile_id')
+        .select('user_id')
         .eq('project_id', project.id)
 
       if (members && members.length > 0) {
         console.log(`📋 Found ${members.length} project members`)
         for (const member of members) {
           try {
-            const memberProfile = await profilesService.getById(member.profile_id)
+            const memberProfile = await profilesService.getById(member.user_id)
             if (memberProfile?.email) {
               involvedEmails.push(memberProfile.email)
               console.log('✅ Added project member:', memberProfile.email)
@@ -556,31 +556,8 @@ export const getProjectInvolvedUsers = async (project) => {
     console.log('👥 Workflow roles for status', project.status, ':', workflowRoles)
     console.log('👥 Workflow designations for status', project.status, ':', workflowDesignations)
 
-    // Query by role
-    for (const role of workflowRoles) {
-      try {
-        const { data: roleProfiles } = await supabase
-          .from('profiles')
-          .select('email, first_name, last_name, role')
-          .eq('role', role)
-
-        if (roleProfiles && roleProfiles.length > 0) {
-          console.log(`✅ Found ${roleProfiles.length} users with role '${role}'`)
-          roleProfiles.forEach((profile) => {
-            if (profile.email) {
-              involvedEmails.push(profile.email)
-              console.log(`  ➡️ Added ${role}:`, profile.email)
-            }
-          })
-        } else {
-          console.warn(`⚠️ No users found with role '${role}'`)
-        }
-      } catch (error) {
-        console.warn(`⚠️ Error fetching users with role '${role}':`, error)
-      }
-    }
-
-    // Query by designation_label (fallback since most profiles have role='member')
+    // Skip role-based query since most profiles have role='member'
+    // Use designation_label instead which is the actual system for role assignment
     for (const designation of workflowDesignations) {
       try {
         const { data: designationProfiles } = await supabase
@@ -642,7 +619,9 @@ const getWorkflowRolesByStatus = (status) => {
  */
 const getDesignationsByStatus = (status) => {
   const designationsByStatus = {
-    to_section_head: ['Section Head', 'Managing Editor', 'Associate Managing Editor'],
+    // For to_section_head: Don't include 'Section Head' since we fetch specific section_head_id from the project
+    // Instead include Managing Editor and Associate Managing Editor
+    to_section_head: ['Managing Editor', 'Associate Managing Editor'],
     to_technical_editor: ['Technical Editor'],
     to_creative_director: ['Creative Director'],
     to_editor_in_chief: ['Editor-in-Chief'],
