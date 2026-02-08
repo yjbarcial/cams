@@ -30,8 +30,11 @@ watch(
 
 const loadProjects = async () => {
   try {
-    // Load from Supabase with section head profile data
-    const { data, error } = await supabase
+    const userRole = localStorage.getItem('userRole')
+    const userId = localStorage.getItem('userId')
+
+    // Build base query
+    let query = supabase
       .from('projects')
       .select(
         `
@@ -42,6 +45,14 @@ const loadProjects = async () => {
       )
       .eq('project_type', 'folio')
       .order('created_at', { ascending: false })
+
+    // If user is a member (writer/artist), only show their projects
+    if (userRole === 'member' && userId) {
+      query = query.filter('project_members.user_id', 'eq', userId)
+    }
+    // section_head, editor, and admin see all projects
+
+    const { data, error } = await query
 
     if (error) throw error
 

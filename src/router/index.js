@@ -20,6 +20,7 @@ import TechnicalEditorView from '@/views/system/TechnicalEditorView.vue'
 import EditorInChiefView from '@/views/system/EditorInChiefView.vue'
 import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 import ArchivalManagerView from '@/views/system/ArchivalManagerView.vue'
+import { showAccessDenied } from '@/stores/accessDenied'
 
 // SYSTEM ADMINS ONLY - Access to admin panel and system settings
 // These are NOT content admins (EIC, Technical Editor, etc.)
@@ -28,6 +29,10 @@ const adminEmails = [
   'lovellhudson.clavel@carsu.edu.ph',
   'altheaguila.gorres@carsu.edu.ph',
 ]
+
+const getEffectiveUserRole = () => {
+  return localStorage.getItem('debugRole') || localStorage.getItem('userRole')
+}
 
 // Authentication guard
 const requireAuth = (to, from, next) => {
@@ -53,6 +58,138 @@ const requireAdmin = (to, from, next) => {
     next({ name: 'dashboard' })
   } else {
     next()
+  }
+}
+
+// Role-based guards for approval workflows
+// Section Head - can access section-head view
+const requireSectionHead = (to, from, next) => {
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+  if (!isLoggedIn) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  const userRole = getEffectiveUserRole()
+  const userEmail = localStorage.getItem('userEmail')
+
+  // Allow if admin or section head
+  if (userRole === 'section_head' || (userEmail && adminEmails.includes(userEmail))) {
+    next()
+  } else {
+    showAccessDenied('section_head')
+    next(false)
+  }
+}
+
+// Editor (Content Admin) - can access technical-editor, editor-in-chief, chief-adviser, archival-manager views
+const requireEditor = (to, from, next) => {
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+  if (!isLoggedIn) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  const userRole = getEffectiveUserRole()
+  const userEmail = localStorage.getItem('userEmail')
+
+  // Allow if editor (content admin) or system admin
+  if (userRole === 'editor' || (userEmail && adminEmails.includes(userEmail))) {
+    next()
+  } else {
+    showAccessDenied('editor')
+    next(false)
+  }
+}
+
+// Specific editor role guards
+const requireEditorInChief = (to, from, next) => {
+  if (!checkAuth(to, from, next)) return
+  const accessRole = localStorage.getItem('accessRole')
+  const userEmail = localStorage.getItem('userEmail')
+
+  if (accessRole === 'editor_in_chief' || (userEmail && adminEmails.includes(userEmail))) {
+    next()
+  } else {
+    showAccessDenied('editor_in_chief')
+    next(false)
+  }
+}
+
+const requireChiefAdviser = (to, from, next) => {
+  if (!checkAuth(to, from, next)) return
+  const accessRole = localStorage.getItem('accessRole')
+  const userEmail = localStorage.getItem('userEmail')
+
+  if (accessRole === 'chief_adviser' || (userEmail && adminEmails.includes(userEmail))) {
+    next()
+  } else {
+    showAccessDenied('chief_adviser')
+    next(false)
+  }
+}
+
+const requireArchivalManager = (to, from, next) => {
+  if (!checkAuth(to, from, next)) return
+  const accessRole = localStorage.getItem('accessRole')
+  const userEmail = localStorage.getItem('userEmail')
+
+  if (accessRole === 'archival_manager' || (userEmail && adminEmails.includes(userEmail))) {
+    next()
+  } else {
+    showAccessDenied('archival_manager')
+    next(false)
+  }
+}
+
+const requireTechnicalEditor = (to, from, next) => {
+  if (!checkAuth(to, from, next)) return
+  const accessRole = localStorage.getItem('accessRole')
+  const userEmail = localStorage.getItem('userEmail')
+
+  if (
+    accessRole === 'technical_editor' ||
+    accessRole === 'creative_director' ||
+    (userEmail && adminEmails.includes(userEmail))
+  ) {
+    next()
+  } else {
+    showAccessDenied('technical_editor')
+    next(false)
+  }
+}
+
+// Helper to check auth and avoid repetition
+const checkAuth = (to, from, next) => {
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+  if (!isLoggedIn) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+    return false
+  }
+  return true
+}
+
+// Member (Writer/Artist) - can only access their own project view
+const requireMember = (to, from, next) => {
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+  if (!isLoggedIn) {
+    next({ name: 'login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  const userRole = getEffectiveUserRole()
+  const userEmail = localStorage.getItem('userEmail')
+
+  // Allow if member (writer/artist) or admin
+  if (
+    userRole === 'member' ||
+    userRole === 'admin' ||
+    (userEmail && adminEmails.includes(userEmail))
+  ) {
+    next()
+  } else {
+    showAccessDenied('member')
+    next(false)
   }
 }
 
@@ -188,7 +325,7 @@ const router = createRouter({
       name: 'project',
       component: ProjectView,
       props: true,
-      beforeEnter: requireAuth,
+      beforeEnter: requireMember,
     },
 
     // Approval Routes - Updated Flow: Section Head → Technical Editor → EIC → Chief Adviser → Archival Manager
@@ -197,35 +334,35 @@ const router = createRouter({
       name: 'section-head',
       component: SectionHeadView,
       props: true,
-      beforeEnter: requireAuth,
+      beforeEnter: requireSectionHead,
     },
     {
       path: '/technical-editor/:id',
       name: 'technical-editor',
       component: TechnicalEditorView,
       props: true,
-      beforeEnter: requireAuth,
+      beforeEnter: requireTechnicalEditor,
     },
     {
       path: '/editor-in-chief/:id',
       name: 'editor-in-chief',
       component: EditorInChiefView,
       props: true,
-      beforeEnter: requireAuth,
+      beforeEnter: requireEditorInChief,
     },
     {
       path: '/chief-adviser/:id',
       name: 'chief-adviser',
       component: ChiefAdviserView,
       props: true,
-      beforeEnter: requireAuth,
+      beforeEnter: requireChiefAdviser,
     },
     {
       path: '/archival-manager/:id',
       name: 'archival-manager',
       component: ArchivalManagerView,
       props: true,
-      beforeEnter: requireAuth,
+      beforeEnter: requireArchivalManager,
     },
   ],
 })

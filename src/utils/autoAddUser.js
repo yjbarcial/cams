@@ -40,14 +40,28 @@ const SECTION_HEAD_EMAILS = [
   'kentadriane.vinatero@carsu.edu.ph',
 ]
 
-// Content Administrators - Have 'editor' role (NOT system admin)
-// Includes: Technical Editor, Creative Director, Editor-in-Chief, Archive Managers
+// Content Administrators - Separate roles for each position
+// EDITOR-IN-CHIEF - Single user
+const EDITOR_IN_CHIEF_EMAILS = ['melede.ganoy@carsu.edu.ph']
+
+// TECHNICAL EDITOR - Single user
+const TECHNICAL_EDITOR_EMAILS = ['jonee.elopre@carsu.edu.ph']
+
+// CREATIVE DIRECTOR - Single user
+const CREATIVE_DIRECTOR_EMAILS = ['levibrian.cejuela@carsu.edu.ph']
+
+// CHIEF ADVISER - Need to identify the user
+// TODO: Add Chief Adviser email once identified
+const CHIEF_ADVISER_EMAILS = [
+  // 'chief.adviser@carsu.edu.ph',  // PLACEHOLDER - needs to be defined
+]
+
+// ARCHIVAL MANAGERS - Two users
+const ARCHIVAL_MANAGER_EMAILS = ['julesleo.reserva@carsu.edu.ph', 'eizzielmarie.bacoy@carsu.edu.ph']
+
+// Generic EDITOR_EMAILS - for other editorial roles if needed
 const EDITOR_EMAILS = [
-  'jonee.elopre@carsu.edu.ph', // Technical Editor
-  'levibrian.cejuela@carsu.edu.ph', // Creative Director
-  'melede.ganoy@carsu.edu.ph', // Editor-in-Chief
-  'julesleo.reserva@carsu.edu.ph', // Archive Manager (also artist)
-  'eizzielmarie.bacoy@carsu.edu.ph', // Archive Manager
+  // Any other general editors go here
 ]
 
 const WRITER_EMAILS = [
@@ -169,9 +183,16 @@ export async function addUserToProfiles(user) {
         console.error('❌ Error updating:', updateError)
       } else {
         console.log(`✅ Updated successfully with role: ${finalRole}`)
-        // Store role and userId in localStorage
+        // Store role, accessRole, and userId in localStorage
         localStorage.setItem('userRole', finalRole)
         localStorage.setItem('userId', existingUser.id)
+
+        // Store accessRole based on designation for editors
+        const accessRole = getAccessRole(finalRole, existingUser.designation_label)
+        localStorage.setItem('accessRole', accessRole)
+        console.log(
+          `🔑 Access role: ${accessRole} (designation: ${existingUser.designation_label || 'none'})`,
+        )
       }
       return
     }
@@ -198,10 +219,18 @@ export async function addUserToProfiles(user) {
     }
 
     console.log(`✅ User added successfully with role: ${userRole}`, data[0])
-    // Store role and userId in localStorage
+    // Store role, accessRole, and userId in localStorage
     localStorage.setItem('userRole', userRole)
-    if (data && data[0] && data[0].id) {
-      localStorage.setItem('userId', data[0].id)
+    if (data && data[0]) {
+      if (data[0].id) {
+        localStorage.setItem('userId', data[0].id)
+      }
+      // Store accessRole based on designation for editors
+      const accessRole = getAccessRole(userRole, data[0].designation_label)
+      localStorage.setItem('accessRole', accessRole)
+      console.log(
+        `🔑 Access role: ${accessRole} (designation: ${data[0].designation_label || 'none'})`,
+      )
     }
   } catch (err) {
     console.error('❌ Catch error:', err)
