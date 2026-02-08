@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
+import MediaUpload from '@/components/MediaUpload.vue'
 import { projectsService, archivesService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
 import {
@@ -688,6 +689,16 @@ onMounted(async () => {
               />
             </div>
 
+            <!-- Media Upload Section -->
+            <div class="media-upload-wrapper">
+              <MediaUpload
+                :project-id="projectId"
+                :uploaded-by="currentUserProfile?.id || null"
+                @upload-success="showNotification('Media uploaded successfully!')"
+                @upload-error="showNotification($event, 'error')"
+              />
+            </div>
+
             <div class="action-buttons">
               <template v-for="action in approvalActions" :key="action.value">
                 <v-btn
@@ -1354,6 +1365,13 @@ onMounted(async () => {
 
 .profile-link:hover {
   opacity: 0.7;
+}
+
+.media-upload-wrapper {
+  margin-top: 0;
+  margin-bottom: 24px;
+  width: 100%;
+  display: block;
 }
 
 @media (max-width: 768px) {

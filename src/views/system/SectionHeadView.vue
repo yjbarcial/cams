@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
+import MediaUpload from '@/components/MediaUpload.vue'
 import { projectsService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
 import {
@@ -181,20 +182,19 @@ const approvalActions = computed(() => {
 // SECTION HEAD - Updated status mapping
 const getNextStatus = (action) => {
   if (action === 'approve') {
-    // Route to Technical Editor for writers, Creative Director for artists only
-    const hasWriter =
-      project.value?.writers &&
-      project.value.writers !== 'Not assigned' &&
-      project.value.writers.trim() !== ''
-    const hasArtist =
-      project.value?.artists &&
-      project.value.artists !== 'Not assigned' &&
-      project.value.artists.trim() !== ''
+    // Check if project has media (images in content or standalone media files)
+    const hasMediaFiles = project.value?.media_files && project.value.media_files.length > 0
+    const contentHasImages = editorContent.value && editorContent.value.includes('<img')
 
-    if (hasArtist && !hasWriter) {
+    // Route to Creative Director if project has any media
+    if (hasMediaFiles || contentHasImages) {
+      console.log('📸 Project has media - routing to Creative Director')
       return 'to_creative_director'
     }
-    return 'to_technical_editor' // Default for writers
+
+    // Updated: All projects go to Technical Editor first
+    // Both Technical Editor and Creative Director can access and approve
+    return 'to_technical_editor'
   }
   if (action === 'return' || action === 'edit') return 'draft' // Return to draft for writer/artist to edit
   return project.value.status
@@ -203,6 +203,14 @@ const getNextStatus = (action) => {
 // SECTION HEAD - Updated comment placeholder
 const getCommentPlaceholder = () => {
   if (approvalAction.value === 'approve') {
+    // Check if project has media
+    const hasMediaFiles = project.value?.media_files && project.value.media_files.length > 0
+    const contentHasImages = editorContent.value && editorContent.value.includes('<img')
+
+    if (hasMediaFiles || contentHasImages) {
+      return 'Add any comments or notes for the Creative Director...'
+    }
+
     const hasWriter =
       project.value?.writers &&
       project.value.writers !== 'Not assigned' &&
@@ -211,7 +219,7 @@ const getCommentPlaceholder = () => {
       project.value?.artists &&
       project.value.artists !== 'Not assigned' &&
       project.value.artists.trim() !== ''
-    const recipient = hasArtist && !hasWriter ? 'Creative Director' : 'Technical Editor'
+    const recipient = 'Editor Review Team'
     return `Add any comments or notes for the ${recipient}...`
   }
   if (approvalAction.value === 'return' || approvalAction.value === 'edit') {
@@ -352,7 +360,7 @@ const submitApproval = async () => {
     approvalPriority.value = 'Medium'
 
     if (action === 'approve') {
-      showNotification('Project approved and sent to Technical Editor!', 'success')
+      showNotification('Project approved and sent to Editor Review!', 'success')
       setTimeout(() => {
         // Route based on project type
         const routePath =
@@ -733,6 +741,16 @@ onMounted(async () => {
               />
             </div>
 
+            <!-- Media Upload Section -->
+            <div class="media-upload-wrapper">
+              <MediaUpload
+                :project-id="projectId"
+                :uploaded-by="currentUserProfile?.id || null"
+                @upload-success="showNotification('Media uploaded successfully!')"
+                @upload-error="showNotification($event, 'error')"
+              />
+            </div>
+
             <div class="action-buttons">
               <template v-for="action in approvalActions" :key="action.value">
                 <v-tooltip v-if="action.tooltip" location="top">
@@ -879,8 +897,8 @@ onMounted(async () => {
           <div class="approval-info-box">
             <p class="approval-message">
               <template v-if="approvalAction === 'approve'">
-                Approve <strong>"{{ project.title }}"</strong> and forward to Technical Editor for
-                technical review.
+                Approve <strong>"{{ project.title }}"</strong> and forward to Editor Review Team
+                (Technical Editor & Creative Director) for parallel review.
               </template>
               <template v-else-if="approvalAction === 'return'">
                 Return <strong>"{{ project.title }}"</strong> to the author. The project will be
@@ -902,7 +920,7 @@ onMounted(async () => {
               density="comfortable"
               prepend-inner-icon="mdi-flag"
               hide-details
-              placeholder="Set priority for Technical Editor"
+              placeholder="Set priority for Editor Review"
             />
           </div>
 
@@ -930,8 +948,8 @@ onMounted(async () => {
               <v-icon size="20">mdi-information-outline</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Next Step:</strong> Project will be forwarded to Technical Editor for
-              technical review.
+              <strong>Next Step:</strong> Project will be forwarded to Editor Review Team (both
+              Technical Editor and Creative Director will review in parallel).
             </div>
           </v-alert>
 
@@ -1583,5 +1601,12 @@ onMounted(async () => {
 .slide-down-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(-20px);
+}
+
+.media-upload-wrapper {
+  margin-top: 0;
+  margin-bottom: 24px;
+  width: 100%;
+  display: block;
 }
 </style>

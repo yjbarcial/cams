@@ -588,7 +588,21 @@ const canViewProject = computed(() => {
 // Permission checking - determine if current user can edit this project
 const canEditProject = computed(() => {
   const userId = localStorage.getItem('userId')
+  const userEmail = localStorage.getItem('userEmail')
   const effectiveUserId = userId || currentUserProfile.value?.id
+
+  // Admin emails - full access to all projects
+  const adminEmails = [
+    'yssahjulianah.barcial@carsu.edu.ph',
+    'lovellhudson.clavel@carsu.edu.ph',
+    'altheaguila.gorres@carsu.edu.ph',
+  ]
+
+  // Check if user is admin
+  if (userEmail && adminEmails.includes(userEmail)) {
+    console.log('✅ Admin access granted:', userEmail)
+    return true
+  }
 
   console.log('🔐 Permission Check:', {
     userId: effectiveUserId,

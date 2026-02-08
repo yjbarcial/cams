@@ -142,7 +142,7 @@ const handleNotificationClick = async (notification) => {
             project.status === 'to_technical_editor' ||
             project.status === 'to_creative_director'
           ) {
-            console.log('   Routes to: TechnicalEditorView')
+            console.log('   Routes to: TechnicalEditorView (Editor Review)')
             router.push(`/technical-editor/${projectId}?type=${projectType}`)
           } else if (
             project.status === 'to_editor_in_chief' ||

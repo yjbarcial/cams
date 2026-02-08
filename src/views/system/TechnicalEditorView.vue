@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
+import MediaUpload from '@/components/MediaUpload.vue'
 import { projectsService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
 import {
@@ -25,10 +26,20 @@ const projectId = route.params.id
 
 // Current user profile for display names
 const currentUserProfile = ref(null)
+const currentAuthUserId = ref(null)
 
 // Load current user's profile
 const loadCurrentUserProfile = async () => {
   try {
+    // Get auth user ID first
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (user) {
+      currentAuthUserId.value = user.id
+      console.log('👤 Auth User ID:', user.id)
+    }
+
     const userEmail = localStorage.getItem('userEmail')
     if (userEmail) {
       const { data: profiles } = await supabase
@@ -39,6 +50,11 @@ const loadCurrentUserProfile = async () => {
 
       if (profiles) {
         currentUserProfile.value = profiles
+        console.log('👤 User Profile:', {
+          email: profiles.email,
+          role: profiles.role,
+          profileId: profiles.id,
+        })
       }
     }
   } catch (error) {
@@ -48,26 +64,6 @@ const loadCurrentUserProfile = async () => {
 
 // Project type
 const projectType = ref('magazine')
-
-// User role - TECHNICAL EDITOR OR CREATIVE DIRECTOR
-// This file handles BOTH roles - the status determines which role is currently active
-const currentUserRole = computed(() => {
-  const status = project.value?.status
-
-  // Status-based role determination:
-  // - to_technical_editor = Technical Editor (Writer) - CAN edit text, NO image upload
-  // - to_creative_director = Creative Director (Artist) - CANNOT edit text, CAN upload images
-
-  if (status === 'to_creative_director') {
-    console.log('✅ Role: Creative Director (Artist) - Image upload ENABLED, Text editing DISABLED')
-    return 'Creative Director'
-  }
-
-  // Default to Technical Editor for all other statuses
-  console.log('✅ Role: Technical Editor (Writer) - Image upload DISABLED, Text editing ENABLED')
-  return 'Technical Editor'
-})
-const currentUser = ref('Technical Editor User')
 
 // Project data
 const project = ref({
@@ -86,6 +82,10 @@ const project = ref({
   submittedDate: '',
   priority: 'Medium',
   department: '',
+  technical_editor_approved_by: null,
+  technical_editor_approved_date: null,
+  creative_director_approved_by: null,
+  creative_director_approved_date: null,
 })
 
 // Member profiles for clickable links
@@ -96,8 +96,54 @@ const sectionHeadProfile = ref(null)
 // Rich text editor state
 const editorContent = ref('')
 const quillEditorRef = ref(null)
-// Editor editability - starts as true for Technical Editor, can be toggled
+// Editor editability - starts as true for both roles, can be toggled
 const isEditorEditable = ref(true)
+
+// Current user role
+const currentUserRole = computed(() => currentUserProfile.value?.role || '')
+
+// Detect editor role from route path (for admin users or when role doesn't match)
+const routeBasedRole = computed(() => {
+  const path = route.path
+  if (path.includes('/technical-editor/')) return 'technical_editor'
+  if (path.includes('/creative-director/')) return 'creative_director'
+  return null
+})
+
+// Check if current user is Technical Editor or Creative Director
+// Allow admin users to act as either role based on which view they're accessing
+const isTechnicalEditor = computed(() => {
+  if (currentUserRole.value === 'Technical Editor') return true
+  if (currentUserRole.value === 'admin' && routeBasedRole.value === 'technical_editor') return true
+  return false
+})
+
+const isCreativeDirector = computed(() => {
+  if (currentUserRole.value === 'Creative Director') return true
+  if (currentUserRole.value === 'admin' && routeBasedRole.value === 'creative_director') return true
+  return false
+})
+
+const isEIC = computed(() => currentUserRole.value === 'EIC')
+
+// Check approval status
+const technicalEditorApproved = computed(() => !!project.value.technical_editor_approved_by)
+const creativeDirectorApproved = computed(() => !!project.value.creative_director_approved_by)
+const bothApproved = computed(() => technicalEditorApproved.value && creativeDirectorApproved.value)
+
+// Check if current user has already approved
+const currentUserHasApproved = computed(() => {
+  const userId = currentAuthUserId.value
+  if (!userId) return false
+
+  if (isTechnicalEditor.value) {
+    return project.value.technical_editor_approved_by === userId
+  }
+  if (isCreativeDirector.value) {
+    return project.value.creative_director_approved_by === userId
+  }
+  return false
+})
 
 // Auto-save state
 const lastSaveTime = ref(null)
@@ -164,8 +210,7 @@ const updateLastSaveTime = () => {
 
 const handleContentChange = () => {
   // Technical Editor can edit text freely
-  // Creative Director can only insert images (editor is read-only but images can be added)
-  if (isEditorEditable.value || currentUserRole.value === 'Creative Director') {
+  if (isEditorEditable.value) {
     hasUnsavedChanges.value = true
     debouncedSave()
   }
@@ -177,48 +222,58 @@ const debouncedSave = () => {
   }
 
   saveTimeout.value = setTimeout(() => {
-    // Allow both Technical Editor and Creative Director to save
-    // Technical Editor saves text edits, Creative Director saves image uploads
+    // Save Technical Editor text edits
     if (hasUnsavedChanges.value) {
       saveContentChanges()
     }
   }, 1000)
 }
 
-// TECHNICAL EDITOR / CREATIVE DIRECTOR - Approval actions
+// TECHNICAL EDITOR - Approval actions
 const approvalActions = computed(() => {
-  const isCreativeDirector = currentUserRole.value === 'Creative Director'
-
-  return [
-    // Return to writer button available to all editors
-    { value: 'return', text: 'Return to Writer/Artist', color: 'warning' },
-    // Only Technical Editor can request to edit text
-    ...(!isCreativeDirector ? [{ value: 'edit', text: 'Request to Edit', color: 'dark' }] : []),
-    { value: 'approve', text: 'Approve', color: 'success' },
-    {
-      value: 'publish',
-      text: 'Publish',
-      color: 'grey',
-      disabled: true,
-      tooltip: 'Only Editor-in-Chief can publish after approval',
-    },
+  const actions = [
+    // Return to writer button
+    { value: 'return', text: 'Return to Writer', color: 'warning' },
+    // Request to edit text
+    { value: 'edit', text: 'Request to Edit', color: 'dark' },
   ]
+
+  // Approve button - disabled if user already approved
+  if (currentUserHasApproved.value) {
+    actions.push({
+      value: 'approve',
+      text: 'Approved',
+      color: 'success',
+      disabled: true,
+      tooltip: 'You have already approved this project',
+    })
+  } else {
+    actions.push({
+      value: 'approve',
+      text: 'Approve',
+      color: 'success',
+    })
+  }
+
+  // Publish button
+  actions.push({
+    value: 'publish',
+    text: 'Publish',
+    color: 'grey',
+    disabled: true,
+    tooltip: 'Only Editor-in-Chief can publish after approval',
+  })
+
+  return actions
 })
 
-// TECHNICAL EDITOR - Updated status mapping
-const getNextStatus = (action) => {
-  if (action === 'approve') return 'to_editor_in_chief'
-  if (action === 'return') return 'draft'
-  return project.value.status
-}
-
-// TECHNICAL EDITOR - Updated comment placeholder
+// EDITOR REVIEW - Updated comment placeholder
 const getCommentPlaceholder = () => {
   if (approvalAction.value === 'approve') {
-    return 'Add any technical notes for the Editor-in-Chief...'
+    return 'Add any notes for the Editor-in-Chief (optional)...'
   }
   if (approvalAction.value === 'return') {
-    return 'Explain what technical issues need to be addressed by Section Head...'
+    return 'Explain what needs to be addressed...'
   }
   return 'Add your comments...'
 }
@@ -288,43 +343,123 @@ const submitApproval = async () => {
       return
     }
 
+    // Prevent duplicate approvals
+    if (approvalAction.value === 'approve' && currentUserHasApproved.value) {
+      showNotification('You have already approved this project', 'warning')
+      showApprovalDialog.value = false
+      return
+    }
+
     // First save content changes
     await saveContentChanges()
 
-    const nextStatus = getNextStatus(approvalAction.value)
-
-    // Update via Supabase with metadata tracking
+    // Determine the appropriate field based on user role
     const updateData = {
-      status: nextStatus,
-      technical_editor_comments: approvalComments.value || '',
       priority: approvalPriority.value,
       updated_at: new Date().toISOString(),
     }
 
     if (approvalAction.value === 'approve') {
-      // Track who approved and when
-      const roleLabel =
-        currentUserRole === 'Creative Director' ? 'creative_director' : 'technical_editor'
-      updateData[`${roleLabel}_approved_by`] = user.id
-      updateData[`${roleLabel}_approved_date`] = new Date().toISOString()
+      // Fetch current project to check existing approvals
+      const currentProject = await projectsService.getById(projectId)
+
+      console.log('📋 Current approval status before update:', {
+        technicalEditor: currentProject.technical_editor_approved_by,
+        creativeDirector: currentProject.creative_director_approved_by,
+        currentUserRole: currentUserRole.value,
+        currentUserRoleRaw: currentUserProfile.value?.role,
+        routePath: route.path,
+        routeBasedRole: routeBasedRole.value,
+        userId: user.id,
+        isTechnicalEditor: isTechnicalEditor.value,
+        isCreativeDirector: isCreativeDirector.value,
+      })
+
+      if (!isTechnicalEditor.value && !isCreativeDirector.value) {
+        console.error(
+          '❌ Role not recognized! Current role:',
+          currentUserRole.value,
+          'Route:',
+          route.path,
+        )
+        showNotification('Error: Your role is not recognized as an editor.', 'error')
+        return
+      }
+
+      // Track approval by role
+      if (isTechnicalEditor.value) {
+        updateData.technical_editor_approved_by = user.id
+        updateData.technical_editor_approved_date = new Date().toISOString()
+        updateData.technical_editor_comments = approvalComments.value || ''
+
+        // Check if CD already approved
+        if (currentProject.creative_director_approved_by) {
+          updateData.status = 'to_editor_in_chief'
+          console.log('✅ Both approved! Moving to EIC (TE approved, CD already approved)')
+        } else {
+          console.log('⏳ TE approved, waiting for CD approval')
+        }
+      } else if (isCreativeDirector.value) {
+        updateData.creative_director_approved_by = user.id
+        updateData.creative_director_approved_date = new Date().toISOString()
+        updateData.creative_director_comments = approvalComments.value || ''
+
+        // Check if TE already approved
+        if (currentProject.technical_editor_approved_by) {
+          updateData.status = 'to_editor_in_chief'
+          console.log('✅ Both approved! Moving to EIC (CD approved, TE already approved)')
+        } else {
+          console.log('⏳ CD approved, waiting for TE approval')
+        }
+      }
     } else if (approvalAction.value === 'return' || approvalAction.value === 'edit') {
-      const roleLabel =
-        currentUserRole === 'Creative Director' ? 'creative_director' : 'technical_editor'
-      updateData[`returned_by_${roleLabel}`] = true
-      updateData[`returned_by_${roleLabel}_date`] = new Date().toISOString()
-      updateData[`returned_by_${roleLabel}_comments`] = approvalComments.value
-      updateData[`returned_by_${roleLabel}_user`] = user.id
+      // Return to writer
+      updateData.status = 'returned_to_writer'
+      if (isTechnicalEditor.value) {
+        updateData.returned_by_technical_editor = true
+        updateData.returned_by_technical_editor_date = new Date().toISOString()
+        updateData.returned_by_technical_editor_comments = approvalComments.value
+        updateData.returned_by_technical_editor_user = user.id
+      } else if (isCreativeDirector.value) {
+        updateData.returned_by_creative_director = true
+        updateData.returned_by_creative_director_date = new Date().toISOString()
+        updateData.returned_by_creative_director_comments = approvalComments.value
+        updateData.returned_by_creative_director_user = user.id
+      }
     }
 
-    await projectsService.update(projectId, updateData)
+    console.log('💾 Updating project with data:', updateData)
+
+    const result = await projectsService.update(projectId, updateData)
+    console.log('💾 Update result:', result)
 
     console.log('✅ Project status updated via Supabase')
 
-    project.value.status = nextStatus
+    // Reload project to get fresh data
+    const updatedProject = await projectsService.getById(projectId)
+    project.value.status = updatedProject.status
     project.value.lastModified = new Date().toLocaleString()
+    project.value.technical_editor_approved_by = updatedProject.technical_editor_approved_by
+    project.value.creative_director_approved_by = updatedProject.creative_director_approved_by
+
+    console.log('🔄 Project reloaded after approval:', {
+      status: updatedProject.status,
+      technicalEditor: updatedProject.technical_editor_approved_by,
+      creativeDirector: updatedProject.creative_director_approved_by,
+      bothApproved: !!(
+        updatedProject.technical_editor_approved_by && updatedProject.creative_director_approved_by
+      ),
+    })
+
+    // If approval columns are still null/undefined, the database columns don't exist
+    if (
+      !updatedProject.technical_editor_approved_by &&
+      !updatedProject.creative_director_approved_by
+    ) {
+      console.error('⚠️ Approval columns returned null! Run ADD_APPROVAL_COLUMNS.sql in Supabase')
+    }
 
     // Create notification based on action
-    const updatedProject = await projectsService.getById(projectId)
     const userEmail = user.email || localStorage.getItem('userEmail') || 'Current User'
     const fullName = currentUserProfile.value
       ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
@@ -335,34 +470,35 @@ const submitApproval = async () => {
     const displayName = getDisplayName(userEmail, profile, true)
 
     if (approvalAction.value === 'approve') {
-      await notifyStatusChange({
-        project: updatedProject,
-        oldStatus:
-          updatedProject.status === 'to_creative_director'
-            ? 'to_creative_director'
-            : 'to_technical_editor',
-        newStatus: 'to_editor_in_chief',
-        actionBy: displayName,
-        comments: approvalComments.value,
-      })
+      const approverRole = isTechnicalEditor.value ? 'Technical Editor' : 'Creative Director'
+      console.log('📢 Showing notification for:', approverRole, 'Status:', updatedProject.status)
+
+      if (updatedProject.status === 'to_editor_in_chief') {
+        await notifyStatusChange({
+          project: updatedProject,
+          oldStatus: 'to_technical_editor',
+          newStatus: 'to_editor_in_chief',
+          actionBy: displayName,
+          comments: approvalComments.value || `Both editors approved the project.`,
+        })
+        showNotification('Both editors have approved! Project sent to Editor-in-Chief.', 'success')
+      } else {
+        showNotification(
+          `✅ ${approverRole} approved! Waiting for ${isTechnicalEditor.value ? 'Creative Director' : 'Technical Editor'} approval.`,
+          'info',
+        )
+      }
     } else if (approvalAction.value === 'edit' || approvalAction.value === 'return') {
       await notifyStatusChange({
         project: updatedProject,
-        oldStatus:
-          updatedProject.status === 'to_creative_director'
-            ? 'to_creative_director'
-            : 'to_technical_editor',
-        newStatus: 'draft',
+        oldStatus: 'to_technical_editor',
+        newStatus: 'returned_to_writer',
         action: approvalAction.value,
         actionBy: displayName,
         comments: approvalComments.value,
       })
+      showNotification('Project returned to writer.', 'success')
     }
-
-    showNotification(
-      `Project ${approvalAction.value.toLowerCase()} successfully! Status: ${nextStatus}`,
-      'success',
-    )
 
     // Reset approval state
     showApprovalDialog.value = false
@@ -370,10 +506,18 @@ const submitApproval = async () => {
     approvalComments.value = ''
     approvalPriority.value = 'Medium'
 
-    // Navigate back to list view
-    setTimeout(() => {
-      goBack()
-    }, 1500)
+    // Navigate back to list view if project moved to EIC or returned
+    if (
+      updatedProject.status === 'to_editor_in_chief' ||
+      updatedProject.status === 'returned_to_writer'
+    ) {
+      setTimeout(() => {
+        goBack()
+      }, 1500)
+    } else {
+      // If staying on page, refresh approval status immediately
+      await refreshApprovalStatus()
+    }
   } catch (error) {
     console.error('Error during approval:', error)
     showNotification('An error occurred during approval.', 'error')
@@ -419,6 +563,17 @@ const loadProjectData = async () => {
     const foundProject = await projectsService.getById(projectId)
 
     console.log('✅ Project loaded from Supabase:', foundProject)
+
+    // Check if approval columns exist
+    if (
+      !foundProject.hasOwnProperty('technical_editor_approved_by') ||
+      !foundProject.hasOwnProperty('creative_director_approved_by')
+    ) {
+      console.error('⚠️ DATABASE MIGRATION REQUIRED!')
+      console.error('The approval tracking columns do not exist in your database.')
+      console.error('Please run the SQL migration: ADD_APPROVAL_COLUMNS.sql')
+      showNotification('Database columns missing. Please contact administrator.', 'error')
+    }
 
     // Load project members with their profile info
     const members = await projectsService.getMembers(projectId)
@@ -484,6 +639,10 @@ const loadProjectData = async () => {
       artists: artistsText,
       sectionHead: sectionHeadName,
       description: foundProject.description || '',
+      technical_editor_approved_by: foundProject.technical_editor_approved_by || null,
+      technical_editor_approved_date: foundProject.technical_editor_approved_date || null,
+      creative_director_approved_by: foundProject.creative_director_approved_by || null,
+      creative_director_approved_date: foundProject.creative_director_approved_date || null,
     }
 
     projectType.value = foundProject.project_type || route.query.type || 'magazine'
@@ -492,6 +651,10 @@ const loadProjectData = async () => {
     loadProjectComments()
 
     console.log('✅ Project loaded from Supabase')
+    console.log('📊 Approval Status:', {
+      technicalEditor: foundProject.technical_editor_approved_by ? 'Approved' : 'Pending',
+      creativeDirector: foundProject.creative_director_approved_by ? 'Approved' : 'Pending',
+    })
   } catch (error) {
     console.error('❌ Error loading project:', error)
     showNotification('Project not found. Redirecting...', 'error')
@@ -628,34 +791,70 @@ const formatDate = (dateString) => {
 }
 
 const getProjectStatus = (action) => {
-  // Determine if this is Technical Editor or Creative Director
-  const hasWriter =
-    project.value?.writers &&
-    project.value.writers !== 'Not assigned' &&
-    project.value.writers.trim() !== ''
-  const hasArtist =
-    project.value?.artists &&
-    project.value.artists !== 'Not assigned' &&
-    project.value.artists.trim() !== ''
-  const isCreativeDirector = hasArtist && !hasWriter
-
   const statusMap = {
-    edit: isCreativeDirector ? 'returned_by_creative_director' : 'returned_by_technical_editor',
+    edit: 'returned_by_technical_editor',
     approve: 'to_editor_in_chief',
     publish: 'Published',
   }
   return statusMap[action] || project.value.status
 }
 
+// Refresh approval status periodically
+let approvalStatusInterval = null
+
+const refreshApprovalStatus = async () => {
+  try {
+    const updatedProject = await projectsService.getById(projectId)
+    if (updatedProject) {
+      project.value.technical_editor_approved_by = updatedProject.technical_editor_approved_by
+      project.value.creative_director_approved_by = updatedProject.creative_director_approved_by
+      project.value.status = updatedProject.status
+
+      console.log('🔄 Approval status refreshed:', {
+        technicalEditor: updatedProject.technical_editor_approved_by ? 'Approved' : 'Pending',
+        creativeDirector: updatedProject.creative_director_approved_by ? 'Approved' : 'Pending',
+        status: updatedProject.status,
+      })
+    }
+  } catch (error) {
+    console.error('Error refreshing approval status:', error)
+  }
+}
+
+const handleVisibilityChange = () => {
+  if (!document.hidden) {
+    refreshApprovalStatus()
+  }
+}
+
 onUnmounted(() => {
   if (saveTimeout.value) {
     clearTimeout(saveTimeout.value)
   }
+  if (approvalStatusInterval) {
+    clearInterval(approvalStatusInterval)
+  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onMounted(async () => {
   await loadCurrentUserProfile()
+
+  // Log role detection after profile is loaded
+  console.log('🎭 Role Detection:', {
+    userRole: currentUserRole.value,
+    isTechnicalEditor: isTechnicalEditor.value,
+    isCreativeDirector: isCreativeDirector.value,
+    authUserId: currentAuthUserId.value,
+  })
+
   loadProjectData()
+
+  // Refresh approval status every 10 seconds
+  approvalStatusInterval = setInterval(refreshApprovalStatus, 10000)
+
+  // Refresh when user returns to tab
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 
@@ -676,53 +875,61 @@ onMounted(async () => {
             <div class="title-section">
               <h1 class="project-title">
                 {{ project.title }}
-                <v-chip color="info" size="small" class="ml-3">
-                  {{
-                    currentUserRole === 'Creative Director' ? 'Creative Review' : 'Technical Review'
-                  }}
-                </v-chip>
+                <v-chip color="purple" size="small" class="ml-3"> Editor Review </v-chip>
               </h1>
             </div>
 
-            <!-- Role Instructions Alert -->
+            <!-- Editor Review Role Instructions -->
             <v-alert
-              v-if="currentUserRole === 'Creative Director'"
               type="info"
               variant="tonal"
               class="role-alert mb-4"
               border="start"
-              border-color="#2c3e50"
+              border-color="#6b46c1"
             >
               <template v-slot:prepend>
-                <v-icon>mdi-palette</v-icon>
+                <v-icon>mdi-account-group</v-icon>
               </template>
               <div class="role-alert-text">
-                <strong>Creative Director Mode</strong>
+                <strong>Collaborative Editor Review</strong>
                 <p>
-                  You can upload and manage images. Use the comments section below to communicate
-                  with the Technical Editor about any changes needed.
+                  Both Technical Editor and Creative Director review this project in parallel. Both
+                  approvals are required before proceeding to Editor-in-Chief.
                 </p>
               </div>
             </v-alert>
-            <v-alert
-              v-else
-              type="info"
-              variant="tonal"
-              class="role-alert mb-4"
-              border="start"
-              border-color="#2c3e50"
-            >
-              <template v-slot:prepend>
-                <v-icon>mdi-pencil</v-icon>
-              </template>
-              <div class="role-alert-text">
-                <strong>Technical Editor Mode</strong>
-                <p>
-                  You can edit text content. Use the comments section below to communicate with the
-                  Creative Director about image needs.
-                </p>
+
+            <!-- Approval Status Indicators -->
+            <div class="approval-status-section mb-4">
+              <div class="approval-status-row">
+                <div class="approval-status-item">
+                  <v-icon :color="technicalEditorApproved ? 'success' : 'grey'" size="small">
+                    {{ technicalEditorApproved ? 'mdi-check-circle' : 'mdi-clock-outline' }}
+                  </v-icon>
+                  <span class="approval-label">Technical Editor:</span>
+                  <v-chip
+                    :color="technicalEditorApproved ? 'success' : 'grey'"
+                    size="small"
+                    variant="flat"
+                  >
+                    {{ technicalEditorApproved ? 'Approved' : 'Pending' }}
+                  </v-chip>
+                </div>
+                <div class="approval-status-item">
+                  <v-icon :color="creativeDirectorApproved ? 'success' : 'grey'" size="small">
+                    {{ creativeDirectorApproved ? 'mdi-check-circle' : 'mdi-clock-outline' }}
+                  </v-icon>
+                  <span class="approval-label">Creative Director:</span>
+                  <v-chip
+                    :color="creativeDirectorApproved ? 'success' : 'grey'"
+                    size="small"
+                    variant="flat"
+                  >
+                    {{ creativeDirectorApproved ? 'Approved' : 'Pending' }}
+                  </v-chip>
+                </div>
               </div>
-            </v-alert>
+            </div>
 
             <div v-if="project.description" class="project-description">
               <div class="description-label">Description</div>
@@ -846,18 +1053,24 @@ onMounted(async () => {
                 ref="quillEditorRef"
                 v-model="editorContent"
                 :read-only="false"
-                :disable-images="currentUserRole === 'Technical Editor'"
-                :text-only="currentUserRole === 'Creative Director'"
+                :disable-images="true"
+                :text-only="false"
                 :project-id="projectId"
                 :project-type="projectType"
                 height="500px"
-                :placeholder="
-                  currentUserRole === 'Creative Director'
-                    ? 'Upload images using the toolbar button...'
-                    : 'Edit project content...'
-                "
+                placeholder="Edit project content..."
                 @text-change="handleContentChange"
                 @highlight-comments-updated="handleHighlightCommentsUpdated"
+              />
+            </div>
+
+            <!-- Media Upload Section -->
+            <div class="media-upload-wrapper">
+              <MediaUpload
+                :project-id="projectId"
+                :uploaded-by="currentUserProfile?.id || null"
+                @upload-success="showNotification('Media uploaded successfully!')"
+                @upload-error="showNotification($event, 'error')"
               />
             </div>
 
@@ -1015,8 +1228,19 @@ onMounted(async () => {
                 be sent back for major revisions.
               </template>
               <template v-else-if="approvalAction === 'approve'">
-                Approve <strong>"{{ project.title }}"</strong> and forward to Editor-in-Chief for
-                final review.
+                <template v-if="isTechnicalEditor && creativeDirectorApproved">
+                  Approve <strong>"{{ project.title }}"</strong> as Technical Editor. Creative
+                  Director has already approved. Project will proceed to Editor-in-Chief.
+                </template>
+                <template v-else-if="isCreativeDirector && technicalEditorApproved">
+                  Approve <strong>"{{ project.title }}"</strong> as Creative Director. Technical
+                  Editor has already approved. Project will proceed to Editor-in-Chief.
+                </template>
+                <template v-else>
+                  Approve <strong>"{{ project.title }}"</strong> as
+                  {{ isTechnicalEditor ? 'Technical Editor' : 'Creative Director' }}. Both editors
+                  must approve before proceeding to Editor-in-Chief.
+                </template>
               </template>
               <template v-else-if="approvalAction === 'publish'">
                 Approve <strong>"{{ project.title }}"</strong> for publishing. This will finalize
@@ -1104,8 +1328,20 @@ onMounted(async () => {
               <v-icon size="20">mdi-information-outline</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Next Step:</strong> Project will be forwarded to Editor-in-Chief for final
-              review.
+              <template
+                v-if="
+                  (isTechnicalEditor && creativeDirectorApproved) ||
+                  (isCreativeDirector && technicalEditorApproved)
+                "
+              >
+                <strong>Next Step:</strong> Both editors will have approved. Project will be
+                forwarded to Editor-in-Chief for final review.
+              </template>
+              <template v-else>
+                <strong>Next Step:</strong> Your approval will be recorded. Waiting for
+                {{ isTechnicalEditor ? 'Creative Director' : 'Technical Editor' }} approval before
+                proceeding to Editor-in-Chief.
+              </template>
             </div>
           </v-alert>
 
@@ -1256,6 +1492,32 @@ onMounted(async () => {
   margin: 0;
   color: #64748b;
   line-height: 1.5;
+}
+
+.approval-status-section {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.approval-status-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approval-status-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.approval-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  min-width: 140px;
 }
 
 .project-title {
@@ -1771,5 +2033,12 @@ onMounted(async () => {
 
 .profile-link:hover {
   opacity: 0.7;
+}
+
+.media-upload-wrapper {
+  margin-top: 0;
+  margin-bottom: 24px;
+  width: 100%;
+  display: block;
 }
 </style>

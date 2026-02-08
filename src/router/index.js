@@ -147,6 +147,20 @@ const requireTechnicalEditor = (to, from, next) => {
   const accessRole = localStorage.getItem('accessRole')
   const userEmail = localStorage.getItem('userEmail')
 
+  if (accessRole === 'technical_editor' || (userEmail && adminEmails.includes(userEmail))) {
+    next()
+  } else {
+    showAccessDenied('technical_editor')
+    next(false)
+  }
+}
+
+// Combined guard for unified Editor Review (both Technical Editor and Creative Director)
+const requireEditorReview = (to, from, next) => {
+  if (!checkAuth(to, from, next)) return
+  const accessRole = localStorage.getItem('accessRole')
+  const userEmail = localStorage.getItem('userEmail')
+
   if (
     accessRole === 'technical_editor' ||
     accessRole === 'creative_director' ||
@@ -154,7 +168,7 @@ const requireTechnicalEditor = (to, from, next) => {
   ) {
     next()
   } else {
-    showAccessDenied('technical_editor')
+    showAccessDenied('editor_review')
     next(false)
   }
 }
@@ -347,7 +361,14 @@ const router = createRouter({
       name: 'technical-editor',
       component: TechnicalEditorView,
       props: true,
-      beforeEnter: requireTechnicalEditor,
+      beforeEnter: requireEditorReview,
+    },
+    {
+      path: '/creative-director/:id',
+      name: 'creative-director',
+      component: TechnicalEditorView,
+      props: true,
+      beforeEnter: requireEditorReview,
     },
     {
       path: '/editor-in-chief/:id',

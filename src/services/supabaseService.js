@@ -36,18 +36,75 @@ export const projectsService = {
 
   // Update project
   async update(id, projectData) {
+    console.log('📤 Supabase update called with:', { id, projectData })
+
     const { data, error } = await supabase
       .from('projects')
       .update({ ...projectData, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()
-    if (error) throw error
+
+    if (error) {
+      console.error('❌ Supabase update error:', error)
+      throw error
+    }
+
+    console.log('✅ Supabase update successful:', data)
     return data
   },
 
-  // Delete project (simplified after CASCADE is in place)
+  // Delete project (with cascading deletes for related data)
   async delete(id) {
+    // Delete all related data before deleting the project
+    // This handles cases where CASCADE is not set up in the database
+
+    // 1. Delete media files
+    const { error: mediaError } = await supabase.from('media_files').delete().eq('project_id', id)
+
+    if (mediaError) {
+      console.error('Error deleting media files:', mediaError)
+    }
+
+    // 2. Delete project members
+    const { error: membersError } = await supabase
+      .from('project_members')
+      .delete()
+      .eq('project_id', id)
+
+    if (membersError) {
+      console.error('Error deleting project members:', membersError)
+    }
+
+    // 3. Delete project comments
+    const { error: commentsError } = await supabase
+      .from('project_comments')
+      .delete()
+      .eq('project_id', id)
+
+    if (commentsError) {
+      console.error('Error deleting project comments:', commentsError)
+    }
+
+    // 4. Delete project history
+    const { error: historyError } = await supabase
+      .from('project_history')
+      .delete()
+      .eq('project_id', id)
+
+    if (historyError) {
+      console.error('Error deleting project history:', historyError)
+    }
+
+    // 5. Delete tasks (if table exists)
+    const { error: tasksError } = await supabase.from('tasks').delete().eq('project_id', id)
+
+    if (tasksError && tasksError.code !== '42P01') {
+      // Ignore if table doesn't exist
+      console.error('Error deleting tasks:', tasksError)
+    }
+
+    // 6. Finally delete the project itself
     const { error } = await supabase.from('projects').delete().eq('id', id)
     if (error) throw error
     return true

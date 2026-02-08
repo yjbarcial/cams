@@ -254,9 +254,17 @@ const canEditProject = (project) => {
   // Get current user's role and ID from localStorage
   const userRole = localStorage.getItem('userRole')
   const userId = localStorage.getItem('userId')
+  const userEmail = localStorage.getItem('userEmail')
+
+  // Admin emails - full access to all projects
+  const adminEmails = [
+    'yssahjulianah.barcial@carsu.edu.ph',
+    'lovellhudson.clavel@carsu.edu.ph',
+    'altheaguila.gorres@carsu.edu.ph',
+  ]
 
   // System admins can always edit
-  if (userRole === 'admin') {
+  if (userRole === 'admin' || (userEmail && adminEmails.includes(userEmail))) {
     return true
   }
 
