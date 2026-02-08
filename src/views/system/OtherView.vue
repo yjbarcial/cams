@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
 import { supabase } from '@/utils/supabase'
 import { projectsService } from '@/services/supabaseService'
+import { deleteProjectNotifications } from '@/services/notificationsService'
 
 const router = useRouter()
 const route = useRoute()
@@ -342,6 +343,9 @@ const confirmDelete = async () => {
     try {
       // Delete via Supabase
       await projectsService.delete(projectToDelete.value.id)
+
+      // Delete all notifications related to this project
+      await deleteProjectNotifications(projectToDelete.value.id)
 
       // Remove from local state
       projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)

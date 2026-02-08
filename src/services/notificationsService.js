@@ -313,6 +313,26 @@ export const deleteNotification = async (notificationId) => {
 }
 
 /**
+ * Delete all notifications for a specific project
+ * @param {string|number} projectId - Project ID
+ * @returns {boolean} Success status
+ */
+export const deleteProjectNotifications = async (projectId) => {
+  try {
+    // Get ALL notifications from localStorage (not filtered)
+    const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
+    // Filter out all notifications related to this project
+    const filtered = allNotifications.filter((n) => String(n.projectId) !== String(projectId))
+    localStorage.setItem('notifications', JSON.stringify(filtered))
+    console.log(`🗑️ Deleted notifications for project ${projectId}`)
+    return true
+  } catch (error) {
+    console.error('Error deleting project notifications:', error)
+    return false
+  }
+}
+
+/**
  * Get type color based on notification type
  * @param {string} type - Notification type
  * @returns {string} Color hex code

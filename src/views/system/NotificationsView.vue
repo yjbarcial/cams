@@ -9,6 +9,7 @@ import {
   deleteNotification,
   markAllAsRead,
 } from '@/services/notificationsService.js'
+import * as notificationsService from '@/services/notificationsService.js'
 import { formatStatus } from '@/utils/statusFormatter.js'
 import { projectsService } from '@/services/supabaseService'
 
@@ -36,6 +37,30 @@ const loadNotifications = async () => {
   if (visibleCount.value > notifications.value.length) {
     visibleCount.value = notifications.value.length
     localStorage.setItem('notifications_visible_count', notifications.value.length.toString())
+  }
+}
+
+// Clean up orphaned notifications (notifications for deleted projects)
+const cleanupOrphanedNotifications = async () => {
+  const allNotifications = await getNotifications()
+  const projectNotifications = allNotifications.filter((n) => n.projectId)
+
+  if (projectNotifications.length === 0) return
+
+  // Get unique project IDs to avoid checking the same project multiple times
+  const uniqueProjectIds = [...new Set(projectNotifications.map((n) => n.projectId))]
+
+  console.log(`Checking ${uniqueProjectIds.length} unique projects for orphans...`)
+
+  // Check each unique project ID only once
+  for (const projectId of uniqueProjectIds) {
+    try {
+      await projectsService.getById(projectId)
+    } catch (error) {
+      // If project doesn't exist (406 error), remove all notifications for this project
+      console.log(`Removing orphaned notifications for deleted project ${projectId}`)
+      notificationsService.deleteProjectNotifications(projectId)
+    }
   }
 }
 
@@ -140,7 +165,14 @@ const handleNotificationClick = async (notification) => {
       }
     } catch (error) {
       console.error('Error loading project:', error)
-      alert('Project not found. It may have been deleted.')
+
+      // Project was deleted - remove this orphaned notification
+      notificationsService.deleteProjectNotifications(notification.projectId)
+
+      // Reload notifications to reflect the change
+      await loadNotifications()
+
+      alert('This project has been deleted. The notification has been removed.')
     }
   }
 }
@@ -232,7 +264,13 @@ const getFormattedStatus = (status) => {
 
 onMounted(async () => {
   loading.value = true
+
+  // Clean up any orphaned notifications first
+  await cleanupOrphanedNotifications()
+
+  // Then load the notifications
   await loadNotifications()
+
   loading.value = false
 })
 </script>
