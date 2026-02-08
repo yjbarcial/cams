@@ -9,6 +9,7 @@ import {
   deleteNotification,
   markAllAsRead,
 } from '@/services/notificationsService.js'
+import { formatStatus } from '@/utils/statusFormatter.js'
 import { projectsService } from '@/services/supabaseService'
 
 const router = useRouter()
@@ -216,6 +217,11 @@ const handleMarkAllRead = async () => {
 const unreadCount = computed(() => {
   return notifications.value.filter((n) => !n.isRead).length
 })
+
+// Helper function to format status for display
+const getFormattedStatus = (status) => {
+  return formatStatus(status)
+}
 
 onMounted(async () => {
   loading.value = true

@@ -1,6 +1,7 @@
 // Notifications Service
 // Storage key: 'notifications'
 import { isPushNotificationsEnabled, isEmailNotificationsEnabled } from './settingsService.js'
+import { formatStatus } from '@/utils/statusFormatter.js'
 
 /**
  * Get all notifications for the current user
@@ -333,31 +334,8 @@ const getTypeColor = (type) => {
  * @param {string} status - Status code
  * @returns {string} Human-readable status name
  */
-const getStatusDisplayName = (status) => {
-  const statusMap = {
-    draft: 'Draft',
-    to_section_head: 'Section Head',
-    to_technical_editor: 'Technical Editor',
-    to_creative_director: 'Creative Director',
-    to_editor_in_chief: 'Editor-in-Chief',
-    to_chief_adviser: 'Chief Adviser',
-    for_publish: 'Archival Manager',
-    published: 'Published',
-    returned_by_section_head: 'Section Head (returned)',
-    returned_by_technical_editor: 'Technical Editor (returned)',
-    returned_by_creative_director: 'Creative Director (returned)',
-    returned_by_editor_in_chief: 'Editor-in-Chief (returned)',
-    returned_by_chief_adviser: 'Chief Adviser (returned)',
-    approved: 'Approved',
-    rejected: 'Rejected',
-    'Returned by Chief Adviser': 'Chief Adviser (returned)',
-    'To Chief Adviser': 'Chief Adviser',
-    'For Publish': 'Archival Manager',
-    Published: 'Published',
-    Approved: 'Approved',
-    Rejected: 'Rejected',
-  }
-  return statusMap[status] || status
+export const getStatusDisplayName = (status) => {
+  return formatStatus(status)
 }
 
 /**
