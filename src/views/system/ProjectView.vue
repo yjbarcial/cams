@@ -6,13 +6,13 @@ import Footer from '@/components/layout/Footer.vue'
 import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
+import MediaUpload from '@/components/MediaUpload.vue'
 import { projectsService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import {
   getProjectComments,
   addProjectComment,
-  updateProjectComment,
   deleteProjectComment,
   toggleCommentApproval,
 } from '@/services/commentsService.js'
@@ -109,7 +109,7 @@ const submitComments = ref('')
 const showUnsavedChangesDialog = ref(false)
 
 // History state
-const showHistory = ref(true) // Always show by default
+// const showHistory = ref(true) // Always show by default
 
 // Comments state - start empty for new projects
 const comments = ref([])
@@ -246,7 +246,7 @@ const saveContent = async (showNotif = false) => {
       return false // No changes to save
     }
 
-    const oldContent = previousContent.value || project.value.content
+    // const oldContent = previousContent.value || project.value.content
     editorContent.value = content
     project.value.content = content
 
@@ -484,7 +484,7 @@ const cancelSubmitDialog = () => {
 }
 
 // Helper function to determine department
-const getDepartmentFromProject = () => {
+/* const getDepartmentFromProject = () => {
   // You can customize this logic based on your needs
   const typeMap = {
     magazine: 'Editorial',
@@ -493,7 +493,7 @@ const getDepartmentFromProject = () => {
     other: 'Marketing',
   }
   return typeMap[projectType.value] || 'General'
-}
+} */
 
 // Version restoration handler (versions are auto-created on edits)
 const handleVersionRestored = (restoredProject) => {
@@ -908,7 +908,7 @@ const formatCommentTime = (timestamp) => {
     if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
 
     return date.toLocaleDateString()
-  } catch (error) {
+  } catch {
     return timestamp
   }
 }
@@ -1220,6 +1220,16 @@ const getBackButtonText = computed(() => {
                 @text-change="handleContentChange"
                 @highlight-comments-updated="handleHighlightCommentsUpdated"
                 @notification="handleEditorNotification"
+              />
+            </div>
+
+            <!-- Media Upload Section for Images/Videos -->
+            <div class="media-upload-wrapper">
+              <MediaUpload
+                :project-id="projectId"
+                :uploaded-by="currentUserProfile?.id || null"
+                @upload-success="showNotification('Media uploaded successfully!')"
+                @upload-error="showNotification($event, 'error')"
               />
             </div>
 
@@ -1789,6 +1799,13 @@ const getBackButtonText = computed(() => {
   border-radius: 8px;
   margin-bottom: 24px;
   overflow: hidden;
+}
+
+.media-upload-wrapper {
+  margin-top: 0;
+  margin-bottom: 24px;
+  width: 100%;
+  display: block;
 }
 
 .action-buttons {
