@@ -252,7 +252,7 @@ export const markAllAsRead = async () => {
     } else {
       // Regular users: Mark only their notifications as read
       console.log('👤 User: Marking only user notifications as read')
-      
+
       // Get current user's ID
       const { profilesService } = await import('./supabaseService.js')
       let currentUserId = null
@@ -329,6 +329,38 @@ const getTypeColor = (type) => {
 }
 
 /**
+ * Convert status code to human-readable display name
+ * @param {string} status - Status code
+ * @returns {string} Human-readable status name
+ */
+const getStatusDisplayName = (status) => {
+  const statusMap = {
+    draft: 'Draft',
+    to_section_head: 'Section Head',
+    to_technical_editor: 'Technical Editor',
+    to_creative_director: 'Creative Director',
+    to_editor_in_chief: 'Editor-in-Chief',
+    to_chief_adviser: 'Chief Adviser',
+    for_publish: 'Archival Manager',
+    published: 'Published',
+    returned_by_section_head: 'Section Head (returned)',
+    returned_by_technical_editor: 'Technical Editor (returned)',
+    returned_by_creative_director: 'Creative Director (returned)',
+    returned_by_editor_in_chief: 'Editor-in-Chief (returned)',
+    returned_by_chief_adviser: 'Chief Adviser (returned)',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    'Returned by Chief Adviser': 'Chief Adviser (returned)',
+    'To Chief Adviser': 'Chief Adviser',
+    'For Publish': 'Archival Manager',
+    Published: 'Published',
+    Approved: 'Approved',
+    Rejected: 'Rejected',
+  }
+  return statusMap[status] || status
+}
+
+/**
  * Create notification for project status change
  * @param {Object} params - Notification parameters
  * @param {string} params.projectId - Project ID
@@ -356,30 +388,41 @@ export const createStatusChangeNotification = ({
   let description = ''
   let actions = [{ label: 'View', type: 'view', color: '#3b82f6' }]
 
+  // Get human-readable status name
+  const statusDisplay = getStatusDisplayName(newStatus)
+
   // Determine notification type and description based on status change
-  if (newStatus === 'To Section Head') {
+  if (newStatus === 'To Section Head' || newStatus === 'to_section_head') {
     type = 'Request'
-    description = `${actionBy} submitted "${projectTitle}" for Section Head review.`
-  } else if (newStatus === 'To Technical Editor') {
-    type = 'Approved'
-    description = `${actionBy} approved "${projectTitle}" and forwarded to Technical Editor.`
-  } else if (newStatus === 'To Editor-in-Chief') {
-    type = 'Approved'
-    description = `${actionBy} approved "${projectTitle}" and forwarded to Editor-in-Chief.`
-  } else if (newStatus === 'To Chief Adviser') {
+    description = `${actionBy} submitted "${projectTitle}" for ${statusDisplay} review.`
+  } else if (
+    newStatus === 'To Technical Editor' ||
+    newStatus === 'to_technical_editor' ||
+    newStatus === 'to_creative_director' ||
+    newStatus === 'To Editor-in-Chief' ||
+    newStatus === 'to_editor_in_chief' ||
+    newStatus === 'To Chief Adviser' ||
+    newStatus === 'to_chief_adviser'
+  ) {
     type = 'Forwarded'
-    description = `${actionBy} forwarded "${projectTitle}" to Chief Adviser for consultation.`
-  } else if (newStatus === 'For Publish') {
+    description = `${actionBy} moved "${projectTitle}" to ${statusDisplay}.`
+  } else if (newStatus === 'For Publish' || newStatus === 'for_publish') {
     type = 'Approved'
-    description = `${actionBy} approved "${projectTitle}" and marked it ready for publishing.`
-  } else if (newStatus === 'Published') {
+    description = `${actionBy} approved "${projectTitle}" for publication.`
+  } else if (newStatus === 'Published' || newStatus === 'published') {
     type = 'Published'
     description = `${actionBy} published "${projectTitle}".`
   } else if (
     newStatus === 'Returned by Section Head' ||
+    newStatus === 'returned_by_section_head' ||
     newStatus === 'Returned by Technical Editor' ||
+    newStatus === 'returned_by_technical_editor' ||
+    newStatus === 'Returned by Creative Director' ||
+    newStatus === 'returned_by_creative_director' ||
     newStatus === 'Returned by EIC' ||
-    newStatus === 'Returned by Chief Adviser'
+    newStatus === 'returned_by_editor_in_chief' ||
+    newStatus === 'Returned by Chief Adviser' ||
+    newStatus === 'returned_by_chief_adviser'
   ) {
     type = 'Returned'
     description = `${actionBy} returned "${projectTitle}" for edits.`
@@ -393,15 +436,26 @@ export const createStatusChangeNotification = ({
     if (comments) {
       description += ` ${comments}`
     }
-  } else if (newStatus === 'Rejected by Chief Adviser' || newStatus.includes('Rejected')) {
+  } else if (
+    newStatus === 'Rejected by Chief Adviser' ||
+    newStatus.includes('Rejected') ||
+    newStatus.includes('rejected')
+  ) {
     type = 'Rejected'
     description = `${actionBy} rejected "${projectTitle}".`
     if (comments) {
       description += ` ${comments}`
     }
-  } else if (newStatus === 'Draft') {
+  } else if (newStatus === 'Draft' || newStatus === 'draft') {
     type = 'Info'
     description = `${actionBy} saved "${projectTitle}" as draft.`
+  } else {
+    // Default fallback with clean status display
+    type = 'Forwarded'
+    description = `${actionBy} moved "${projectTitle}" to ${statusDisplay}.`
+    if (comments) {
+      description += ` ${comments}`
+    }
   }
 
   return createNotification({
@@ -523,7 +577,7 @@ export const getProjectInvolvedUsers = async (project) => {
     const workflowDesignations = getDesignationsByStatus(project.status)
     console.log('👥 Workflow roles for status', project.status, ':', workflowRoles)
     console.log('👥 Workflow designations for status', project.status, ':', workflowDesignations)
-    
+
     // Query by role
     for (const role of workflowRoles) {
       try {
@@ -531,10 +585,10 @@ export const getProjectInvolvedUsers = async (project) => {
           .from('profiles')
           .select('email, first_name, last_name, role')
           .eq('role', role)
-        
+
         if (roleProfiles && roleProfiles.length > 0) {
           console.log(`✅ Found ${roleProfiles.length} users with role '${role}'`)
-          roleProfiles.forEach(profile => {
+          roleProfiles.forEach((profile) => {
             if (profile.email) {
               involvedEmails.push(profile.email)
               console.log(`  ➡️ Added ${role}:`, profile.email)
@@ -555,10 +609,12 @@ export const getProjectInvolvedUsers = async (project) => {
           .from('profiles')
           .select('email, first_name, last_name, designation_label')
           .eq('designation_label', designation)
-        
+
         if (designationProfiles && designationProfiles.length > 0) {
-          console.log(`✅ Found ${designationProfiles.length} users with designation '${designation}'`)
-          designationProfiles.forEach(profile => {
+          console.log(
+            `✅ Found ${designationProfiles.length} users with designation '${designation}'`,
+          )
+          designationProfiles.forEach((profile) => {
             if (profile.email) {
               involvedEmails.push(profile.email)
               console.log(`  ➡️ Added ${designation}:`, profile.email)
@@ -573,9 +629,9 @@ export const getProjectInvolvedUsers = async (project) => {
     }
 
     // Remove duplicates and empty values
-    const uniqueEmails = [...new Set(involvedEmails.filter(email => email))]
+    const uniqueEmails = [...new Set(involvedEmails.filter((email) => email))]
     console.log('📧 Total unique involved users:', uniqueEmails.length, uniqueEmails)
-    
+
     return uniqueEmails
   } catch (error) {
     console.error('❌ Error getting project involved users:', error)
@@ -590,13 +646,13 @@ export const getProjectInvolvedUsers = async (project) => {
  */
 const getWorkflowRolesByStatus = (status) => {
   const rolesByStatus = {
-    'to_section_head': ['section_head'],
-    'to_technical_editor': ['technical_editor'],
-    'to_creative_director': ['creative_director'],
-    'to_editor_in_chief': ['editor_in_chief'],
-    'to_chief_adviser': ['chief_adviser'],
-    'for_publish': ['archival_manager'],
-    'published': ['admin', 'archival_manager'],
+    to_section_head: ['section_head'],
+    to_technical_editor: ['technical_editor'],
+    to_creative_director: ['creative_director'],
+    to_editor_in_chief: ['editor_in_chief'],
+    to_chief_adviser: ['chief_adviser'],
+    for_publish: ['archival_manager'],
+    published: ['admin', 'archival_manager'],
   }
   return rolesByStatus[status?.toLowerCase()?.replace(/\s+/g, '_')] || []
 }
@@ -608,13 +664,13 @@ const getWorkflowRolesByStatus = (status) => {
  */
 const getDesignationsByStatus = (status) => {
   const designationsByStatus = {
-    'to_section_head': ['Section Head', 'Managing Editor', 'Associate Managing Editor'],
-    'to_technical_editor': ['Technical Editor'],
-    'to_creative_director': ['Creative Director'],
-    'to_editor_in_chief': ['Editor-in-Chief'],
-    'to_chief_adviser': ['Chief Adviser'],
-    'for_publish': ['Archival Manager', 'Circulations Manager'],
-    'published': ['Admin', 'Archival Manager'],
+    to_section_head: ['Section Head', 'Managing Editor', 'Associate Managing Editor'],
+    to_technical_editor: ['Technical Editor'],
+    to_creative_director: ['Creative Director'],
+    to_editor_in_chief: ['Editor-in-Chief'],
+    to_chief_adviser: ['Chief Adviser'],
+    for_publish: ['Archival Manager', 'Circulations Manager'],
+    published: ['Admin', 'Archival Manager'],
   }
   return designationsByStatus[status?.toLowerCase()?.replace(/\s+/g, '_')] || []
 }
@@ -629,20 +685,14 @@ const getDesignationsByStatus = (status) => {
  * @param {string} params.actionBy - User who performed the action
  * @returns {Promise<Array>} Array of created notifications
  */
-export const notifyAllInvolvedUsers = async ({
-  project,
-  type,
-  title,
-  description,
-  actionBy,
-}) => {
+export const notifyAllInvolvedUsers = async ({ project, type, title, description, actionBy }) => {
   try {
     const involvedEmails = await getProjectInvolvedUsers(project)
     const { profilesService } = await import('./supabaseService.js')
     const currentUserEmail = localStorage.getItem('userEmail')
-    
+
     const notifications = []
-    
+
     for (const email of involvedEmails) {
       // Skip notifying the current user (person who performed the action)
       if (email.toLowerCase() === currentUserEmail?.toLowerCase()) {
@@ -707,7 +757,7 @@ export const notifyFileUpload = async ({ project, fileName, uploadedBy }) => {
  * @param {string} params.changes - Description of changes (optional)
  */
 export const notifyProjectUpdate = async ({ project, updatedBy, changes }) => {
-  const description = changes 
+  const description = changes
     ? `${updatedBy} updated "${project.title}": ${changes}`
     : `${updatedBy} made changes to "${project.title}".`
 
@@ -759,6 +809,9 @@ export const notifyStatusChange = async ({ project, oldStatus, newStatus, action
   let type = 'Info'
   let description = ''
 
+  // Get human-readable status name
+  const statusDisplay = getStatusDisplayName(newStatus)
+
   // Determine notification type and description
   if (newStatus?.includes('returned') || newStatus?.includes('Returned')) {
     type = 'Returned'
@@ -780,12 +833,34 @@ export const notifyStatusChange = async ({ project, oldStatus, newStatus, action
     description = `${actionBy} published "${project.title}".`
   } else if (newStatus === 'to_section_head') {
     type = 'Request'
-    description = `${actionBy} submitted "${project.title}" for Section Head review.`
+    description = `${actionBy} submitted "${project.title}" for ${statusDisplay} review.`
+    if (comments) {
+      description += ` Comments: ${comments}`
+    }
+  } else if (
+    newStatus === 'to_technical_editor' ||
+    newStatus === 'to_creative_director' ||
+    newStatus === 'to_editor_in_chief' ||
+    newStatus === 'to_chief_adviser' ||
+    newStatus === 'To Chief Adviser'
+  ) {
+    type = 'Forwarded'
+    description = `${actionBy} moved "${project.title}" to ${statusDisplay}.`
+    if (comments) {
+      description += ` Comments: ${comments}`
+    }
+  } else if (newStatus === 'for_publish' || newStatus === 'For Publish') {
+    type = 'Approved'
+    description = `${actionBy} approved "${project.title}" for publication.`
     if (comments) {
       description += ` Comments: ${comments}`
     }
   } else {
-    description = `${actionBy} moved "${project.title}" to ${newStatus}.`
+    // Default fallback with clean status display
+    description = `${actionBy} moved "${project.title}" to ${statusDisplay}.`
+    if (comments) {
+      description += ` Comments: ${comments}`
+    }
   }
 
   console.log('📬 Notification details:', { type, description })
