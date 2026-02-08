@@ -952,6 +952,10 @@ onMounted(async () => {
                 Request edits for <strong>"{{ project.title }}"</strong>. The project will be
                 returned for revision.
               </template>
+              <template v-else-if="approvalAction === 'return'">
+                Return <strong>"{{ project.title }}"</strong> to the writer/artist. The project will
+                be sent back for major revisions.
+              </template>
               <template v-else-if="approvalAction === 'approve'">
                 Approve <strong>"{{ project.title }}"</strong> and forward to Editor-in-Chief for
                 final review.
@@ -985,7 +989,11 @@ onMounted(async () => {
 
           <div class="form-field">
             <label class="field-label">
-              {{ approvalAction === 'edit' ? 'Comments (Required)' : 'Comments (Optional)' }}
+              {{
+                approvalAction === 'approve' || approvalAction === 'publish'
+                  ? 'Comments (Optional)'
+                  : 'Comments (Required)'
+              }}
             </label>
             <v-textarea
               v-model="approvalComments"
@@ -1008,6 +1016,22 @@ onMounted(async () => {
             </template>
             <div class="alert-text">
               <strong>Action:</strong> Project will be returned for revision.
+            </div>
+          </v-alert>
+
+          <v-alert
+            v-else-if="approvalAction === 'return'"
+            type="error"
+            variant="tonal"
+            density="comfortable"
+            class="next-step-alert"
+          >
+            <template v-slot:prepend>
+              <v-icon size="20">mdi-alert-circle-outline</v-icon>
+            </template>
+            <div class="alert-text">
+              <strong>Action:</strong> Project will be returned to the writer/artist for major
+              revisions.
             </div>
           </v-alert>
 
@@ -1056,7 +1080,9 @@ onMounted(async () => {
             size="default"
             class="confirm-approval-btn"
             :prepend-icon="approvalActions.find((a) => a.value === approvalAction)?.icon"
-            :disabled="approvalAction === 'edit' && !approvalComments.trim()"
+            :disabled="
+              (approvalAction === 'edit' || approvalAction === 'return') && !approvalComments.trim()
+            "
           >
             Confirm {{ approvalActions.find((a) => a.value === approvalAction)?.text }}
           </v-btn>

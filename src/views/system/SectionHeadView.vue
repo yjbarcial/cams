@@ -252,7 +252,7 @@ const saveContentChanges = async () => {
 }
 
 const startApproval = (action) => {
-  if (action === 'return') {
+  if (action === 'edit') {
     isEditorEditable.value = true
     if (quillEditorRef.value) {
       quillEditorRef.value.setReadOnly(false)
@@ -883,8 +883,12 @@ onMounted(async () => {
                 technical review.
               </template>
               <template v-else-if="approvalAction === 'return'">
+                Return <strong>"{{ project.title }}"</strong> to the author. The project will be
+                sent back for major revisions.
+              </template>
+              <template v-else-if="approvalAction === 'edit'">
                 Request edits for <strong>"{{ project.title }}"</strong>. The project will be
-                returned to the author.
+                returned to the author for revisions.
               </template>
             </p>
           </div>
@@ -904,7 +908,7 @@ onMounted(async () => {
 
           <div class="form-field">
             <label class="field-label">
-              {{ approvalAction === 'return' ? 'Comments (Required)' : 'Comments (Optional)' }}
+              {{ approvalAction === 'approve' ? 'Comments (Optional)' : 'Comments (Required)' }}
             </label>
             <v-textarea
               v-model="approvalComments"
@@ -942,7 +946,22 @@ onMounted(async () => {
               <v-icon size="20">mdi-alert-outline</v-icon>
             </template>
             <div class="alert-text">
-              <strong>Action:</strong> Project will be returned to the author for editing.
+              <strong>Action:</strong> Project will be returned to the author for major revisions.
+            </div>
+          </v-alert>
+
+          <v-alert
+            v-else-if="approvalAction === 'edit'"
+            type="warning"
+            variant="tonal"
+            density="comfortable"
+            class="next-step-alert"
+          >
+            <template v-slot:prepend>
+              <v-icon size="20">mdi-pencil-outline</v-icon>
+            </template>
+            <div class="alert-text">
+              <strong>Action:</strong> Project will be returned to the author for requested edits.
             </div>
           </v-alert>
         </v-card-text>
@@ -960,7 +979,9 @@ onMounted(async () => {
             size="default"
             class="confirm-approval-btn"
             :prepend-icon="approvalActions.find((a) => a.value === approvalAction)?.icon"
-            :disabled="approvalAction === 'return' && !approvalComments.trim()"
+            :disabled="
+              (approvalAction === 'return' || approvalAction === 'edit') && !approvalComments.trim()
+            "
           >
             Confirm {{ approvalActions.find((a) => a.value === approvalAction)?.text }}
           </v-btn>
