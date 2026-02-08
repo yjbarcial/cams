@@ -551,16 +551,19 @@ const projectTypeMap = {
   'social-media': '/other', // social-media projects route to /other
 }
 
-// View permission - allow admin, assigned section head, or assigned members
+// View permission - allow admin, all editors, section heads, and assigned members
 const canViewProject = computed(() => {
   const userRole = localStorage.getItem('userRole')
   const accessRole = localStorage.getItem('accessRole')
   const userId = localStorage.getItem('userId')
   const effectiveUserId = userId || currentUserProfile.value?.id
 
+  // All higher ranks can VIEW projects (but not necessarily EDIT)
   if (
     userRole === 'admin' ||
     userRole === 'editor' ||
+    userRole === 'section_head' ||
+    accessRole === 'section_head' ||
     accessRole === 'technical_editor' ||
     accessRole === 'creative_director' ||
     accessRole === 'editor_in_chief' ||

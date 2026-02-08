@@ -104,6 +104,55 @@ const ARTIST_EMAILS = [
 ]
 
 /**
+ * Map designation_label to accessRole for router guards
+ */
+function getAccessRole(userRole, designationLabel) {
+  // Admins can access everything
+  if (userRole === 'admin') {
+    return 'admin'
+  }
+
+  // Section heads
+  if (userRole === 'section_head') {
+    return 'section_head'
+  }
+
+  // Map specific editor designations to accessRole
+  if (designationLabel) {
+    const label = designationLabel.toLowerCase()
+
+    if (label.includes('technical editor') || label === 'technical editor') {
+      return 'technical_editor'
+    }
+    if (label.includes('creative director') || label === 'creative director') {
+      return 'creative_director'
+    }
+    if (label.includes('editor-in-chief') || label.includes('editor in chief') || label === 'eic') {
+      return 'editor_in_chief'
+    }
+    if (label.includes('chief adviser') || label === 'chief adviser') {
+      return 'chief_adviser'
+    }
+    if (label.includes('archival manager') || label.includes('archive manager')) {
+      return 'archival_manager'
+    }
+  }
+
+  // Fall back to checking email lists for specific roles
+  const normalizedEmail = '' // We'd need email passed in, or check userRole
+
+  // Default accessRole based on userRole
+  if (userRole === 'editor') {
+    return 'editor' // Generic editor access
+  }
+  if (userRole === 'member') {
+    return 'member'
+  }
+
+  return 'member' // Default
+}
+
+/**
  * Determine user role ba(SYSTEM ADMIN) > editor (content admin) > section_head > member
  */
 function getUserRole(email) {
