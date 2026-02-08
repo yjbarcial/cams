@@ -554,10 +554,19 @@ const projectTypeMap = {
 // View permission - allow admin, assigned section head, or assigned members
 const canViewProject = computed(() => {
   const userRole = localStorage.getItem('userRole')
+  const accessRole = localStorage.getItem('accessRole')
   const userId = localStorage.getItem('userId')
   const effectiveUserId = userId || currentUserProfile.value?.id
 
-  if (userRole === 'admin') {
+  if (
+    userRole === 'admin' ||
+    userRole === 'editor' ||
+    accessRole === 'technical_editor' ||
+    accessRole === 'creative_director' ||
+    accessRole === 'editor_in_chief' ||
+    accessRole === 'chief_adviser' ||
+    accessRole === 'archival_manager'
+  ) {
     return true
   }
 
@@ -588,10 +597,11 @@ const canEditProject = computed(() => {
   })
 
   // Only assigned writers/artists can edit
-  if (projectMemberIds.value.length > 0 && effectiveUserId) {
-    const hasAccess = projectMemberIds.value.includes(parseInt(effectiveUserId, 10))
+  const normalizedUserId = effectiveUserId ? parseInt(effectiveUserId, 10) : null
+  if (projectMemberIds.value.length > 0 && normalizedUserId) {
+    const hasAccess = projectMemberIds.value.includes(normalizedUserId)
     console.log('🔍 Member edit check:', {
-      effectiveUserId,
+      effectiveUserId: normalizedUserId,
       memberIds: projectMemberIds.value,
       hasAccess,
     })
