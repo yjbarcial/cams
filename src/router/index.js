@@ -331,7 +331,7 @@ const router = createRouter({
       name: 'project',
       component: ProjectView,
       props: true,
-      beforeEnter: requireMember,
+      beforeEnter: requireAuth,
     },
 
     // Approval Routes - Updated Flow: Section Head → Technical Editor → EIC → Chief Adviser → Archival Manager

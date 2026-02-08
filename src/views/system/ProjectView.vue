@@ -551,44 +551,54 @@ const projectTypeMap = {
   'social-media': '/other', // social-media projects route to /other
 }
 
-// Permission checking - determine if current user can edit this project
-const canEditProject = computed(() => {
+// View permission - allow admin, assigned section head, or assigned members
+const canViewProject = computed(() => {
   const userRole = localStorage.getItem('userRole')
   const userId = localStorage.getItem('userId')
+  const effectiveUserId = userId || currentUserProfile.value?.id
+
+  if (userRole === 'admin') {
+    return true
+  }
+
+  const normalizedUserId = effectiveUserId ? parseInt(effectiveUserId, 10) : null
+  if (!normalizedUserId) {
+    return false
+  }
+
+  if (projectMemberIds.value.includes(normalizedUserId)) {
+    return true
+  }
+
+  const sectionHeadId = project.value?.section_head_id
+    ? parseInt(project.value.section_head_id, 10)
+    : null
+  return sectionHeadId === normalizedUserId
+})
+
+// Permission checking - determine if current user can edit this project
+const canEditProject = computed(() => {
+  const userId = localStorage.getItem('userId')
+  const effectiveUserId = userId || currentUserProfile.value?.id
 
   console.log('🔐 Permission Check:', {
-    userRole,
-    userId,
+    userId: effectiveUserId,
     projectMemberIds: projectMemberIds.value,
     currentUserProfile: currentUserProfile.value?.id,
   })
 
-  // Admins, editors, and section heads can always edit
-  if (userRole === 'admin' || userRole === 'editor' || userRole === 'section_head') {
-    console.log('✅ Permission granted: Admin/Editor/Section Head role')
-    return true
+  // Only assigned writers/artists can edit
+  if (projectMemberIds.value.length > 0 && effectiveUserId) {
+    const hasAccess = projectMemberIds.value.includes(parseInt(effectiveUserId, 10))
+    console.log('🔍 Member edit check:', {
+      effectiveUserId,
+      memberIds: projectMemberIds.value,
+      hasAccess,
+    })
+    return hasAccess
   }
 
-  // Members (writers/artists) can only edit projects they are assigned to
-  if (userRole === 'member') {
-    // Try to get userId from currentUserProfile if not in localStorage
-    const effectiveUserId = userId || currentUserProfile.value?.id
-
-    if (projectMemberIds.value.length > 0 && effectiveUserId) {
-      const hasAccess = projectMemberIds.value.includes(parseInt(effectiveUserId))
-      console.log('🔍 Member permission check:', {
-        effectiveUserId,
-        memberIds: projectMemberIds.value,
-        hasAccess,
-      })
-      return hasAccess
-    }
-    console.log('❌ Permission denied: No userId or no project members')
-    return false
-  }
-
-  console.log('❌ Permission denied: No valid role')
-  // Default to false for safety
+  console.log('❌ Permission denied: No userId or no project members')
   return false
 })
 
@@ -699,6 +709,14 @@ const loadProjectData = async () => {
       dueDate: foundProject.due_date || foundProject.deadline || '',
       department: foundProject.department || '',
       priority: foundProject.priority || 'Medium',
+    }
+
+    if (!canViewProject.value) {
+      showNotification('Access denied. You are not assigned to this project.', 'error')
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 1500)
+      return
     }
 
     // Set project type
