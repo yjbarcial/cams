@@ -260,52 +260,67 @@ onMounted(() => {
       </v-card-text>
     </v-card>
 
-    <!-- Uploaded Media List -->
+    <!-- Uploaded Media Gallery -->
     <v-card v-if="uploadedMedia.length > 0" class="uploaded-media-card" elevation="1">
       <v-card-title class="uploaded-title">
-        <v-icon class="mr-2 gold-icon" size="20">mdi-paperclip</v-icon>
-        <span>Uploaded Files ({{ uploadedMedia.length }})</span>
+        <v-icon class="mr-2 gold-icon" size="20">mdi-image-multiple</v-icon>
+        <span>Uploaded Media ({{ uploadedMedia.length }})</span>
       </v-card-title>
       <v-card-text class="uploaded-content">
         <div v-if="loadingMedia" class="loading-state">
           <v-progress-circular indeterminate color="#f5c52b" size="20"></v-progress-circular>
-          <span class="ml-2">Loading...</span>
+          <span class="ml-2">Loading media...</span>
         </div>
-        <v-list v-else class="media-list">
-          <v-list-item v-for="media in uploadedMedia" :key="media.id" class="media-list-item">
-            <template v-slot:prepend>
-              <v-icon size="20">{{ getMediaIcon(media.mime_type) }}</v-icon>
-            </template>
-            <v-list-item-title class="media-filename">{{ media.name }}</v-list-item-title>
-            <v-list-item-subtitle class="media-filesize"
-              >{{ (media.size / 1024 / 1024).toFixed(2) }} MB</v-list-item-subtitle
-            >
-            <template v-slot:append>
-              <div class="media-actions-inline">
-                <v-btn
-                  icon
-                  size="x-small"
-                  variant="text"
-                  :href="media.url"
-                  target="_blank"
-                  title="View/Download"
-                >
-                  <v-icon size="18" color="#f5c52b">mdi-open-in-new</v-icon>
-                </v-btn>
-                <v-btn
-                  v-if="canDeleteMedia(media)"
-                  icon
-                  size="x-small"
-                  variant="text"
-                  @click="deleteMedia(media.id)"
-                  title="Delete"
-                >
-                  <v-icon size="18" color="#f44336">mdi-delete</v-icon>
-                </v-btn>
-              </div>
-            </template>
-          </v-list-item>
-        </v-list>
+        <div v-else class="media-grid">
+          <div v-for="media in uploadedMedia" :key="media.id" class="media-card">
+            <div class="media-preview">
+              <template v-if="media.mime_type?.startsWith('image/')">
+                <img :src="media.url" :alt="media.name" class="media-image" />
+              </template>
+              <template v-else-if="media.mime_type?.startsWith('video/')">
+                <video :src="media.url" class="media-video" controls />
+                <div class="video-overlay">
+                  <v-icon size="48" color="white">mdi-play-circle-outline</v-icon>
+                </div>
+              </template>
+              <template v-else>
+                <div class="media-placeholder">
+                  <v-icon size="48" color="#f5c52b">mdi-file-document</v-icon>
+                </div>
+              </template>
+            </div>
+            <div class="media-info">
+              <div class="media-filename">{{ media.name }}</div>
+              <div class="media-filesize">{{ (media.size / 1024 / 1024).toFixed(2) }} MB</div>
+            </div>
+            <div class="media-actions">
+              <v-btn
+                icon
+                size="small"
+                variant="flat"
+                color="#f5c52b"
+                :href="media.url"
+                target="_blank"
+                title="View/Download"
+                class="action-btn"
+              >
+                <v-icon size="18">mdi-open-in-new</v-icon>
+              </v-btn>
+              <v-btn
+                v-if="canDeleteMedia(media)"
+                icon
+                size="small"
+                variant="flat"
+                color="#f44336"
+                @click="deleteMedia(media.id)"
+                title="Delete"
+                class="action-btn"
+              >
+                <v-icon size="18">mdi-delete</v-icon>
+              </v-btn>
+            </div>
+          </div>
+        </div>
       </v-card-text>
     </v-card>
 
@@ -611,15 +626,15 @@ onMounted(() => {
   }
 }
 
-/* Uploaded Media List Styles */
+/* Uploaded Media Gallery Styles */
 .uploaded-media-card {
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #ececec;
   max-width: 100%;
   width: 100%;
-  margin-top: 20px;
+  margin-top: 24px;
   margin-left: 0;
   margin-right: auto;
   padding: 0;
@@ -628,61 +643,185 @@ onMounted(() => {
 .uploaded-title {
   display: flex;
   align-items: center;
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: #353535;
-  background: #fafafa;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 12px 16px;
+  background: transparent;
+  border-bottom: 1px solid #f5c52b33;
+  padding: 16px 22px 12px 22px;
 }
 
 .uploaded-content {
-  padding: 0 !important;
+  padding: 22px !important;
 }
 
 .loading-state {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 24px;
   color: #666;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
-.media-list {
-  background: transparent;
+/* Media Grid Layout */
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
   padding: 0;
 }
 
-.media-list-item {
-  border-bottom: 1px solid #f3f4f6;
-  padding: 10px 16px;
-  transition: background 0.2s;
-}
-
-.media-list-item:last-child {
-  border-bottom: none;
-}
-
-.media-list-item:hover {
+/* Media Card */
+.media-card {
   background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.media-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  border-color: #f5c52b;
+}
+
+/* Media Preview Area */
+.media-preview {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.media-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.media-card:hover .video-overlay {
+  opacity: 1;
+}
+
+.media-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+}
+
+/* Media Info */
+.media-info {
+  padding: 12px 14px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #fff;
 }
 
 .media-filename {
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
   color: #353535;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
 .media-filesize {
   font-size: 0.8rem;
   color: #888;
-  margin-top: 2px;
+  font-weight: 400;
 }
 
-.media-actions-inline {
+/* Media Actions */
+.media-actions {
   display: flex;
-  gap: 4px;
-  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fff;
+  border-top: 1px solid #f3f4f6;
+  justify-content: center;
+}
+
+.action-btn {
+  border-radius: 6px;
+  box-shadow: none;
+  transition: transform 0.2s;
+}
+
+.action-btn:hover {
+  transform: scale(1.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 960px) {
+  .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+  }
+
+  .media-preview {
+    height: 150px;
+  }
+}
+
+@media (max-width: 600px) {
+  .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  .media-preview {
+    height: 130px;
+  }
+
+  .uploaded-content {
+    padding: 16px !important;
+  }
+
+  .media-info {
+    padding: 10px 12px;
+  }
+
+  .media-actions {
+    padding: 8px 12px;
+  }
 }
 </style>
