@@ -1001,7 +1001,7 @@ const cancelBulkDelete = () => {
   background-color: #f9fafb !important;
   border-bottom: 1px solid #e5e7eb !important;
   display: grid !important;
-  grid-template-columns: 2fr 1fr 1fr 1fr 120px !important;
+  grid-template-columns: 60px 2fr 1fr 1fr 1fr 120px !important;
 }
 
 .header-cell {
@@ -1009,6 +1009,13 @@ const cancelBulkDelete = () => {
   font-weight: 600 !important;
   color: #2f2f2f !important;
   font-size: 14px !important;
+}
+
+.checkbox-header {
+  padding: 12px 8px !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
 }
 
 .title-header {
@@ -1027,7 +1034,15 @@ const cancelBulkDelete = () => {
   border-bottom: 1px solid #e5e7eb !important;
   transition: background-color 0.2s ease !important;
   display: grid !important;
-  grid-template-columns: 2fr 1fr 1fr 1fr 120px !important;
+  grid-template-columns: 60px 2fr 1fr 1fr 1fr 120px !important;
+  align-items: center !important;
+}
+
+.checkbox-cell {
+  padding: 12px 8px !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
 }
 
 .table-row:last-child {
