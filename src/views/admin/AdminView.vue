@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { projectsService, profilesService, archivesService } from '@/services/supabaseService'
+import { deleteProjectNotifications } from '@/services/notificationsService'
 import { supabase } from '@/utils/supabase'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
@@ -36,6 +37,8 @@ const clearInProgress = ref(false)
 const clearMessage = ref('')
 const showDeleteDialog = ref(false)
 const publicationToDelete = ref(null)
+const showDeleteProjectDialog = ref(false)
+const projectToDelete = ref(null)
 
 // Notification state
 const showNotification = ref(false)
@@ -249,6 +252,41 @@ const deletePublication = async () => {
   } finally {
     showDeleteDialog.value = false
     publicationToDelete.value = null
+  }
+}
+
+// Delete project
+const confirmDeleteProject = (project) => {
+  projectToDelete.value = project
+  showDeleteProjectDialog.value = true
+}
+
+const deleteProject = async () => {
+  if (!projectToDelete.value) return
+
+  try {
+    // Delete from database with cascading deletes
+    await projectsService.delete(projectToDelete.value.id)
+
+    // Delete all notifications related to this project
+    await deleteProjectNotifications(projectToDelete.value.id)
+
+    // Remove from local arrays
+    projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
+    allRecords.value = allRecords.value.filter((r) => r.id !== projectToDelete.value.id)
+
+    // Update statistics
+    statistics.value.totalProjects = projects.value.length
+    statistics.value.recentProjects = projects.value.slice(0, 5)
+
+    displayNotification('Project deleted successfully', 'success')
+    console.log('✅ Project deleted:', projectToDelete.value.title)
+  } catch (error) {
+    console.error('❌ Error deleting project:', error)
+    displayNotification('Failed to delete project', 'error')
+  } finally {
+    showDeleteProjectDialog.value = false
+    projectToDelete.value = null
   }
 }
 
@@ -651,6 +689,7 @@ const performClearClientData = async () => {
                               <th>Status</th>
                               <th>Created By</th>
                               <th>Date</th>
+                              <th class="text-center" style="width: 120px">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -670,6 +709,18 @@ const performClearClientData = async () => {
                                 {{ project.user?.full_name || project.sectionHead }}
                               </td>
                               <td>{{ formatDate(project.created_at) }}</td>
+                              <td class="text-center">
+                                <v-btn
+                                  icon
+                                  size="small"
+                                  color="error"
+                                  variant="text"
+                                  @click="confirmDeleteProject(project)"
+                                  title="Delete Project"
+                                >
+                                  <v-icon>mdi-delete</v-icon>
+                                </v-btn>
+                              </td>
                             </tr>
                           </tbody>
                         </v-table>
@@ -843,6 +894,40 @@ const performClearClientData = async () => {
                   </v-card>
                 </v-dialog>
 
+                <!-- Delete Project Confirmation Dialog -->
+                <v-dialog v-model="showDeleteProjectDialog" max-width="500">
+                  <v-card>
+                    <v-card-title class="text-h6 d-flex justify-space-between align-center">
+                      <div>
+                        <v-icon class="mr-2" color="error">mdi-delete-alert</v-icon>
+                        Delete Project
+                      </div>
+                      <v-btn icon @click="showDeleteProjectDialog = false">
+                        <v-icon>mdi-close</v-icon>
+                      </v-btn>
+                    </v-card-title>
+                    <v-card-text>
+                      <p class="mb-3">Are you sure you want to delete this project?</p>
+                      <v-alert type="warning" density="compact" class="mb-3">
+                        <strong>{{ projectToDelete?.title || 'Untitled' }}</strong>
+                      </v-alert>
+                      <p class="text-caption text-grey">
+                        This action cannot be undone. The project and all related data (media files,
+                        comments, history, notifications) will be permanently removed from the
+                        system.
+                      </p>
+                    </v-card-text>
+                    <v-card-actions>
+                      <v-spacer />
+                      <v-btn variant="text" @click="showDeleteProjectDialog = false">Cancel</v-btn>
+                      <v-btn color="error" @click="deleteProject">
+                        <v-icon left>mdi-delete</v-icon>
+                        Delete
+                      </v-btn>
+                    </v-card-actions>
+                  </v-card>
+                </v-dialog>
+
                 <!-- View All Dialog -->
                 <v-dialog v-model="showAllDialog" max-width="1200">
                   <v-card>
@@ -871,9 +956,7 @@ const performClearClientData = async () => {
                             <th v-if="showAllType === 'projects'">Status</th>
                             <th v-if="showAllType === 'projects'">Created By</th>
                             <th>Date</th>
-                            <th v-if="showAllType === 'publications'" class="text-center">
-                              Actions
-                            </th>
+                            <th class="text-center">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -901,14 +984,22 @@ const performClearClientData = async () => {
                               {{ record.user?.full_name || record.sectionHead }}
                             </td>
                             <td>{{ formatDate(record.created_at) }}</td>
-                            <td v-if="showAllType === 'publications'" class="text-center">
+                            <td class="text-center">
                               <v-btn
                                 icon
                                 size="small"
                                 color="error"
                                 variant="text"
-                                @click="confirmDeletePublication(record)"
-                                title="Delete Publication"
+                                @click="
+                                  showAllType === 'projects'
+                                    ? confirmDeleteProject(record)
+                                    : confirmDeletePublication(record)
+                                "
+                                :title="
+                                  showAllType === 'projects'
+                                    ? 'Delete Project'
+                                    : 'Delete Publication'
+                                "
                               >
                                 <v-icon>mdi-delete</v-icon>
                               </v-btn>
@@ -916,7 +1007,7 @@ const performClearClientData = async () => {
                           </tr>
                           <tr v-if="allRecords.length === 0">
                             <td
-                              :colspan="showAllType === 'publications' ? 5 : 6"
+                              :colspan="showAllType === 'publications' ? 5 : 7"
                               class="text-center text-grey py-4"
                             >
                               No
