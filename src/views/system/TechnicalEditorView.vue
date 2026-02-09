@@ -99,8 +99,9 @@ const quillEditorRef = ref(null)
 // Editor editability - starts as true for both roles, can be toggled
 const isEditorEditable = ref(true)
 
-// Current user role
+// Current user role and accessRole
 const currentUserRole = computed(() => currentUserProfile.value?.role || '')
+const currentAccessRole = computed(() => localStorage.getItem('accessRole') || '')
 
 // Detect editor role from route path (for admin users or when role doesn't match)
 const routeBasedRole = computed(() => {
@@ -113,18 +114,18 @@ const routeBasedRole = computed(() => {
 // Check if current user is Technical Editor or Creative Director
 // Allow admin users to act as either role based on which view they're accessing
 const isTechnicalEditor = computed(() => {
-  if (currentUserRole.value === 'Technical Editor') return true
+  if (currentAccessRole.value === 'technical_editor') return true
   if (currentUserRole.value === 'admin' && routeBasedRole.value === 'technical_editor') return true
   return false
 })
 
 const isCreativeDirector = computed(() => {
-  if (currentUserRole.value === 'Creative Director') return true
+  if (currentAccessRole.value === 'creative_director') return true
   if (currentUserRole.value === 'admin' && routeBasedRole.value === 'creative_director') return true
   return false
 })
 
-const isEIC = computed(() => currentUserRole.value === 'EIC')
+const isEIC = computed(() => currentAccessRole.value === 'editor_in_chief')
 
 // Check approval status
 const technicalEditorApproved = computed(() => !!project.value.technical_editor_approved_by)

@@ -104,9 +104,11 @@ const ARTIST_EMAILS = [
 ]
 
 /**
- * Map designation_label to accessRole for router guards
+ * Map email and designation_label to accessRole for router guards
  */
-function getAccessRole(userRole, designationLabel) {
+function getAccessRole(userRole, email, designationLabel) {
+  const normalizedEmail = email?.toLowerCase() || ''
+
   // Admins can access everything
   if (userRole === 'admin') {
     return 'admin'
@@ -117,29 +119,43 @@ function getAccessRole(userRole, designationLabel) {
     return 'section_head'
   }
 
-  // Map specific editor designations to accessRole
+  // Check specific email lists first for precise role assignment
+  if (TECHNICAL_EDITOR_EMAILS.includes(normalizedEmail)) {
+    return 'technical_editor'
+  }
+  if (CREATIVE_DIRECTOR_EMAILS.includes(normalizedEmail)) {
+    return 'creative_director'
+  }
+  if (EDITOR_IN_CHIEF_EMAILS.includes(normalizedEmail)) {
+    return 'editor_in_chief'
+  }
+  if (CHIEF_ADVISER_EMAILS.includes(normalizedEmail)) {
+    return 'chief_adviser'
+  }
+  if (ARCHIVAL_MANAGER_EMAILS.includes(normalizedEmail)) {
+    return 'archival_manager'
+  }
+
+  // Fall back to designation_label if email not in specific lists
   if (designationLabel) {
     const label = designationLabel.toLowerCase()
 
-    if (label.includes('technical editor') || label === 'technical editor') {
+    if (label.includes('technical editor')) {
       return 'technical_editor'
     }
-    if (label.includes('creative director') || label === 'creative director') {
+    if (label.includes('creative director')) {
       return 'creative_director'
     }
     if (label.includes('editor-in-chief') || label.includes('editor in chief') || label === 'eic') {
       return 'editor_in_chief'
     }
-    if (label.includes('chief adviser') || label === 'chief adviser') {
+    if (label.includes('chief adviser')) {
       return 'chief_adviser'
     }
     if (label.includes('archival manager') || label.includes('archive manager')) {
       return 'archival_manager'
     }
   }
-
-  // Fall back to checking email lists for specific roles
-  const normalizedEmail = '' // We'd need email passed in, or check userRole
 
   // Default accessRole based on userRole
   if (userRole === 'editor') {
@@ -153,7 +169,32 @@ function getAccessRole(userRole, designationLabel) {
 }
 
 /**
- * Determine user role ba(SYSTEM ADMIN) > editor (content admin) > section_head > member
+ * Get designation label based on email (for content administrators)
+ */
+function getDesignationLabel(email) {
+  const normalizedEmail = email.toLowerCase()
+
+  if (TECHNICAL_EDITOR_EMAILS.includes(normalizedEmail)) {
+    return 'Technical Editor'
+  }
+  if (CREATIVE_DIRECTOR_EMAILS.includes(normalizedEmail)) {
+    return 'Creative Director'
+  }
+  if (EDITOR_IN_CHIEF_EMAILS.includes(normalizedEmail)) {
+    return 'Editor-in-Chief'
+  }
+  if (CHIEF_ADVISER_EMAILS.includes(normalizedEmail)) {
+    return 'Chief Adviser'
+  }
+  if (ARCHIVAL_MANAGER_EMAILS.includes(normalizedEmail)) {
+    return 'Archival Manager'
+  }
+
+  return null
+}
+
+/**
+ * Determine user role: admin (SYSTEM ADMIN) > editor (content admin) > section_head > member
  */
 function getUserRole(email) {
   const normalizedEmail = email.toLowerCase()
@@ -165,8 +206,15 @@ function getUserRole(email) {
     return 'admin'
   }
 
-  // 2. Content Administrators - EIC, Technical Editor, Creative Director, Archive Managers
-  if (EDITOR_EMAILS.includes(normalizedEmail)) {
+  // 2. Content Administrators - EIC, Technical Editor, Creative Director, Chief Adviser, Archive Managers
+  if (
+    EDITOR_IN_CHIEF_EMAILS.includes(normalizedEmail) ||
+    TECHNICAL_EDITOR_EMAILS.includes(normalizedEmail) ||
+    CREATIVE_DIRECTOR_EMAILS.includes(normalizedEmail) ||
+    CHIEF_ADVISER_EMAILS.includes(normalizedEmail) ||
+    ARCHIVAL_MANAGER_EMAILS.includes(normalizedEmail) ||
+    EDITOR_EMAILS.includes(normalizedEmail)
+  ) {
     return 'editor'
   }
 
@@ -211,36 +259,46 @@ export async function addUserToProfiles(user) {
 
     // ⭐ Determine user role based on their position
     const userRole = getUserRole(user.email)
-    console.log(`👤 Role assigned: ${userRole}`)
+    const designationLabel = getDesignationLabel(user.email)
+    console.log(`👤 Role assigned: ${userRole}${designationLabel ? ` (${designationLabel})` : ''}`)
 
     if (existingUser) {
-      console.log('✅ User exists, updating last_login and role')
+      console.log('✅ User exists, updating last_login, role, and designation')
 
-      // Use existing role or determine new one
-      const finalRole = existingUser.role || userRole
+      // Always update role and designation to ensure they're current
+      const updateData = {
+        last_active: new Date().toISOString(),
+        status: 'active',
+        role: userRole,
+      }
+
+      // Add designation_label if this is a content administrator
+      if (designationLabel) {
+        updateData.designation_label = designationLabel
+      }
 
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({
-          last_active: new Date().toISOString(),
-          status: 'active',
-          role: finalRole, // Keep existing role or update if it was null
-        })
+        .update(updateData)
         .eq('email', user.email)
 
       if (updateError) {
         console.error('❌ Error updating:', updateError)
       } else {
-        console.log(`✅ Updated successfully with role: ${finalRole}`)
+        console.log(`✅ Updated successfully with role: ${userRole}`)
         // Store role, accessRole, and userId in localStorage
-        localStorage.setItem('userRole', finalRole)
+        localStorage.setItem('userRole', userRole)
         localStorage.setItem('userId', existingUser.id)
 
-        // Store accessRole based on designation for editors
-        const accessRole = getAccessRole(finalRole, existingUser.designation_label)
+        // Store accessRole based on email and designation for editors
+        const accessRole = getAccessRole(
+          userRole,
+          user.email,
+          designationLabel || existingUser.designation_label,
+        )
         localStorage.setItem('accessRole', accessRole)
         console.log(
-          `🔑 Access role: ${accessRole} (designation: ${existingUser.designation_label || 'none'})`,
+          `🔑 Access role: ${accessRole} (designation: ${designationLabel || existingUser.designation_label || 'none'})`,
         )
       }
       return
@@ -253,6 +311,11 @@ export async function addUserToProfiles(user) {
       role: userRole, // Column name is 'role', not 'user_role'
       status: 'active',
       last_active: new Date().toISOString(),
+    }
+
+    // Add designation_label if this is a content administrator
+    if (designationLabel) {
+      newUser.designation_label = designationLabel
     }
 
     console.log('📝 User to insert:', newUser)
@@ -274,8 +337,8 @@ export async function addUserToProfiles(user) {
       if (data[0].id) {
         localStorage.setItem('userId', data[0].id)
       }
-      // Store accessRole based on designation for editors
-      const accessRole = getAccessRole(userRole, data[0].designation_label)
+      // Store accessRole based on email and designation for editors
+      const accessRole = getAccessRole(userRole, user.email, data[0].designation_label)
       localStorage.setItem('accessRole', accessRole)
       console.log(
         `🔑 Access role: ${accessRole} (designation: ${data[0].designation_label || 'none'})`,
