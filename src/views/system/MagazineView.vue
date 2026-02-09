@@ -11,6 +11,21 @@ import { deleteProjectNotifications } from '@/services/notificationsService'
 const router = useRouter()
 const route = useRoute()
 
+// System admin emails
+const ADMIN_EMAILS = [
+  'yssahjulianah.barcial@carsu.edu.ph',
+  'lovellhudson.clavel@carsu.edu.ph',
+  'altheaguila.gorres@carsu.edu.ph',
+]
+
+// Check if current user can add projects (section head or admin)
+const canAddProject = computed(() => {
+  const userRole = localStorage.getItem('userRole')
+  const userEmail = localStorage.getItem('userEmail')
+  const isAdmin = ADMIN_EMAILS.some((email) => email.toLowerCase() === userEmail?.toLowerCase())
+  return userRole === 'section_head' || isAdmin
+})
+
 // Sample magazine projects data
 const defaultProjects = []
 
@@ -139,6 +154,46 @@ const editingProject = ref(null)
 const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
+
+// Bulk delete functionality
+const selectedProjects = ref([])
+const showBulkDeleteConfirm = ref(false)
+
+// Check if current user is admin
+const isAdmin = computed(() => {
+  const userEmail = localStorage.getItem('userEmail')
+  const userRole = localStorage.getItem('userRole')
+  return (
+    userRole === 'admin' ||
+    ADMIN_EMAILS.some((email) => email.toLowerCase() === userEmail?.toLowerCase())
+  )
+})
+
+// Toggle select/deselect all projects
+const selectAll = computed({
+  get() {
+    return (
+      filteredProjects.value.length > 0 &&
+      selectedProjects.value.length === filteredProjects.value.length
+    )
+  },
+  set(value) {
+    if (value) {
+      selectedProjects.value = filteredProjects.value.map((p) => p.id)
+    } else {
+      selectedProjects.value = []
+    }
+  },
+})
+
+const toggleProjectSelection = (projectId) => {
+  const index = selectedProjects.value.indexOf(projectId)
+  if (index > -1) {
+    selectedProjects.value.splice(index, 1)
+  } else {
+    selectedProjects.value.push(projectId)
+  }
+}
 
 // ...existing code...
 // UPDATED: Routing based on project status
@@ -397,9 +452,41 @@ const deleteFromEdit = () => {
 }
 
 // Bulk delete functionality
-const confirmBulkDelete = () => {
-  console.log('Bulk delete projects')
-  // Handle bulk delete logic here
+const startBulkDelete = () => {
+  if (selectedProjects.value.length === 0) {
+    alert('Please select at least one project to delete')
+    return
+  }
+  showBulkDeleteConfirm.value = true
+}
+
+const confirmBulkDelete = async () => {
+  if (selectedProjects.value.length === 0) return
+
+  try {
+    const deletePromises = selectedProjects.value.map(async (projectId) => {
+      await projectsService.delete(projectId)
+      await deleteProjectNotifications(projectId)
+    })
+
+    await Promise.all(deletePromises)
+
+    // Remove deleted projects from local state
+    projects.value = projects.value.filter((p) => !selectedProjects.value.includes(p.id))
+
+    // Clear selection
+    selectedProjects.value = []
+    showBulkDeleteConfirm.value = false
+
+    alert(`Successfully deleted ${deletePromises.length} project(s)`)
+  } catch (error) {
+    console.error('Error during bulk delete:', error)
+    alert('Failed to delete some projects: ' + (error.error?.message || error.message))
+  }
+}
+
+const cancelBulkDelete = () => {
+  showBulkDeleteConfirm.value = false
 }
 </script>
 
@@ -464,14 +551,30 @@ const confirmBulkDelete = () => {
 
           <div class="spacer"></div>
 
-          <div>
-            <RouterLink to="/magazine/new" class="add-project-btn">Add Project</RouterLink>
+          <div class="action-buttons">
+            <v-btn
+              v-if="isAdmin && selectedProjects.length > 0"
+              color="error"
+              variant="elevated"
+              @click="startBulkDelete"
+              prepend-icon="mdi-delete-sweep"
+              class="mr-2"
+            >
+              Delete Selected ({{ selectedProjects.length }})
+            </v-btn>
+
+            <RouterLink v-if="canAddProject" to="/magazine/new" class="add-project-btn"
+              >Add Project</RouterLink
+            >
           </div>
         </div>
 
         <!-- Projects Table -->
         <v-container fluid class="projects-table pa-0">
           <v-row class="table-header" no-gutters>
+            <v-col v-if="isAdmin" class="header-cell checkbox-header" cols="auto">
+              <v-checkbox v-model="selectAll" hide-details density="compact" color="primary" />
+            </v-col>
             <v-col class="header-cell title-header">Title</v-col>
             <v-col class="header-cell">Section Head</v-col>
             <v-col class="header-cell">Due Date</v-col>
@@ -486,6 +589,15 @@ const confirmBulkDelete = () => {
               class="table-row"
               no-gutters
             >
+              <v-col v-if="isAdmin" class="table-cell checkbox-cell" cols="auto">
+                <v-checkbox
+                  :model-value="selectedProjects.includes(project.id)"
+                  @update:model-value="toggleProjectSelection(project.id)"
+                  hide-details
+                  density="compact"
+                  color="primary"
+                />
+              </v-col>
               <v-col class="table-cell title-cell">
                 <v-btn
                   class="star-button"
@@ -693,6 +805,38 @@ const confirmBulkDelete = () => {
             class="confirm-delete-btn"
           >
             Delete Project
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Bulk Delete Confirmation Dialog -->
+    <v-dialog v-model="showBulkDeleteConfirm" max-width="500px" persistent>
+      <v-card class="delete-dialog">
+        <v-card-title class="delete-dialog-header">
+          <v-icon class="mr-2" size="24">mdi-delete-sweep</v-icon>
+          <span>Confirm Bulk Delete</span>
+        </v-card-title>
+
+        <v-card-text class="delete-dialog-content">
+          <p class="delete-warning-text">
+            Are you sure you want to delete <strong>{{ selectedProjects.length }}</strong> selected
+            project(s)?
+          </p>
+          <p class="delete-subtext">This action cannot be undone.</p>
+        </v-card-text>
+
+        <v-card-actions class="delete-dialog-actions">
+          <v-btn @click="cancelBulkDelete" variant="text" class="cancel-delete-btn"> Cancel </v-btn>
+          <v-spacer />
+          <v-btn
+            @click="confirmBulkDelete"
+            color="error"
+            variant="elevated"
+            prepend-icon="mdi-delete"
+            class="confirm-delete-btn"
+          >
+            Delete Projects
           </v-btn>
         </v-card-actions>
       </v-card>
