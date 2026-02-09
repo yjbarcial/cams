@@ -10,6 +10,14 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  projectId: {
+    type: [String, Number],
+    default: null,
+  },
+  projectType: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits(['delete-comment', 'highlight-text', 'load-comments', 'resolve-comment'])

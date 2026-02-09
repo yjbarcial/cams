@@ -293,7 +293,7 @@ const router = createRouter({
       path: '/magazine/new',
       name: 'magazine-new',
       component: AddProjectView,
-      beforeEnter: requireAuth,
+      beforeEnter: requireSectionHead,
     },
     {
       path: '/newsletter',
@@ -305,7 +305,7 @@ const router = createRouter({
       path: '/newsletter/new',
       name: 'newsletter-new',
       component: AddProjectView,
-      beforeEnter: requireAuth,
+      beforeEnter: requireSectionHead,
     },
     {
       path: '/folio',
@@ -317,7 +317,7 @@ const router = createRouter({
       path: '/folio/new',
       name: 'folio-new',
       component: AddProjectView,
-      beforeEnter: requireAuth,
+      beforeEnter: requireSectionHead,
     },
     {
       path: '/other',
@@ -329,7 +329,7 @@ const router = createRouter({
       path: '/other/new',
       name: 'other-new',
       component: AddProjectView,
-      beforeEnter: requireAuth,
+      beforeEnter: requireSectionHead,
     },
 
     // Project Detail Routes
