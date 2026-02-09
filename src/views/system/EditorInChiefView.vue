@@ -16,7 +16,7 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
-import { notifyStatusChange } from '@/services/notificationsService.js'
+import { notifyStatusChange, notifyProjectUpdate } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
 import { formatStatus } from '@/utils/statusFormatter.js'
 
@@ -87,6 +87,8 @@ const isEditorEditable = ref(false)
 const lastSaveTime = ref(null)
 const saveTimeout = ref(null)
 const hasUnsavedChanges = ref(false)
+const notificationTimeout = ref(null)
+const lastNotificationTime = ref(null)
 
 // Approval state
 const showApprovalDialog = ref(false)
@@ -233,6 +235,37 @@ const saveContentChanges = async () => {
     project.value.lastModified = new Date().toLocaleString()
     updateLastSaveTime()
     hasUnsavedChanges.value = false
+
+    // Schedule notification after 10 seconds of no further edits
+    if (notificationTimeout.value) {
+      clearTimeout(notificationTimeout.value)
+    }
+    notificationTimeout.value = setTimeout(async () => {
+      // Only send notification if enough time has passed since last notification
+      const now = Date.now()
+      if (!lastNotificationTime.value || now - lastNotificationTime.value > 30000) {
+        try {
+          const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+          const fullName = currentUserProfile.value
+            ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+            : ''
+          const profile = currentUserProfile.value
+            ? { ...currentUserProfile.value, full_name: fullName }
+            : { full_name: fullName }
+          const displayName = getDisplayName(userEmail, profile, true)
+
+          await notifyProjectUpdate({
+            project: project.value,
+            updatedBy: displayName,
+            changes: 'Content updated',
+          })
+          lastNotificationTime.value = now
+          console.log('✅ Notified users about content update')
+        } catch (notifError) {
+          console.error('Error sending content update notification:', notifError)
+        }
+      }
+    }, 10000)
   } catch (error) {
     console.error('❌ Error saving content:', error)
     showNotification('Error saving content', 'error')
@@ -295,13 +328,23 @@ const submitApproval = async () => {
 
     console.log('✅ Project status updated via Supabase')
 
-    project.value.status = newStatus
+    // Reload project from database to get fresh data with all fields
+    const updatedProject = await projectsService.getById(projectId)
+    project.value.status = updatedProject.status
+    project.value.lastModified = new Date().toLocaleString()
+
+    console.log('🔄 Project reloaded after update:', {
+      id: updatedProject.id,
+      title: updatedProject.title,
+      status: updatedProject.status,
+      project_type: updatedProject.project_type,
+    })
 
     // Create notification based on action with workflow labels
     try {
       const displayName = getDisplayName(currentUserProfile.value)
       await notifyStatusChange({
-        project: project.value,
+        project: updatedProject,
         oldStatus: 'to_editor_in_chief',
         newStatus: newStatus,
         actionBy: displayName,
@@ -616,6 +659,9 @@ const formatDate = (dateString) => {
 onUnmounted(() => {
   if (saveTimeout.value) {
     clearTimeout(saveTimeout.value)
+  }
+  if (notificationTimeout.value) {
+    clearTimeout(notificationTimeout.value)
   }
 })
 

@@ -15,8 +15,11 @@ import {
   deleteProjectComment,
   toggleCommentApproval,
 } from '@/services/commentsService.js'
-import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
-import { notifyStatusChange } from '@/services/notificationsService.js'
+import {
+  notifyStatusChange,
+  createNotification,
+  notifyProjectUpdate,
+} from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
 import { formatStatus } from '@/utils/statusFormatter.js'
 
@@ -125,12 +128,9 @@ const isCreativeDirector = computed(() => {
   return false
 })
 
-const isEIC = computed(() => currentAccessRole.value === 'editor_in_chief')
-
 // Check approval status
 const technicalEditorApproved = computed(() => !!project.value.technical_editor_approved_by)
 const creativeDirectorApproved = computed(() => !!project.value.creative_director_approved_by)
-const bothApproved = computed(() => technicalEditorApproved.value && creativeDirectorApproved.value)
 
 // Check if current user has already approved
 const currentUserHasApproved = computed(() => {
@@ -150,6 +150,8 @@ const currentUserHasApproved = computed(() => {
 const lastSaveTime = ref(null)
 const saveTimeout = ref(null)
 const hasUnsavedChanges = ref(false)
+const notificationTimeout = ref(null)
+const lastNotificationTime = ref(null)
 
 // Approval state
 const showApprovalDialog = ref(false)
@@ -304,6 +306,37 @@ const saveContentChanges = async () => {
     project.value.lastModified = new Date().toLocaleString()
     updateLastSaveTime()
     hasUnsavedChanges.value = false
+
+    // Schedule notification after 10 seconds of no further edits
+    if (notificationTimeout.value) {
+      clearTimeout(notificationTimeout.value)
+    }
+    notificationTimeout.value = setTimeout(async () => {
+      // Only send notification if enough time has passed since last notification
+      const now = Date.now()
+      if (!lastNotificationTime.value || now - lastNotificationTime.value > 30000) {
+        try {
+          const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+          const fullName = currentUserProfile.value
+            ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+            : ''
+          const profile = currentUserProfile.value
+            ? { ...currentUserProfile.value, full_name: fullName }
+            : { full_name: fullName }
+          const displayName = getDisplayName(userEmail, profile, true)
+
+          await notifyProjectUpdate({
+            project: project.value,
+            updatedBy: displayName,
+            changes: 'Content updated',
+          })
+          lastNotificationTime.value = now
+          console.log('✅ Notified users about content update')
+        } catch (notifError) {
+          console.error('Error sending content update notification:', notifError)
+        }
+      }
+    }, 10000)
   } catch (error) {
     console.error('❌ Error saving content:', error)
     showNotification('Error saving content', 'error')
@@ -475,6 +508,7 @@ const submitApproval = async () => {
       console.log('📢 Showing notification for:', approverRole, 'Status:', updatedProject.status)
 
       if (updatedProject.status === 'to_editor_in_chief') {
+        // Both editors approved - notify EIC
         await notifyStatusChange({
           project: updatedProject,
           oldStatus: 'to_technical_editor',
@@ -484,8 +518,40 @@ const submitApproval = async () => {
         })
         showNotification('Both editors have approved! Project sent to Editor-in-Chief.', 'success')
       } else {
+        // One editor approved, waiting for the other - notify the other editor
+        const waitingForRole = isTechnicalEditor.value ? 'Creative Director' : 'Technical Editor'
+        const waitingForDesignation = isTechnicalEditor.value
+          ? 'Creative Director'
+          : 'Technical Editor'
+
+        // Send notification to the other editor that it's their turn
+        try {
+          const { data: otherEditors } = await supabase
+            .from('profiles')
+            .select('id, email, first_name, last_name')
+            .eq('designation_label', waitingForDesignation)
+
+          if (otherEditors && otherEditors.length > 0) {
+            for (const editor of otherEditors) {
+              await createNotification({
+                type: 'Request',
+                title: `Your approval needed: "${updatedProject.title}"`,
+                description: `${displayName} (${approverRole}) approved "${updatedProject.title}". ${waitingForRole} approval is now needed.`,
+                projectId: updatedProject.id,
+                projectType: updatedProject.project_type,
+                recipientEmail: editor.email,
+                recipientUserId: editor.id,
+                createdBy: displayName,
+              })
+              console.log(`✅ Notified ${waitingForRole}:`, editor.email)
+            }
+          }
+        } catch (error) {
+          console.error('Error notifying other editor:', error)
+        }
+
         showNotification(
-          `✅ ${approverRole} approved! Waiting for ${isTechnicalEditor.value ? 'Creative Director' : 'Technical Editor'} approval.`,
+          `✅ ${approverRole} approved! Waiting for ${waitingForRole} approval.`,
           'info',
         )
       }
@@ -567,8 +633,8 @@ const loadProjectData = async () => {
 
     // Check if approval columns exist
     if (
-      !foundProject.hasOwnProperty('technical_editor_approved_by') ||
-      !foundProject.hasOwnProperty('creative_director_approved_by')
+      !Object.prototype.hasOwnProperty.call(foundProject, 'technical_editor_approved_by') ||
+      !Object.prototype.hasOwnProperty.call(foundProject, 'creative_director_approved_by')
     ) {
       console.error('⚠️ DATABASE MIGRATION REQUIRED!')
       console.error('The approval tracking columns do not exist in your database.')
@@ -768,7 +834,7 @@ const formatCommentTime = (timestamp) => {
     if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
 
     return date.toLocaleDateString()
-  } catch (error) {
+  } catch {
     return timestamp
   }
 }
@@ -789,15 +855,6 @@ const formatDate = (dateString) => {
     month: 'short',
     day: 'numeric',
   })
-}
-
-const getProjectStatus = (action) => {
-  const statusMap = {
-    edit: 'returned_by_technical_editor',
-    approve: 'to_editor_in_chief',
-    publish: 'Published',
-  }
-  return statusMap[action] || project.value.status
 }
 
 // Refresh approval status periodically
@@ -831,6 +888,9 @@ const handleVisibilityChange = () => {
 onUnmounted(() => {
   if (saveTimeout.value) {
     clearTimeout(saveTimeout.value)
+  }
+  if (notificationTimeout.value) {
+    clearTimeout(notificationTimeout.value)
   }
   if (approvalStatusInterval) {
     clearInterval(approvalStatusInterval)

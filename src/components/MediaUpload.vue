@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { supabase } from '@/utils/supabase'
+import { notifyFileUpload } from '@/services/notificationsService.js'
+import { projectsService } from '@/services/supabaseService'
+import { getDisplayName } from '@/utils/userDisplay.js'
 
 const props = defineProps({
   projectId: {
@@ -123,6 +126,35 @@ const uploadFiles = async () => {
     notificationMessage.value = 'Media uploaded successfully!'
     emit('upload-success', notificationMessage.value)
 
+    // Notify all involved users about file upload
+    if (props.projectId) {
+      try {
+        const project = await projectsService.getById(props.projectId)
+        const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', userEmail)
+          .single()
+
+        const fullName = profiles
+          ? `${profiles.first_name || ''} ${profiles.last_name || ''}`.trim()
+          : ''
+        const profile = profiles ? { ...profiles, full_name: fullName } : { full_name: fullName }
+        const displayName = getDisplayName(userEmail, profile, true)
+
+        await notifyFileUpload({
+          project,
+          fileName:
+            uploadedCount > 1 ? `${uploadedCount} files` : selectedFiles.value[0]?.name || 'file',
+          uploadedBy: displayName,
+        })
+        console.log('✅ Notified users about file upload')
+      } catch (notifError) {
+        console.error('Error sending file upload notification:', notifError)
+      }
+    }
+
     // Refresh media list
     await fetchUploadedMedia()
   } catch (error) {
@@ -162,12 +194,6 @@ const deleteMedia = async (mediaId) => {
 const canDeleteMedia = (media) => {
   // Allow delete if user is the uploader or has edit permissions
   return media.uploaded_by === props.uploadedBy
-}
-
-const getMediaIcon = (mimeType) => {
-  if (mimeType?.startsWith('image/')) return 'mdi-file-image'
-  if (mimeType?.startsWith('video/')) return 'mdi-video'
-  return 'mdi-file'
 }
 
 // Fetch media on mount

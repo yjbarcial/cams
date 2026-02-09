@@ -15,8 +15,7 @@ import {
   deleteProjectComment,
   toggleCommentApproval,
 } from '@/services/commentsService.js'
-import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
-import { notifyStatusChange } from '@/services/notificationsService.js'
+import { notifyStatusChange, notifyProjectUpdate } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
 import { formatStatus } from '@/utils/statusFormatter.js'
 
@@ -50,10 +49,6 @@ const loadCurrentUserProfile = async () => {
 // Project type
 const projectType = ref('magazine')
 
-// User role - SECTION HEAD ONLY
-const currentUserRole = ref('Section Head')
-const currentUser = ref('Section Head User')
-
 // Project data
 const project = ref({
   id: projectId,
@@ -82,6 +77,8 @@ const isEditorEditable = ref(false)
 const lastSaveTime = ref(null)
 const saveTimeout = ref(null)
 const hasUnsavedChanges = ref(false)
+const notificationTimeout = ref(null)
+const lastNotificationTime = ref(null)
 
 // Approval state
 const showApprovalDialog = ref(false)
@@ -211,14 +208,6 @@ const getCommentPlaceholder = () => {
       return 'Add any comments or notes for the Creative Director...'
     }
 
-    const hasWriter =
-      project.value?.writers &&
-      project.value.writers !== 'Not assigned' &&
-      project.value.writers.trim() !== ''
-    const hasArtist =
-      project.value?.artists &&
-      project.value.artists !== 'Not assigned' &&
-      project.value.artists.trim() !== ''
     const recipient = 'Editor Review Team'
     return `Add any comments or notes for the ${recipient}...`
   }
@@ -253,6 +242,37 @@ const saveContentChanges = async () => {
     project.value.lastModified = new Date().toLocaleString()
     updateLastSaveTime()
     hasUnsavedChanges.value = false
+
+    // Schedule notification after 10 seconds of no further edits
+    if (notificationTimeout.value) {
+      clearTimeout(notificationTimeout.value)
+    }
+    notificationTimeout.value = setTimeout(async () => {
+      // Only send notification if enough time has passed since last notification
+      const now = Date.now()
+      if (!lastNotificationTime.value || now - lastNotificationTime.value > 30000) {
+        try {
+          const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+          const fullName = currentUserProfile.value
+            ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+            : ''
+          const profile = currentUserProfile.value
+            ? { ...currentUserProfile.value, full_name: fullName }
+            : { full_name: fullName }
+          const displayName = getDisplayName(userEmail, profile, true)
+
+          await notifyProjectUpdate({
+            project: project.value,
+            updatedBy: displayName,
+            changes: 'Content updated',
+          })
+          lastNotificationTime.value = now
+          console.log('✅ Notified users about content update')
+        } catch (notifError) {
+          console.error('Error sending content update notification:', notifError)
+        }
+      }
+    }, 10000)
   } catch (error) {
     console.error('❌ Error saving content:', error)
     showNotification('Error saving content', 'error')
@@ -587,7 +607,7 @@ const formatCommentTime = (timestamp) => {
     if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
 
     return date.toLocaleDateString()
-  } catch (error) {
+  } catch {
     return timestamp
   }
 }
@@ -613,6 +633,9 @@ const formatDate = (dateString) => {
 onUnmounted(() => {
   if (saveTimeout.value) {
     clearTimeout(saveTimeout.value)
+  }
+  if (notificationTimeout.value) {
+    clearTimeout(notificationTimeout.value)
   }
 })
 
