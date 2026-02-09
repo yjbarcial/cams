@@ -39,10 +39,17 @@ export const getNotifications = async () => {
       isAdmin,
     })
 
-    // If admin, return ALL notifications without filtering
+    // If admin, return only Published notifications
     if (isAdmin) {
-      console.log('👑 Admin access: Showing all', notifications.length, 'notifications')
-      return notifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      const publishedNotifications = notifications.filter((n) => n.type === 'Published')
+      console.log(
+        '👑 Admin access: Showing',
+        publishedNotifications.length,
+        'published notifications out of',
+        notifications.length,
+        'total',
+      )
+      return publishedNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     }
 
     // Get current user's ID from their profile
@@ -247,10 +254,12 @@ export const markAllAsRead = async () => {
     const isAdmin = isAdminByEmail || isAdminByRole
 
     if (isAdmin) {
-      // Admins: Mark ALL notifications as read
-      console.log('👑 Admin: Marking all', allNotifications.length, 'notifications as read')
+      // Admins: Mark only Published notifications as read
+      console.log('👑 Admin: Marking published notifications as read')
       allNotifications.forEach((n) => {
-        n.isRead = true
+        if (n.type === 'Published') {
+          n.isRead = true
+        }
       })
     } else {
       // Regular users: Mark only their notifications as read
