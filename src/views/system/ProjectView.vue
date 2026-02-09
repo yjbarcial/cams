@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
@@ -496,17 +496,33 @@ const cancelSubmitDialog = () => {
 } */
 
 // Version restoration handler (versions are auto-created on edits)
-const handleVersionRestored = (restoredProject) => {
-  // Update the current project with restored data
-  project.value = { ...project.value, ...restoredProject }
-  editorContent.value = restoredProject.content || ''
-  previousContent.value = restoredProject.content || '' // Initialize for version history
+const handleVersionRestored = async (restoredProject) => {
+  // Reload the entire project from database to get the restored content
+  try {
+    await loadProjectData()
 
-  // Update last modified
-  project.value.lastModified = new Date().toLocaleString()
+    // Force update the Quill editor after a short delay to ensure data is loaded
+    await nextTick()
+    if (quillEditorRef.value && editorContent.value) {
+      quillEditorRef.value.setContent(editorContent.value)
+    }
 
-  showNotification('Project restored from version')
-  console.log('Project restored from version:', restoredProject)
+    showNotification('Project restored from version')
+    console.log('Project restored from version:', restoredProject)
+  } catch (error) {
+    console.error('Error reloading project after restore:', error)
+    // Fallback to manual update if reload fails
+    project.value = { ...project.value, ...restoredProject }
+    editorContent.value = restoredProject.content || ''
+    previousContent.value = restoredProject.content || ''
+    project.value.lastModified = new Date().toLocaleString()
+
+    // Force update the editor even in fallback
+    await nextTick()
+    if (quillEditorRef.value) {
+      quillEditorRef.value.setContent(editorContent.value)
+    }
+  }
 }
 
 // Navigation functions

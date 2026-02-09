@@ -37,7 +37,9 @@ const confirmMessage = ref('')
 const confirmAction = ref(null)
 
 // Computed
-const activeHistory = computed(() => history.value.filter((v) => !v.isDeleted))
+const activeHistory = computed(() =>
+  history.value.filter((v) => !v.isDeleted && v.author !== 'Current User'),
+)
 const currentVersion = computed(() => activeHistory.value.find((v) => v.isActive))
 
 // Methods
@@ -97,9 +99,43 @@ const restoreVersion = (versionId) => {
         emit('version-restored', restoredProject)
         await loadHistory()
         showNotification('Version restored successfully', 'success')
+        closeVersionDialog() // Close dialog after successful restore
       } catch (err) {
         showNotification('Failed to restore version', 'error')
         console.error('Error restoring version:', err)
+      } finally {
+        loading.value = false
+      }
+    },
+  )
+}
+
+const restoreToPreviousVersion = (currentVersion) => {
+  // Find the previous version
+  const currentIndex = activeHistory.value.findIndex((v) => v.id === currentVersion.id)
+  if (currentIndex === -1 || currentIndex === activeHistory.value.length - 1) {
+    showNotification('No previous version available', 'error')
+    return
+  }
+
+  const previousVersion = activeHistory.value[currentIndex + 1]
+  showConfirm(
+    'Restore to the previous version (before these changes)? This will undo the current changes.',
+    async () => {
+      try {
+        loading.value = true
+        const restoredProject = await restoreProjectVersion(
+          props.projectType,
+          props.projectId,
+          previousVersion.id,
+        )
+        emit('version-restored', restoredProject)
+        await loadHistory()
+        showNotification('Restored to previous version successfully', 'success')
+        closeVersionDialog() // Close dialog after successful restore
+      } catch (err) {
+        showNotification('Failed to restore to previous version', 'error')
+        console.error('Error restoring to previous version:', err)
       } finally {
         loading.value = false
       }
@@ -617,18 +653,42 @@ watch([() => props.projectId, () => props.projectType], () => {
         <v-divider></v-divider>
 
         <v-card-actions class="dialog-actions">
+          <v-btn variant="text" @click="closeVersionDialog" color="grey-darken-1">Close</v-btn>
           <v-spacer />
-          <v-btn variant="text" @click="closeVersionDialog">Close</v-btn>
+          <!-- Main restore button - restores to PREVIOUS version (red/old content) -->
           <v-btn
-            v-if="!selectedVersion.isActive"
-            color="primary"
-            variant="flat"
-            @click="
-              () => {
-                restoreVersion(selectedVersion.id)
-                closeVersionDialog()
-              }
+            v-if="
+              !selectedVersion.isActive &&
+              !getVersionChanges(selectedVersion).isFirstVersion &&
+              activeHistory.findIndex((v) => v.id === selectedVersion.id) !==
+                activeHistory.length - 1
             "
+            color="grey-darken-2"
+            variant="elevated"
+            @click="restoreToPreviousVersion(selectedVersion)"
+            class="restore-primary-btn"
+          >
+            <v-icon class="mr-1">mdi-restore</v-icon>
+            Restore (Before These Changes)
+          </v-btn>
+          <!-- Secondary button - restores to THIS version (green/new content) -->
+          <v-btn
+            v-if="!selectedVersion.isActive && !getVersionChanges(selectedVersion).isFirstVersion"
+            color="grey-darken-1"
+            variant="outlined"
+            @click="restoreVersion(selectedVersion.id)"
+            class="restore-secondary-btn"
+          >
+            <v-icon class="mr-1">mdi-redo-variant</v-icon>
+            Restore This Version
+          </v-btn>
+          <!-- For first version, only show restore to this version -->
+          <v-btn
+            v-if="!selectedVersion.isActive && getVersionChanges(selectedVersion).isFirstVersion"
+            color="grey-darken-2"
+            variant="elevated"
+            @click="restoreVersion(selectedVersion.id)"
+            class="restore-primary-btn"
           >
             <v-icon class="mr-1">mdi-restore</v-icon>
             Restore This Version
@@ -669,15 +729,42 @@ watch([() => props.projectId, () => props.projectType], () => {
 
     <!-- Confirmation Dialog -->
     <v-dialog v-model="showConfirmDialog" max-width="400px" persistent>
-      <v-card>
-        <v-card-title class="text-h6">Confirm Restore</v-card-title>
-        <v-card-text>
-          <p>{{ confirmMessage }}</p>
+      <v-card class="confirm-dialog-card">
+        <v-card-title class="confirm-dialog-header">
+          <v-icon class="mr-2" size="24">mdi-restore</v-icon>
+          <span>Confirm Restore</span>
+        </v-card-title>
+
+        <v-divider class="dialog-divider" />
+
+        <v-card-text class="confirm-dialog-content">
+          <p class="confirm-message">{{ confirmMessage }}</p>
         </v-card-text>
-        <v-card-actions>
+
+        <v-divider class="dialog-divider" />
+
+        <v-card-actions class="confirm-dialog-actions">
+          <v-btn
+            @click="cancelConfirm"
+            variant="outlined"
+            size="default"
+            class="cancel-btn"
+            color="grey-darken-1"
+          >
+            Cancel
+          </v-btn>
           <v-spacer />
-          <v-btn variant="text" @click="cancelConfirm">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" @click="handleConfirm">Restore</v-btn>
+          <v-btn
+            @click="handleConfirm"
+            variant="elevated"
+            size="default"
+            prepend-icon="mdi-restore"
+            color="grey-darken-2"
+            class="restore-btn"
+            style="background-color: #424242 !important; color: white !important"
+          >
+            Restore
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -1234,6 +1321,148 @@ watch([() => props.projectId, () => props.projectType], () => {
   transform: translateX(-50%) translateY(-20px);
 }
 
+/* ========================================
+   Confirmation Dialog Styles
+   ======================================== */
+.confirm-dialog-card {
+  border: 2px solid #616161 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+.confirm-dialog-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 24px !important;
+  background: #424242 !important;
+  color: white !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.dialog-divider {
+  border-color: #e0e0e0 !important;
+  opacity: 1 !important;
+}
+
+.confirm-dialog-content {
+  padding: 24px !important;
+  background: white !important;
+}
+
+.confirm-message {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #555;
+  margin: 0;
+}
+
+.confirm-dialog-actions {
+  padding: 16px 24px !important;
+  background: #fafafa !important;
+  border-top: 1px solid #e0e0e0 !important;
+}
+
+.confirm-dialog-actions .cancel-btn {
+  border: 2px solid #616161 !important;
+  color: #424242 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+}
+
+.confirm-dialog-actions .cancel-btn:hover {
+  background: #f5f5f5 !important;
+  border-color: #424242 !important;
+}
+
+.confirm-dialog-actions .restore-btn {
+  background: #424242 !important;
+  background-color: #424242 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 28px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.confirm-dialog-actions .restore-btn:hover {
+  background: #303030 !important;
+  background-color: #303030 !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Main Dialog Action Buttons */
+.dialog-actions {
+  padding: 16px 24px !important;
+  background: #fafafa !important;
+  border-top: 1px solid #e5e7eb !important;
+}
+
+.restore-primary-btn {
+  background: #424242 !important;
+  background-color: #424242 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.restore-primary-btn:hover {
+  background: #303030 !important;
+  background-color: #303030 !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.restore-secondary-btn {
+  border: 2px solid #616161 !important;
+  color: #424242 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-radius: 6px !important;
+  padding: 0 24px !important;
+}
+
+.restore-secondary-btn:hover {
+  background: #f5f5f5 !important;
+  border-color: #424242 !important;
+}
+
+.restore-btn {
+  background: #424242 !important;
+  background-color: #424242 !important;
+  color: white !important;
+}
+
+:deep(.restore-btn) {
+  background: #353535 !important;
+  background-color: #353535 !important;
+  color: white !important;
+}
+
+:deep(.restore-btn .v-btn__content) {
+  color: white !important;
+}
+
+:deep(.restore-btn .v-icon) {
+  color: white !important;
+}
+
+:deep(.restore-btn .v-btn__overlay) {
+  display: none !important;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .project-history {
@@ -1272,6 +1501,35 @@ watch([() => props.projectId, () => props.projectType], () => {
   .snapshot-value {
     padding: 10px;
     font-size: 13px;
+  }
+
+  /* Confirmation dialog responsive */
+  .confirm-dialog-header {
+    padding: 16px 20px !important;
+    font-size: 16px !important;
+  }
+
+  .confirm-dialog-content {
+    padding: 20px !important;
+  }
+
+  .confirm-message {
+    font-size: 13px;
+  }
+
+  .confirm-dialog-actions {
+    padding: 12px 20px !important;
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .confirm-dialog-actions .cancel-btn,
+  .confirm-dialog-actions .restore-btn {
+    width: 100%;
+  }
+
+  .confirm-dialog-actions .v-spacer {
+    display: none;
   }
 }
 </style>
