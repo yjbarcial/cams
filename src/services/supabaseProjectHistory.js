@@ -7,7 +7,7 @@ import { supabase } from '@/utils/supabase.js'
 
 // Store last version creation time per project to prevent too frequent versions
 const lastVersionTime = new Map()
-const VERSION_DEBOUNCE_MS = 120000 // 2 minutes (like Google Docs)
+const VERSION_DEBOUNCE_MS = 30000 // 30 seconds - reduced for more frequent history updates
 
 /**
  * Get current user UUID from Supabase auth session
@@ -425,29 +425,30 @@ export const restoreProjectVersion = async (projectType, projectId, versionId) =
       throw new Error('Version not found')
     }
 
-    // Update the main project
+    // Update the main project - only update columns that actually exist in projects table
+    const updateData = {
+      title: version.data.title || 'Untitled',
+      description: version.data.description || '',
+      content: version.data.content || '',
+      status: (version.data.status || 'draft').toLowerCase().replace(/\s+/g, '_'),
+      updated_at: new Date().toISOString(),
+    }
+
+    // Only add due_date if it exists in version data
+    if (version.data.dueDateISO) {
+      updateData.due_date = new Date(version.data.dueDateISO).toISOString().split('T')[0]
+    } else if (version.data.dueDate) {
+      updateData.due_date = version.data.dueDate
+    }
+
     const { error: updateError } = await supabase
       .from('projects')
-      .update({
-        title: version.data.title,
-        description: version.data.description,
-        content: version.data.content,
-        status: (version.data.status || 'draft').toLowerCase().replace(/\s+/g, '_'),
-        section_head: version.data.sectionHead,
-        writers: version.data.writers,
-        artists: version.data.artists,
-        due_date: version.data.dueDateISO
-          ? new Date(version.data.dueDateISO).toISOString().split('T')[0]
-          : null,
-        due_date_iso: version.data.dueDateISO,
-        media_uploaded: version.data.mediaUploaded,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', projectId)
 
     if (updateError) throw updateError
 
-    // Create a new version entry for the restoration
+    // Return the restored project data without creating a new history entry
     const restoredProject = {
       ...version.data,
       id: projectId,
@@ -455,15 +456,6 @@ export const restoreProjectVersion = async (projectType, projectId, versionId) =
       lastModified: new Date().toLocaleString(),
       lastModifiedISO: new Date().toISOString(),
     }
-
-    const restorationVersion = await createProjectVersion(
-      projectType,
-      projectId,
-      restoredProject,
-      `Restored from version ${version.versionNumber}`,
-      'Current User', // This should come from auth system
-      'restoration',
-    )
 
     return restoredProject
   } catch (error) {
