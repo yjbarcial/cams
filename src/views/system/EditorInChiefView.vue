@@ -388,8 +388,12 @@ const submitApproval = async () => {
     } else if (action === 'forward') {
       showNotification('Project forwarded to Chief Adviser!', 'success')
       setTimeout(() => {
-        // Go to Chief Adviser view for this project
-        router.push(`/chief-adviser/${projectId}?type=${projectType.value}`)
+        // Route back to the project list (not the Chief Adviser view)
+        const routePath =
+          projectType.value === 'other' || projectType.value === 'social-media'
+            ? '/other'
+            : `/${projectType.value}`
+        router.push(routePath)
       }, 600)
     }
   } catch (error) {
