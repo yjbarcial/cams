@@ -134,7 +134,13 @@ const loadAllProjects = async () => {
     let query = supabase.from('projects').select(
       `
         *,
-        profiles!created_by (
+        creator:profiles!created_by_profile_id (
+          id,
+          email,
+          first_name,
+          last_name
+        ),
+        section_head:profiles!section_head_id (
           id,
           email,
           first_name,
@@ -185,11 +191,11 @@ const loadAllProjects = async () => {
 
     // Map to display format
     const mappedProjects = (apiProjects || []).map((project) => {
-      // Get user info from the profiles join
-      const userProfile = project.profiles
+      // Try to get creator profile first, fall back to section_head
+      const creatorProfile = project.creator || project.section_head
       const fullName =
-        userProfile?.first_name && userProfile?.last_name
-          ? `${userProfile.first_name} ${userProfile.last_name}`
+        creatorProfile?.first_name && creatorProfile?.last_name
+          ? `${creatorProfile.first_name} ${creatorProfile.last_name}`
           : null
 
       return {
@@ -203,8 +209,8 @@ const loadAllProjects = async () => {
         created_at: project.created_at,
         updated_at: project.updated_at,
         user: {
-          full_name: fullName || userProfile?.email || 'Unknown',
-          email: userProfile?.email || 'N/A',
+          full_name: fullName || creatorProfile?.email || 'Unknown',
+          email: creatorProfile?.email || 'N/A',
         },
       }
     })

@@ -177,6 +177,13 @@ const assignProject = async () => {
   }
 
   try {
+    // Get current user info first
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const currentUserEmail = user?.email || 'System'
+    const currentUserProfile = user ? await profilesService.getByEmail(currentUserEmail) : null
+
     // Create project via Supabase
     const projectData = {
       title: title.value.trim(),
@@ -185,16 +192,11 @@ const assignProject = async () => {
       due_date: deadline.value || null,
       status: 'draft',
       section_head_id: selectedSectionHead.value ? parseInt(selectedSectionHead.value) : null,
+      created_by: user?.id || null, // Set the creator's auth UUID
+      created_by_profile_id: currentUserProfile?.id || null, // Set the creator's profile ID
     }
 
     const newProject = await projectsService.create(projectData)
-
-    // Get current user info for notification
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    const currentUserEmail = user?.email || 'System'
-    const currentUserProfile = user ? await profilesService.getByEmail(currentUserEmail) : null
     const creatorName = currentUserProfile
       ? `${currentUserProfile.first_name} ${currentUserProfile.last_name}`.trim()
       : currentUserEmail
