@@ -7,7 +7,7 @@ import QuillEditor from '@/components/QuillEditor.vue'
 import ProjectHistory from '@/components/ProjectHistory.vue'
 import HighlightComments from '@/components/HighlightComments.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
-import { projectsService, archivesService, profilesService } from '@/services/supabaseService'
+import { projectsService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
 import {
   getProjectComments,
@@ -16,7 +16,7 @@ import {
   toggleCommentApproval,
 } from '@/services/commentsService.js'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
-import { notifyStatusChange, notifyProjectUpdate } from '@/services/notificationsService.js'
+import { notifyStatusChange } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
 import { formatStatus } from '@/utils/statusFormatter.js'
 
@@ -50,9 +50,12 @@ const loadCurrentUserProfile = async () => {
 // Project type
 const projectType = ref('magazine')
 
-// User role - ARCHIVAL MANAGER ONLY
-const currentUserRole = ref('Archival Manager')
-const currentUser = ref(null)
+// User role - Detect if Archival Manager or Online Accounts Manager
+const accessRole = localStorage.getItem('accessRole')
+const isOnlineAccountsManager = accessRole === 'online_accounts_manager'
+const currentUserRole = ref(
+  isOnlineAccountsManager ? 'Online Accounts Manager' : 'Archival Manager',
+)
 
 // Project data
 const project = ref({
@@ -86,7 +89,6 @@ const isEditorEditable = ref(false) // Archival Manager cannot edit content
 // Auto-save state
 const lastSaveTime = ref(null)
 const saveTimeout = ref(null)
-const hasUnsavedChanges = ref(false)
 
 // Approval state
 const showApprovalDialog = ref(false)
@@ -131,19 +133,6 @@ const showCommentNotification = (message, type = 'success') => {
   }, 3000)
 }
 
-const getLastSaveDisplay = computed(() => {
-  if (!lastSaveTime.value) return 'Never'
-  const now = new Date()
-  const saveTime = new Date(lastSaveTime.value)
-  const diffInSeconds = Math.floor((now - saveTime) / 1000)
-
-  if (diffInSeconds < 5) return 'Just now'
-  if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`
-
-  return lastSaveTime.value
-})
-
 const updateLastSaveTime = () => {
   lastSaveTime.value = new Date().toLocaleString()
   project.value.lastModified = lastSaveTime.value
@@ -154,30 +143,61 @@ const handleContentChange = () => {
   // Keeping method for template compatibility
 }
 
-// ARCHIVAL MANAGER - Only publish button available
+// ARCHIVAL MANAGER / ONLINE ACCOUNTS MANAGER - Dynamic button logic
 const approvalActions = computed(() => {
-  // Only show publish button if status is "For Publish"
-  const isReadyToPublish = project.value.status === 'For Publish'
+  const actions = []
 
-  return [
-    {
+  // Online Accounts Manager workflow
+  if (isOnlineAccountsManager) {
+    // Approval step - when project comes from both editors
+    if (project.value.status === 'to_online_accounts_manager') {
+      actions.push({
+        value: 'approve',
+        text: 'Approve & Send to Editor-in-Chief',
+        color: 'success',
+        icon: 'mdi-check-circle',
+        disabled: false,
+      })
+    }
+    // Publishing step - when EIC has approved Other projects
+    else if (project.value.status === 'For Publish' && project.value.type === 'other') {
+      actions.push({
+        value: 'publish',
+        text: 'Publish',
+        color: 'primary',
+        icon: 'mdi-publish',
+        disabled: false,
+      })
+    }
+  }
+  // Archival Manager workflow - only for non-Other projects
+  else {
+    const isReadyToPublish =
+      project.value.status === 'For Publish' && project.value.type !== 'other'
+    actions.push({
       value: 'publish',
       text: 'Publish',
       color: 'primary',
-      icon: isReadyToPublish ? null : 'mdi-lock',
+      icon: 'mdi-publish',
       disabled: !isReadyToPublish,
-    },
-  ]
+    })
+  }
+
+  return actions
 })
 
-// ARCHIVAL MANAGER - Status mapping
+// ARCHIVAL MANAGER / ONLINE ACCOUNTS MANAGER - Status mapping
 const getNextStatus = (action) => {
+  if (action === 'approve') return 'to_editor_in_chief'
   if (action === 'publish') return 'Published'
   return project.value.status
 }
 
-// ARCHIVAL MANAGER - Comment placeholder
+// ARCHIVAL MANAGER / ONLINE ACCOUNTS MANAGER - Comment placeholder
 const getCommentPlaceholder = () => {
+  if (approvalAction.value === 'approve') {
+    return 'Add approval notes...'
+  }
   if (approvalAction.value === 'publish') {
     return 'Add publication notes...'
   }
@@ -196,8 +216,13 @@ const getBackButtonText = computed(() => {
 })
 
 const startApproval = (action) => {
+  // Validation for different actions
+  if (action === 'approve' && project.value.status !== 'to_online_accounts_manager') {
+    showNotification('Project is not ready for approval', 'warning')
+    return
+  }
   if (action === 'publish' && project.value.status !== 'For Publish') {
-    showNotification('Project must be approved by Chief Adviser before publishing', 'warning')
+    showNotification('Project must be approved before publishing', 'warning')
     return
   }
 
@@ -228,7 +253,13 @@ const submitApproval = async () => {
       updated_at: new Date().toISOString(),
     }
 
-    if (action === 'publish') {
+    if (action === 'approve') {
+      // Online Accounts Manager approval
+      updateData.online_accounts_manager_approved_by = user.id
+      updateData.online_accounts_manager_approved_date = new Date().toISOString()
+      updateData.online_accounts_manager_comments = approvalComments.value
+    } else if (action === 'publish') {
+      // Publishing (either role)
       updateData.published_by = user.id
       updateData.published_date = publishData.value.publishDate
       updateData.publish_platform = publishData.value.publishPlatform
@@ -237,20 +268,20 @@ const submitApproval = async () => {
 
     await projectsService.update(projectId, updateData)
 
-    console.log('✅ Project published via Supabase')
+    console.log(`✅ Project ${action}ed via Supabase`)
 
     project.value.status = newStatus
 
-    // Create notification for publishing with workflow labels
+    // Create notification with workflow labels
     try {
       const displayName = getDisplayName(currentUserProfile.value)
       await notifyStatusChange({
         project: project.value,
-        oldStatus: 'for_publish',
-        newStatus: 'published',
+        oldStatus: action === 'approve' ? 'to_online_accounts_manager' : 'for_publish',
+        newStatus: newStatus,
         actionBy: displayName,
         comments: approvalComments.value,
-        action: 'publish',
+        action: action,
       })
       console.log('✅ Notification created successfully')
     } catch (notifError) {
@@ -258,14 +289,16 @@ const submitApproval = async () => {
       // Continue execution even if notification fails
     }
 
-    // Try to save to Supabase
+    // Try to save to Supabase project history
     try {
       if (project.value.supabaseId) {
         await createProjectVersionSupabase(
           projectType.value,
           projectId,
           project.value,
-          `Published by Archival Manager`,
+          action === 'approve'
+            ? `Approved by Online Accounts Manager`
+            : `Published by ${currentUserRole.value}`,
           user.id,
           newStatus,
         )
@@ -279,7 +312,11 @@ const submitApproval = async () => {
     approvalAction.value = ''
     approvalComments.value = ''
 
-    showNotification('Project published successfully!', 'success')
+    const successMessage =
+      action === 'approve'
+        ? 'Project approved and sent to Editor-in-Chief!'
+        : 'Project published successfully!'
+    showNotification(successMessage, 'success')
 
     setTimeout(() => {
       router.push('/admin')
@@ -297,12 +334,10 @@ const cancelApproval = () => {
 }
 
 const goBack = () => {
-  const actualStorage = getActualStorageKey(projectId)
-  if (actualStorage) {
+  const projectType = project.value.type
+  if (projectType) {
     const routePath =
-      actualStorage.type === 'other' || actualStorage.type === 'social-media'
-        ? '/other'
-        : `/${actualStorage.type}`
+      projectType === 'other' || projectType === 'social-media' ? '/other' : `/${projectType}`
     router.push(routePath)
   } else {
     const routePath =
@@ -517,7 +552,7 @@ const formatCommentTime = (timestamp) => {
     if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
 
     return date.toLocaleDateString()
-  } catch (error) {
+  } catch {
     return timestamp
   }
 }
@@ -568,7 +603,9 @@ onMounted(async () => {
             <div class="title-section">
               <h1 class="project-title">
                 {{ project.title }}
-                <v-chip color="primary" size="small" class="ml-3"> Archival Manager Review </v-chip>
+                <v-chip color="primary" size="small" class="ml-3">
+                  {{ currentUserRole }} Review
+                </v-chip>
               </h1>
             </div>
 
@@ -703,9 +740,12 @@ onMounted(async () => {
               <template v-for="action in approvalActions" :key="action.value">
                 <v-btn
                   @click="startApproval(action.value)"
-                  variant="flat"
+                  variant="outlined"
+                  size="default"
+                  density="default"
                   :disabled="action.disabled"
                   :class="{
+                    'approve-btn': action.value === 'approve',
                     'publish-btn': action.value === 'publish',
                     'publish-btn-locked': action.value === 'publish' && action.disabled,
                   }"
@@ -814,7 +854,10 @@ onMounted(async () => {
     <v-dialog v-model="showApprovalDialog" max-width="600px" persistent>
       <v-card class="approval-dialog-card">
         <v-card-title class="approval-dialog-header">
-          <span v-if="approvalAction === 'publish'">Publish Project</span>
+          <v-icon class="mr-2" size="24" color="#FFFFFF">
+            {{ approvalActions.find((a) => a.value === approvalAction)?.icon }}
+          </v-icon>
+          <span>{{ approvalActions.find((a) => a.value === approvalAction)?.text }}</span>
         </v-card-title>
 
         <v-divider class="dialog-divider" />
@@ -822,10 +865,12 @@ onMounted(async () => {
         <v-card-text class="approval-dialog-content">
           <div class="approval-info-box">
             <p class="approval-message">
-              <strong v-if="approvalAction === 'publish'">Publish Project:</strong>
-              <span v-if="approvalAction === 'publish'">
-                This will publish the project and make it available in the archive.
-              </span>
+              <template v-if="approvalAction === 'approve'">
+                Approve <strong>"{{ project.title }}"</strong> as {{ currentUserRole }}.
+              </template>
+              <template v-else-if="approvalAction === 'publish'">
+                Publish <strong>"{{ project.title }}"</strong> and make it available in the archive.
+              </template>
             </p>
           </div>
 
@@ -835,7 +880,7 @@ onMounted(async () => {
               v-model="publishData.publishDate"
               type="date"
               variant="outlined"
-              density="compact"
+              density="comfortable"
               hide-details
             />
           </div>
@@ -844,9 +889,9 @@ onMounted(async () => {
             <label class="field-label">Publish Platform</label>
             <v-select
               v-model="publishData.publishPlatform"
-              :items="['Website', 'Print', 'Both']"
+              :items="['Website', 'Print', 'Digital Magazine', 'Social Media', 'All Platforms']"
               variant="outlined"
-              density="compact"
+              density="comfortable"
               hide-details
             />
           </div>
@@ -857,22 +902,39 @@ onMounted(async () => {
               v-model="approvalComments"
               :placeholder="getCommentPlaceholder()"
               variant="outlined"
-              density="compact"
-              rows="3"
+              rows="4"
               hide-details
             />
           </div>
 
           <v-alert
-            v-if="approvalAction === 'publish'"
+            v-if="approvalAction === 'approve'"
             type="info"
             variant="tonal"
-            density="compact"
+            density="comfortable"
             class="next-step-alert"
           >
+            <template v-slot:prepend>
+              <v-icon size="20">mdi-information-outline</v-icon>
+            </template>
             <div class="alert-text">
-              <strong>Final Step:</strong>
-              This project will be published and marked as complete.
+              <strong>Next Step:</strong> Project will be sent to the Editor-in-Chief for final
+              approval.
+            </div>
+          </v-alert>
+
+          <v-alert
+            v-if="approvalAction === 'publish'"
+            type="success"
+            variant="tonal"
+            density="comfortable"
+            class="next-step-alert"
+          >
+            <template v-slot:prepend>
+              <v-icon size="20">mdi-check-circle</v-icon>
+            </template>
+            <div class="alert-text">
+              <strong>Final Step:</strong> Project will be published and made available to readers.
             </div>
           </v-alert>
         </v-card-text>
@@ -880,10 +942,18 @@ onMounted(async () => {
         <v-divider class="dialog-divider" />
 
         <v-card-actions class="approval-dialog-actions">
-          <v-btn variant="outlined" class="cancel-btn" @click="cancelApproval"> Cancel </v-btn>
+          <v-btn variant="outlined" size="default" class="cancel-btn" @click="cancelApproval">
+            Cancel
+          </v-btn>
           <v-spacer />
-          <v-btn class="confirm-approval-btn" @click="submitApproval">
-            <span v-if="approvalAction === 'publish'">Publish</span>
+          <v-btn
+            variant="flat"
+            size="default"
+            class="confirm-approval-btn"
+            :prepend-icon="approvalActions.find((a) => a.value === approvalAction)?.icon"
+            @click="submitApproval"
+          >
+            Confirm {{ approvalActions.find((a) => a.value === approvalAction)?.text }}
           </v-btn>
         </v-card-actions>
       </v-card>

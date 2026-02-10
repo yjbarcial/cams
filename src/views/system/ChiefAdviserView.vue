@@ -174,19 +174,19 @@ const approvalActions = computed(() => {
       value: 'return',
       text: 'Request to Edit',
       color: 'warning',
-      icon: null,
+      icon: 'mdi-pencil',
     },
     {
       value: 'approve',
       text: 'Approve',
       color: 'success',
-      icon: null,
+      icon: 'mdi-check-circle',
     },
     {
       value: 'reject',
       text: 'Reject',
       color: 'error',
-      icon: null,
+      icon: 'mdi-close-circle',
     },
   ]
 })
@@ -844,7 +844,9 @@ onMounted(async () => {
               <template v-for="action in approvalActions" :key="action.value">
                 <v-btn
                   @click="startApproval(action.value)"
-                  variant="flat"
+                  variant="outlined"
+                  size="default"
+                  density="default"
                   :class="{
                     'approve-btn': action.value === 'approve',
                     'return-btn': action.value === 'return',
@@ -955,7 +957,7 @@ onMounted(async () => {
       <v-card class="approval-dialog-card">
         <v-card-title class="approval-dialog-header">
           <v-icon class="mr-2" size="24" color="#FFFFFF">
-            {{ approvalAction === 'approve' ? 'mdi-check-circle' : 'mdi-pencil' }}
+            {{ approvalActions.find((a) => a.value === approvalAction)?.icon }}
           </v-icon>
           <span>{{ approvalActions.find((a) => a.value === approvalAction)?.text }}</span>
         </v-card-title>
@@ -1057,6 +1059,7 @@ onMounted(async () => {
             variant="flat"
             size="default"
             class="confirm-approval-btn"
+            :prepend-icon="approvalActions.find((a) => a.value === approvalAction)?.icon"
             :disabled="
               (approvalAction === 'return' || approvalAction === 'reject') &&
               !approvalComments.trim()
