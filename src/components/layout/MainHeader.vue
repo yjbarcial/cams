@@ -91,6 +91,10 @@ const handleLogout = async () => {
     localStorage.removeItem('isLoggedIn')
     localStorage.removeItem('user')
     localStorage.removeItem('token')
+    localStorage.removeItem('userRole')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('accessRole')
+    localStorage.removeItem('user_settings')
     sessionStorage.clear()
 
     // Navigate to login page with logout flag

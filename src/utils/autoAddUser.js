@@ -99,7 +99,6 @@ const ARTIST_EMAILS = [
   'kurtclyde.pablo@carsu.edu.ph',
   'jharedmiguel.paderna@carsu.edu.ph',
   'jevan.racaza@carsu.edu.ph',
-  'julesleo.reserva@carsu.edu.ph', // Also Archive Manager (gets 'editor' role as highest)
 ]
 
 /**

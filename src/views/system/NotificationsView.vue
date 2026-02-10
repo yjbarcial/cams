@@ -57,9 +57,18 @@ const cleanupOrphanedNotifications = async () => {
     try {
       await projectsService.getById(projectId)
     } catch (error) {
-      // If project doesn't exist (406 error), remove all notifications for this project
-      console.log(`Removing orphaned notifications for deleted project ${projectId}`)
-      notificationsService.deleteProjectNotifications(projectId)
+      // Only remove if project genuinely doesn't exist (PGRST116 = no rows, 406 = not acceptable)
+      // Don't remove on network errors, auth errors, or other transient failures
+      const isNotFound =
+        error?.code === 'PGRST116' ||
+        error?.status === 404 ||
+        error?.status === 406 ||
+        error?.message?.includes('not found') ||
+        error?.message?.includes('No rows')
+      if (isNotFound) {
+        console.log(`Removing orphaned notifications for deleted project ${projectId}`)
+        notificationsService.deleteProjectNotifications(projectId)
+      }
     }
   }
 }

@@ -10,6 +10,14 @@ const ADMIN_EMAILS = [
   'altheaguila.gorres@carsu.edu.ph',
 ]
 
+// Direct email lookups for all workflow roles - mirrors autoAddUser.js
+const TECHNICAL_EDITOR_EMAILS = ['jonee.elopre@carsu.edu.ph']
+const CREATIVE_DIRECTOR_EMAILS = ['levibrian.cejuela@carsu.edu.ph']
+const EDITOR_IN_CHIEF_EMAILS = ['melede.ganoy@carsu.edu.ph']
+const CHIEF_ADVISER_EMAILS = ['julesleo.reserva@carsu.edu.ph']
+const ARCHIVAL_MANAGER_EMAILS = ['eizzielmarie.bacoy@carsu.edu.ph']
+const ONLINE_ACCOUNTS_MANAGER_EMAILS = ['kentadriane.vinatero@carsu.edu.ph']
+
 /**
  * Get display name for notifications
  * - Admins see real names of everyone (for tracking purposes)
@@ -145,37 +153,70 @@ export const getNotifications = async () => {
       console.error('Error fetching current user profile:', error)
     }
 
-    // Role mapping for notification recipients
+    // Role mapping for notification recipients (maps designation label → userRole)
     const roleMapping = {
       'Section Head': 'section_head',
       'Technical Editor': 'editor',
+      'Creative Director': 'editor',
       'Editor-in-Chief': 'editor',
-      'Chief Adviser': 'admin',
+      'Chief Adviser': 'editor',
+      'Archival Manager': 'editor',
+      'Online Accounts Manager': 'editor',
     }
 
-    console.log('🔍 Filtering notifications for non-admin user, role:', currentUserRole)
+    // Also check accessRole from localStorage for more precise matching
+    const currentAccessRole = localStorage.getItem('accessRole')
+
+    // Direct email lists for source-based matching
+    const EMAIL_BY_SOURCE = {
+      technical_editor: ['jonee.elopre@carsu.edu.ph'],
+      creative_director: ['levibrian.cejuela@carsu.edu.ph'],
+      editor_in_chief: ['melede.ganoy@carsu.edu.ph'],
+      chief_adviser: ['julesleo.reserva@carsu.edu.ph'],
+      archival_manager: ['eizzielmarie.bacoy@carsu.edu.ph'],
+      online_accounts_manager: ['kentadriane.vinatero@carsu.edu.ph'],
+    }
+
+    console.log('🔍 Filtering notifications for user:', {
+      email: currentUserEmail,
+      role: currentUserRole,
+      accessRole: currentAccessRole,
+      userId: currentUserId,
+      isAdmin,
+    })
 
     // Filter notifications for current user
     // IMPORTANT: Only show notifications explicitly addressed to this user
     const userNotifications = notifications.filter((n) => {
+      // Admins see ALL notifications (they need full visibility for oversight)
+      if (isAdmin) return true
+
       // 1. User ID-based notifications (most reliable)
       if (n.recipientUserId && currentUserId) {
-        if (n.recipientUserId === currentUserId) return true
+        // Compare as strings to handle type mismatches
+        if (String(n.recipientUserId) === String(currentUserId)) return true
       }
 
-      // 2. Email-based notifications (fallback)
+      // 2. Email-based notifications
       if (n.recipientEmail) {
         if (n.recipientEmail.toLowerCase() === currentUserEmail.toLowerCase()) return true
-        // If recipientEmail is set but doesn't match, this notification is for someone else
-        return false
+        // Don't return false yet — check source-based matching first
       }
 
-      // 3. Role-based notifications (e.g., "Section Head", "Technical Editor")
+      // 3. Source-based matching — check if user's email is in the source role's email list
+      if (n.source && EMAIL_BY_SOURCE[n.source]) {
+        if (EMAIL_BY_SOURCE[n.source].includes(currentUserEmail.toLowerCase())) return true
+      }
+
+      // If recipientEmail was set but didn't match in steps 2 or 3, skip this notification
+      if (n.recipientEmail) return false
+
+      // 4. Role-based notifications (e.g., "Section Head", "Technical Editor")
       if (n.recipient && roleMapping[n.recipient] && currentUserRole) {
         return currentUserRole === roleMapping[n.recipient]
       }
 
-      // 4. Legacy notifications without any recipient info - show to all (backward compat)
+      // 5. Legacy notifications without any recipient info - show to all (backward compat)
       if (!n.recipient && !n.recipientEmail && !n.recipientUserId) {
         return true
       }
@@ -218,17 +259,9 @@ export const getUnreadCount = async () => {
  */
 export const createNotification = async (notificationData) => {
   try {
-    // Check if push notifications are enabled
-    if (!isPushNotificationsEnabled()) {
-      console.log('Push notifications are disabled, skipping notification creation')
-      // Still return the notification object for email notifications if enabled
-      // but don't add it to the in-app notifications list
-      if (isEmailNotificationsEnabled()) {
-        // In a real app, you would send an email here
-        console.log('Email notification would be sent:', notificationData.title)
-      }
-      return null
-    }
+    // Always create notifications regardless of sender's push notification setting.
+    // The push notification setting controls whether the RECIPIENT sees notifications,
+    // not whether they are created.
 
     // Get ALL notifications from localStorage (not filtered)
     const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
@@ -1156,8 +1189,11 @@ const getTargetedRecipients = async (project, newStatus, action) => {
     // For forward/approve/submit actions: notify only the NEXT role in the workflow
     const designations = getDesignationsByStatus(newStatus, project)
 
+    // Normalize status for comparisons (handle both 'For Publish' and 'for_publish' formats)
+    const normalizedStatus = newStatus?.toLowerCase()?.replace(/\s+/g, '_') || ''
+
     // If forwarding to section head, notify the specific assigned section head
-    if (newStatus === 'to_section_head' && project.section_head_id) {
+    if (normalizedStatus === 'to_section_head' && project.section_head_id) {
       try {
         const shProfile = await profilesService.getById(project.section_head_id)
         if (shProfile?.email) addRecipient(shProfile.email, 'section_head')
@@ -1166,7 +1202,29 @@ const getTargetedRecipients = async (project, newStatus, action) => {
       }
     }
 
-    // Notify users with the target designation
+    // Direct email lookups for ALL workflow roles (most reliable)
+    if (normalizedStatus === 'to_technical_editor') {
+      TECHNICAL_EDITOR_EMAILS.forEach((email) => addRecipient(email, 'technical_editor'))
+    }
+    if (normalizedStatus === 'to_creative_director') {
+      CREATIVE_DIRECTOR_EMAILS.forEach((email) => addRecipient(email, 'creative_director'))
+    }
+    if (normalizedStatus === 'to_editor_in_chief') {
+      EDITOR_IN_CHIEF_EMAILS.forEach((email) => addRecipient(email, 'editor_in_chief'))
+    }
+    if (normalizedStatus === 'to_chief_adviser') {
+      CHIEF_ADVISER_EMAILS.forEach((email) => addRecipient(email, 'chief_adviser'))
+    }
+    if (normalizedStatus === 'to_archival_manager' || normalizedStatus === 'for_publish') {
+      ARCHIVAL_MANAGER_EMAILS.forEach((email) => addRecipient(email, 'archival_manager'))
+    }
+    if (normalizedStatus === 'to_online_accounts_manager') {
+      ONLINE_ACCOUNTS_MANAGER_EMAILS.forEach((email) =>
+        addRecipient(email, 'online_accounts_manager'),
+      )
+    }
+
+    // Also query by designation_label as fallback (for any roles not in direct email lists)
     for (const designation of designations) {
       try {
         const { data: profiles } = await supabase

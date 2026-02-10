@@ -345,7 +345,14 @@ const submitApproval = async () => {
 
     // Create notification based on action with workflow labels
     try {
-      const displayName = getDisplayName(currentUserProfile.value)
+      const userEmail = localStorage.getItem('userEmail') || ''
+      const fullName = currentUserProfile.value
+        ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+        : ''
+      const profile = currentUserProfile.value
+        ? { ...currentUserProfile.value, full_name: fullName }
+        : { full_name: fullName }
+      const displayName = getDisplayName(userEmail, profile, true)
       await notifyStatusChange({
         project: updatedProject,
         oldStatus: 'to_editor_in_chief',

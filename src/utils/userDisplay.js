@@ -13,7 +13,8 @@ export const ADMIN_EMAILS = [
  * @returns {boolean}
  */
 export function isAdmin(email) {
-  return email && ADMIN_EMAILS.includes(email.toLowerCase().trim())
+  if (!email || typeof email !== 'string') return false
+  return ADMIN_EMAILS.includes(email.toLowerCase().trim())
 }
 
 /**
