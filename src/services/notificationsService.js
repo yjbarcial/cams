@@ -11,19 +11,87 @@ const ADMIN_EMAILS = [
 ]
 
 /**
- * Get display name for notifications - returns "Admin" if user is an admin, otherwise returns the name
- * @param {string} nameOrEmail - User name or email
+ * Get display name for notifications
+ * - Admins see real names of everyone (for tracking purposes)
+ * - Non-admins see "Admin" when an admin performs an action
+ * @param {string} nameOrEmail - User name or email of the person performing action
+ * @param {string} recipientEmail - Email of the person receiving the notification
  * @returns {string} Display name for notifications
  */
-const getNotificationDisplayName = (nameOrEmail) => {
+const getNotificationDisplayName = (nameOrEmail, recipientEmail = null) => {
   if (!nameOrEmail) return 'System'
 
-  // Check if the name/email matches an admin email (case-insensitive)
-  const isAdmin = ADMIN_EMAILS.some((adminEmail) =>
+  // Check if the actor (person performing action) is an admin
+  const actorIsAdmin = ADMIN_EMAILS.some((adminEmail) =>
     nameOrEmail.toLowerCase().includes(adminEmail.toLowerCase()),
   )
 
-  return isAdmin ? 'Admin' : nameOrEmail
+  // Check if the recipient is an admin
+  const recipientIsAdmin =
+    recipientEmail &&
+    ADMIN_EMAILS.some((adminEmail) => adminEmail.toLowerCase() === recipientEmail.toLowerCase())
+
+  // If recipient is admin, show real name of actor
+  // If recipient is not admin and actor is admin, show "Admin"
+  if (actorIsAdmin && !recipientIsAdmin) {
+    return 'Admin'
+  }
+
+  return nameOrEmail
+}
+
+/**
+ * Clean up duplicate notifications from localStorage
+ * This removes notifications that are duplicates based on:
+ * - Same recipient, project, title, description, and type
+ * - Keeps only the most recent one
+ * @returns {number} Number of duplicates removed
+ */
+export const cleanupDuplicateNotifications = () => {
+  try {
+    const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
+    const seen = new Map()
+    const uniqueNotifications = []
+    let duplicatesRemoved = 0
+
+    // Process notifications from newest to oldest
+    allNotifications.forEach((notif) => {
+      // Create a unique key based on important fields
+      // Include recipientEmail so different recipients are NOT treated as duplicates
+      const key = [
+        notif.recipientEmail?.toLowerCase().trim() || '',
+        notif.recipientUserId || '',
+        notif.projectId || '',
+        notif.title || '',
+        notif.type || '',
+        notif.description || '',
+      ].join('|||')
+
+      if (!seen.has(key)) {
+        seen.set(key, true)
+        uniqueNotifications.push(notif)
+      } else {
+        duplicatesRemoved++
+        console.log('🗑️ Removing duplicate notification:', {
+          id: notif.id,
+          title: notif.title,
+          recipient: notif.recipientEmail,
+        })
+      }
+    })
+
+    if (duplicatesRemoved > 0) {
+      localStorage.setItem('notifications', JSON.stringify(uniqueNotifications))
+      console.log(`✅ Cleaned up ${duplicatesRemoved} duplicate notifications`)
+    } else {
+      console.log('✅ No duplicate notifications found')
+    }
+
+    return duplicatesRemoved
+  } catch (error) {
+    console.error('❌ Error cleaning up notifications:', error)
+    return 0
+  }
 }
 
 /**
@@ -32,6 +100,7 @@ const getNotificationDisplayName = (nameOrEmail) => {
  */
 export const getNotifications = async () => {
   try {
+    cleanupDuplicateNotifications()
     const notifications = JSON.parse(localStorage.getItem('notifications') || '[]')
     const currentUserEmail = localStorage.getItem('userEmail')
 
@@ -62,19 +131,6 @@ export const getNotifications = async () => {
       isAdmin,
     })
 
-    // If admin, return only Published notifications
-    if (isAdmin) {
-      const publishedNotifications = notifications.filter((n) => n.type === 'Published')
-      console.log(
-        '👑 Admin access: Showing',
-        publishedNotifications.length,
-        'published notifications out of',
-        notifications.length,
-        'total',
-      )
-      return publishedNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    }
-
     // Get current user's ID from their profile
     const { profilesService } = await import('./supabaseService.js')
     let currentUserId = null
@@ -100,30 +156,18 @@ export const getNotifications = async () => {
     console.log('🔍 Filtering notifications for non-admin user, role:', currentUserRole)
 
     // Filter notifications for current user
+    // IMPORTANT: Only show notifications explicitly addressed to this user
     const userNotifications = notifications.filter((n) => {
       // 1. User ID-based notifications (most reliable)
       if (n.recipientUserId && currentUserId) {
-        const matches = n.recipientUserId === currentUserId
-        console.log('🔍 User ID notification filter:', {
-          notificationId: n.id,
-          recipientUserId: n.recipientUserId,
-          currentUserId,
-          matches,
-        })
-        if (matches) return true
+        if (n.recipientUserId === currentUserId) return true
       }
 
       // 2. Email-based notifications (fallback)
       if (n.recipientEmail) {
-        // Case-insensitive email comparison
-        const matches = n.recipientEmail.toLowerCase() === currentUserEmail.toLowerCase()
-        console.log('🔍 Email notification filter:', {
-          notificationId: n.id,
-          recipientEmail: n.recipientEmail,
-          currentUserEmail,
-          matches,
-        })
-        if (matches) return true
+        if (n.recipientEmail.toLowerCase() === currentUserEmail.toLowerCase()) return true
+        // If recipientEmail is set but doesn't match, this notification is for someone else
+        return false
       }
 
       // 3. Role-based notifications (e.g., "Section Head", "Technical Editor")
@@ -131,8 +175,12 @@ export const getNotifications = async () => {
         return currentUserRole === roleMapping[n.recipient]
       }
 
-      // 4. Legacy notifications without specific recipient - show to all
-      return !n.recipient
+      // 4. Legacy notifications without any recipient info - show to all (backward compat)
+      if (!n.recipient && !n.recipientEmail && !n.recipientUserId) {
+        return true
+      }
+
+      return false
     })
 
     // Sort by timestamp (newest first)
@@ -185,42 +233,105 @@ export const createNotification = async (notificationData) => {
     // Get ALL notifications from localStorage (not filtered)
     const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
 
-    // Check for duplicate notifications within the last 5 seconds
+    // Check for duplicate notifications with two strategies:
+    // 1. Exact match within last 30 seconds (for rapid duplicates)
+    // 2. Similar notification for same project+recipient (regardless of time)
     const now = Date.now()
-    const fiveSecondsAgo = now - 5000
+    const thirtySecondsAgo = now - 30000
     const normalizedRecipientEmail = notificationData.recipientEmail?.toLowerCase().trim()
 
+    let duplicateReason = null
     const isDuplicate = allNotifications.some((existingNotif) => {
       const existingTimestamp = new Date(existingNotif.timestamp).getTime()
       const existingRecipientEmail = existingNotif.recipientEmail?.toLowerCase().trim()
 
-      // Check if notification is within 5 seconds and has matching content
-      const isRecent = existingTimestamp > fiveSecondsAgo
+      // Strategy 1: Check for recent exact duplicates (within 30 seconds)
+      const isRecent = existingTimestamp > thirtySecondsAgo
       const sameTitle = existingNotif.title === notificationData.title
       const sameDescription = existingNotif.description === notificationData.description
       const sameProject = existingNotif.projectId === notificationData.projectId
       const sameRecipient = existingRecipientEmail === normalizedRecipientEmail
       const sameType = existingNotif.type === notificationData.type
 
-      const matches =
+      const recentExactMatch =
         isRecent && sameTitle && sameDescription && sameProject && sameRecipient && sameType
 
-      if (matches) {
-        console.log('🚫 DUPLICATE NOTIFICATION DETECTED and prevented:', {
+      if (recentExactMatch) {
+        duplicateReason = 'recent_exact_match'
+        console.log('🚫 DUPLICATE (recent exact) DETECTED and prevented:', {
           title: notificationData.title,
           recipient: notificationData.recipientEmail,
           projectId: notificationData.projectId,
           existingId: existingNotif.id,
           timeGap: now - existingTimestamp,
         })
+        return true
       }
 
-      return matches
+      // Strategy 2: Check for very similar notifications (same project, type, recipient)
+      // This catches duplicates even if description varies slightly
+      const veryRecentDuplicate =
+        existingTimestamp > now - 3000 && // Within 3 seconds
+        sameProject &&
+        sameRecipient &&
+        sameType &&
+        sameTitle
+
+      if (veryRecentDuplicate) {
+        duplicateReason = 'very_recent_similar'
+        console.log('🚫 DUPLICATE (very recent similar) DETECTED and prevented:', {
+          title: notificationData.title,
+          recipient: notificationData.recipientEmail,
+          projectId: notificationData.projectId,
+          existingId: existingNotif.id,
+          timeGap: now - existingTimestamp,
+        })
+        return true
+      }
+
+      return false
     })
 
     // If duplicate found, return null without creating
     if (isDuplicate) {
+      console.log('🚫 Duplicate notification blocked:', duplicateReason)
       return null
+    }
+
+    // Prepare description based on recipient type
+    let description = notificationData.description || ''
+    const createdByName = notificationData.createdBy || 'System'
+
+    // Check if recipient is an admin
+    const recipientIsAdmin =
+      notificationData.recipientEmail &&
+      ADMIN_EMAILS.some(
+        (adminEmail) => adminEmail.toLowerCase() === notificationData.recipientEmail.toLowerCase(),
+      )
+
+    // Check if creator is an admin
+    const creatorIsAdmin = ADMIN_EMAILS.some((adminEmail) =>
+      createdByName.toLowerCase().includes(adminEmail.toLowerCase()),
+    )
+
+    // If recipient is NOT admin and creator IS admin, replace admin name with "Admin"
+    if (!recipientIsAdmin && creatorIsAdmin) {
+      // Find and replace any admin name in the description with "Admin"
+      ADMIN_EMAILS.forEach((adminEmail) => {
+        const adminParts = adminEmail.split('@')[0].split('.')
+        // Try to match common name formats in the description
+        const possibleNames = [
+          adminParts.join(' '),
+          adminParts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' '),
+          createdByName,
+        ]
+
+        possibleNames.forEach((name) => {
+          if (description.includes(name)) {
+            description = description.replace(new RegExp(name, 'g'), 'Admin')
+          }
+        })
+      })
     }
 
     const notification = {
@@ -228,7 +339,7 @@ export const createNotification = async (notificationData) => {
       type: notificationData.type || 'Info',
       typeColor: getTypeColor(notificationData.type),
       title: notificationData.title || 'Notification',
-      description: notificationData.description || '',
+      description: description,
       timestamp: new Date().toISOString(),
       isRead: false,
       projectId: notificationData.projectId || null,
@@ -253,6 +364,11 @@ export const createNotification = async (notificationData) => {
     // Keep only last 100 notifications to prevent storage bloat
     const trimmedNotifications = allNotifications.slice(0, 100)
     localStorage.setItem('notifications', JSON.stringify(trimmedNotifications))
+
+    console.log(
+      '💾 Notification saved to localStorage. Total notifications now:',
+      trimmedNotifications.length,
+    )
 
     // Dispatch custom event to notify MainHeader of new notification
     window.dispatchEvent(new CustomEvent('notificationUpdated'))
@@ -467,12 +583,11 @@ export const createStatusChangeNotification = ({
 
   // Get human-readable status name
   const statusDisplay = getStatusDisplayName(newStatus)
-  const displayName = getNotificationDisplayName(actionBy)
 
   // Determine notification type and description based on status change
   if (newStatus === 'To Section Head' || newStatus === 'to_section_head') {
     type = 'Request'
-    description = `${displayName} submitted "${projectTitle}" for ${statusDisplay} review.`
+    description = `${actionBy} submitted "${projectTitle}" for ${statusDisplay} review.`
   } else if (
     newStatus === 'To Technical Editor' ||
     newStatus === 'to_technical_editor' ||
@@ -483,13 +598,13 @@ export const createStatusChangeNotification = ({
     newStatus === 'to_chief_adviser'
   ) {
     type = 'Forwarded'
-    description = `${displayName} moved "${projectTitle}" to ${statusDisplay}.`
+    description = `${actionBy} moved "${projectTitle}" to ${statusDisplay}.`
   } else if (newStatus === 'For Publish' || newStatus === 'for_publish') {
     type = 'Approved'
-    description = `${displayName} approved "${projectTitle}" for publication.`
+    description = `${actionBy} approved "${projectTitle}" for publication.`
   } else if (newStatus === 'Published' || newStatus === 'published') {
     type = 'Published'
-    description = `${displayName} published "${projectTitle}".`
+    description = `${actionBy} published "${projectTitle}".`
   } else if (
     newStatus === 'Returned by Section Head' ||
     newStatus === 'returned_by_section_head' ||
@@ -503,7 +618,7 @@ export const createStatusChangeNotification = ({
     newStatus === 'returned_by_chief_adviser'
   ) {
     type = 'Returned'
-    description = `${displayName} returned "${projectTitle}" for edits.`
+    description = `${actionBy} returned "${projectTitle}" for edits.`
     if (comments) {
       description += ` ${comments}`
     }
@@ -513,17 +628,17 @@ export const createStatusChangeNotification = ({
     newStatus.includes('rejected')
   ) {
     type = 'Rejected'
-    description = `${displayName} rejected "${projectTitle}".`
+    description = `${actionBy} rejected "${projectTitle}".`
     if (comments) {
       description += ` ${comments}`
     }
   } else if (newStatus === 'Draft' || newStatus === 'draft') {
     type = 'Info'
-    description = `${displayName} saved "${projectTitle}" as draft.`
+    description = `${actionBy} saved "${projectTitle}" as draft.`
   } else {
     // Default fallback with clean status display
     type = 'Forwarded'
-    description = `${displayName} moved "${projectTitle}" to ${statusDisplay}.`
+    description = `${actionBy} moved "${projectTitle}" to ${statusDisplay}.`
     if (comments) {
       description += ` ${comments}`
     }
@@ -562,11 +677,10 @@ export const createCommentNotification = ({
   recipient,
   recipientEmail,
 }) => {
-  const displayName = getNotificationDisplayName(commentAuthor)
   return createNotification({
     type: 'Comment',
     title: `Comment on "${projectTitle}"`,
-    description: `${displayName} posted a comment: "${commentText.substring(0, 100)}${commentText.length > 100 ? '...' : ''}"`,
+    description: `${commentAuthor} posted a comment: "${commentText.substring(0, 100)}${commentText.length > 100 ? '...' : ''}"`,
     projectId,
     projectType,
     actions: [{ label: 'View', type: 'view', color: '#3b82f6' }],
@@ -602,20 +716,16 @@ export const getProjectInvolvedUsers = async (project) => {
       }
     }
 
-    // 1. Get project creator's email from created_by (UUID)
-    // Note: profiles.id is BIGSERIAL, not UUID, so we can't directly join
-    // The creator is usually the person submitting, so they'll be filtered out anyway
-    if (project.created_by) {
+    // 1. Get project creator's email from created_by_profile_id
+    if (project.created_by_profile_id) {
       try {
-        // Try to get the user's email from auth
-        const { data: userData } = await supabase.auth.admin.getUserById(project.created_by)
-        if (userData?.user?.email) {
-          addEmail(userData.user.email, 'project_creator')
-          console.log('✅ Added project creator:', userData.user.email)
+        const creatorProfile = await profilesService.getById(project.created_by_profile_id)
+        if (creatorProfile?.email) {
+          addEmail(creatorProfile.email, 'project_creator')
+          console.log('✅ Added project creator:', creatorProfile.email)
         }
-      } catch {
-        // Admin API not available in client, skip creator
-        console.log('⚠️ Could not fetch creator (admin API not available), skipping')
+      } catch (error) {
+        console.warn('⚠️ Could not fetch creator profile:', error)
       }
     }
 
@@ -689,6 +799,13 @@ export const getProjectInvolvedUsers = async (project) => {
         console.warn(`⚠️ Error fetching users with designation '${designation}':`, error)
       }
     }
+
+    // 5. Add all system admins to receive notifications about all project submissions/approvals
+    console.log('👑 Adding system admins to notification list')
+    ADMIN_EMAILS.forEach((adminEmail) => {
+      addEmail(adminEmail, 'system_admin')
+      console.log('✅ Added system admin:', adminEmail)
+    })
 
     // Remove duplicates and empty values (case-insensitive for emails)
     const emailMap = new Map()
@@ -809,8 +926,17 @@ export const notifyAllInvolvedUsers = async ({
     const notifications = []
     const notifiedEmails = new Set() // Track already notified emails
 
+    console.log(
+      '📋 Processing',
+      involvedEmails.length,
+      'unique emails from getProjectInvolvedUsers',
+    )
+    console.log('👤 Current user email:', currentUserEmail)
+
     for (const email of involvedEmails) {
       const normalizedEmail = email.toLowerCase().trim()
+
+      console.log('🔄 Processing email:', email, '(normalized:', normalizedEmail, ')')
 
       // Skip if already notified this email
       if (notifiedEmails.has(normalizedEmail)) {
@@ -818,10 +944,20 @@ export const notifyAllInvolvedUsers = async ({
         continue
       }
 
-      // Skip notifying the current user (person who performed the action)
-      if (normalizedEmail === currentUserEmail?.toLowerCase().trim()) {
-        console.log('⏭️ Skipping current user:', email)
+      // Check if recipient is an admin
+      const recipientIsAdmin = ADMIN_EMAILS.some(
+        (adminEmail) => adminEmail.toLowerCase() === normalizedEmail,
+      )
+
+      // Skip notifying the current user UNLESS they are an admin
+      // Admins receive all notifications to track project workflow
+      if (normalizedEmail === currentUserEmail?.toLowerCase().trim() && !recipientIsAdmin) {
+        console.log('⏭️ Skipping current user (non-admin):', email)
         continue
+      }
+
+      if (recipientIsAdmin) {
+        console.log('👑 Including admin in notifications:', email)
       }
 
       // Get user ID for better notification filtering
@@ -848,7 +984,9 @@ export const notifyAllInvolvedUsers = async ({
       if (notification) {
         notifications.push(notification)
         notifiedEmails.add(normalizedEmail)
-        console.log('✅ Notified:', email)
+        console.log('✅ Notification created for:', email, 'ID:', notification.id)
+      } else {
+        console.log('⚠️ Notification was null (possibly duplicate or disabled):', email)
       }
     }
 
@@ -868,12 +1006,11 @@ export const notifyAllInvolvedUsers = async ({
  * @param {string} params.uploadedBy - User who uploaded the file
  */
 export const notifyFileUpload = async ({ project, fileName, uploadedBy }) => {
-  const displayName = getNotificationDisplayName(uploadedBy)
   return notifyAllInvolvedUsers({
     project,
     type: 'Info',
     title: `File uploaded to "${project.title}"`,
-    description: `${displayName} uploaded "${fileName}" to the project.`,
+    description: `${uploadedBy} uploaded "${fileName}" to the project.`,
     actionBy: uploadedBy,
   })
 }
@@ -886,10 +1023,9 @@ export const notifyFileUpload = async ({ project, fileName, uploadedBy }) => {
  * @param {string} params.changes - Description of changes (optional)
  */
 export const notifyProjectUpdate = async ({ project, updatedBy, changes }) => {
-  const displayName = getNotificationDisplayName(updatedBy)
   const description = changes
-    ? `${displayName} updated "${project.title}": ${changes}`
-    : `${displayName} made changes to "${project.title}".`
+    ? `${updatedBy} updated "${project.title}": ${changes}`
+    : `${updatedBy} made changes to "${project.title}".`
 
   return notifyAllInvolvedUsers({
     project,
@@ -908,12 +1044,11 @@ export const notifyProjectUpdate = async ({ project, updatedBy, changes }) => {
  * @param {string} params.commentText - Comment text
  */
 export const notifyNewComment = async ({ project, commentAuthor, commentText }) => {
-  const displayName = getNotificationDisplayName(commentAuthor)
   return notifyAllInvolvedUsers({
     project,
     type: 'Comment',
     title: `New comment on "${project.title}"`,
-    description: `${displayName} commented: "${commentText.substring(0, 100)}${commentText.length > 100 ? '...' : ''}"`,
+    description: `${commentAuthor} commented: "${commentText.substring(0, 100)}${commentText.length > 100 ? '...' : ''}"`,
     actionBy: commentAuthor,
   })
 }
@@ -963,6 +1098,110 @@ const getWorkflowLabel = (oldStatus, newStatus) => {
   return `${oldDisplay} → ${newDisplay}`
 }
 
+/**
+ * Get targeted recipient emails for a workflow transition.
+ * Only notifies the NEXT person in the chain + admins — NOT everyone involved.
+ * For returns/rejects, notifies the writer/creator + admins.
+ * @param {Object} project - Project object
+ * @param {string} newStatus - New status
+ * @param {string} action - Action type (return/edit/approve/forward/publish)
+ * @returns {Promise<Array>} Array of { email, source } objects
+ */
+const getTargetedRecipients = async (project, newStatus, action) => {
+  const { supabase } = await import('@/utils/supabase.js')
+  const { profilesService } = await import('./supabaseService.js')
+  const recipients = []
+  const addedEmails = new Set()
+
+  const addRecipient = (email, source) => {
+    if (!email) return
+    const norm = email.toLowerCase().trim()
+    if (!addedEmails.has(norm)) {
+      addedEmails.add(norm)
+      recipients.push({ email, source })
+    }
+  }
+
+  // For return/edit/reject actions: notify the writer/creator
+  if (action === 'return' || action === 'edit' || action === 'reject') {
+    // Notify project creator (writer)
+    if (project.created_by_profile_id) {
+      try {
+        const creatorProfile = await profilesService.getById(project.created_by_profile_id)
+        if (creatorProfile?.email) addRecipient(creatorProfile.email, 'writer_creator')
+      } catch (e) {
+        console.warn('Could not fetch creator:', e)
+      }
+    }
+    // Notify project members (writers/artists)
+    try {
+      const { data: members } = await supabase
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', project.id)
+      if (members) {
+        for (const member of members) {
+          try {
+            const memberProfile = await profilesService.getById(member.user_id)
+            if (memberProfile?.email) addRecipient(memberProfile.email, 'project_member')
+          } catch (e) {
+            /* skip */
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch members:', e)
+    }
+  } else {
+    // For forward/approve/submit actions: notify only the NEXT role in the workflow
+    const designations = getDesignationsByStatus(newStatus, project)
+
+    // If forwarding to section head, notify the specific assigned section head
+    if (newStatus === 'to_section_head' && project.section_head_id) {
+      try {
+        const shProfile = await profilesService.getById(project.section_head_id)
+        if (shProfile?.email) addRecipient(shProfile.email, 'section_head')
+      } catch (e) {
+        console.warn('Could not fetch section head:', e)
+      }
+    }
+
+    // Notify users with the target designation
+    for (const designation of designations) {
+      try {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, email, first_name, last_name, designation_label')
+          .eq('designation_label', designation)
+        if (profiles) {
+          profiles.forEach((p) => {
+            if (p.email) addRecipient(p.email, `target_role:${designation}`)
+          })
+        }
+      } catch (e) {
+        console.warn(`Could not fetch ${designation}:`, e)
+      }
+    }
+
+    // For published status, also notify the creator so they know their work is live
+    if (newStatus === 'published' || newStatus === 'Published') {
+      if (project.created_by_profile_id) {
+        try {
+          const creatorProfile = await profilesService.getById(project.created_by_profile_id)
+          if (creatorProfile?.email) addRecipient(creatorProfile.email, 'writer_published')
+        } catch (e) {
+          /* skip */
+        }
+      }
+    }
+  }
+
+  // ALWAYS add system admins so they can track project workflow
+  ADMIN_EMAILS.forEach((adminEmail) => addRecipient(adminEmail, 'system_admin'))
+
+  return recipients
+}
+
 export const notifyStatusChange = async ({
   project,
   oldStatus,
@@ -978,8 +1217,6 @@ export const notifyStatusChange = async ({
     newStatus,
     action,
     actionBy,
-    comments,
-    callStack: new Error().stack?.split('\n').slice(1, 4).join('\n'), // Show where this was called from
   })
 
   let type = 'Info'
@@ -987,7 +1224,6 @@ export const notifyStatusChange = async ({
 
   // Get human-readable status name
   const statusDisplay = getStatusDisplayName(newStatus)
-  const displayName = getNotificationDisplayName(actionBy)
 
   // Generate workflow label for admins to see the full flow
   const workflowLabel = getWorkflowLabel(oldStatus, newStatus)
@@ -996,34 +1232,27 @@ export const notifyStatusChange = async ({
   if (action === 'return' || action === 'edit') {
     type = 'Returned'
     const actionText = action === 'return' ? 'returned' : 'requested edit on'
-    description = `${displayName} ${actionText} "${project.title}" back to writer/artist.`
-    if (comments) {
-      description += ` Comment: ${comments}`
-    }
+    description = `${actionBy} ${actionText} "${project.title}" back to writer/artist.`
+    if (comments) description += ` Comment: ${comments}`
   } else if (newStatus?.includes('returned') || newStatus?.includes('Returned')) {
     type = 'Returned'
-    description = `${displayName} returned "${project.title}" for edits.`
-    if (comments) {
-      description += ` Comment: ${comments}`
-    }
-  } else if (newStatus?.includes('approved') || newStatus?.includes('Approved')) {
-    type = 'Approved'
-    description = `${displayName} approved "${project.title}".`
-  } else if (newStatus?.includes('rejected') || newStatus?.includes('Rejected')) {
+    description = `${actionBy} returned "${project.title}" for edits.`
+    if (comments) description += ` Comment: ${comments}`
+  } else if (
+    action === 'reject' ||
+    newStatus?.includes('rejected') ||
+    newStatus?.includes('Rejected')
+  ) {
     type = 'Rejected'
-    description = `${displayName} rejected "${project.title}".`
-    if (comments) {
-      description += ` Reason: ${comments}`
-    }
+    description = `${actionBy} rejected "${project.title}".`
+    if (comments) description += ` Reason: ${comments}`
   } else if (newStatus === 'published' || newStatus === 'Published') {
     type = 'Published'
-    description = `${displayName} published "${project.title}".`
+    description = `${actionBy} published "${project.title}".`
   } else if (newStatus === 'to_section_head') {
     type = 'Request'
-    description = `${displayName} submitted "${project.title}" for ${statusDisplay} review.`
-    if (comments) {
-      description += ` Comments: ${comments}`
-    }
+    description = `${actionBy} submitted "${project.title}" for ${statusDisplay} review.`
+    if (comments) description += ` Comments: ${comments}`
   } else if (
     newStatus === 'to_technical_editor' ||
     newStatus === 'to_creative_director' ||
@@ -1034,35 +1263,77 @@ export const notifyStatusChange = async ({
     newStatus === 'To Chief Adviser'
   ) {
     type = 'Forwarded'
-    description = `${displayName} moved "${project.title}" to ${statusDisplay}.`
-    if (comments) {
-      description += ` Comments: ${comments}`
-    }
+    description = `${actionBy} forwarded "${project.title}" to ${statusDisplay}.`
+    if (comments) description += ` Comments: ${comments}`
   } else if (newStatus === 'for_publish' || newStatus === 'For Publish') {
     type = 'Approved'
-    description = `${displayName} approved "${project.title}" for publication.`
-    if (comments) {
-      description += ` Comments: ${comments}`
-    }
+    description = `${actionBy} approved "${project.title}" for publication.`
+    if (comments) description += ` Comments: ${comments}`
+  } else if (newStatus?.includes('approved') || newStatus?.includes('Approved')) {
+    type = 'Approved'
+    description = `${actionBy} approved "${project.title}".`
   } else {
-    // Default fallback with clean status display
-    description = `${displayName} moved "${project.title}" to ${statusDisplay}.`
-    if (comments) {
-      description += ` Comments: ${comments}`
-    }
+    description = `${actionBy} moved "${project.title}" to ${statusDisplay}.`
+    if (comments) description += ` Comments: ${comments}`
   }
 
   console.log('📬 Notification details:', { type, description, workflowLabel })
 
-  const result = await notifyAllInvolvedUsers({
-    project,
-    type,
-    title: `Status changed: "${project.title}"`,
-    description,
-    actionBy,
-    workflowLabel,
-  })
+  // Get TARGETED recipients — only next person in chain + admins
+  const recipients = await getTargetedRecipients(project, newStatus, action)
+  const currentUserEmail = localStorage.getItem('userEmail')
+  const { profilesService } = await import('./supabaseService.js')
 
-  console.log('📬 Notifications sent:', result?.length || 0)
-  return result
+  console.log(
+    '📬 Targeted recipients:',
+    recipients.map((r) => `${r.email} (${r.source})`),
+  )
+
+  const notifications = []
+  const notifiedEmails = new Set()
+
+  for (const { email } of recipients) {
+    const normalizedEmail = email.toLowerCase().trim()
+
+    // Skip if already notified
+    if (notifiedEmails.has(normalizedEmail)) continue
+
+    // Check if recipient is an admin
+    const recipientIsAdmin = ADMIN_EMAILS.some(
+      (adminEmail) => adminEmail.toLowerCase() === normalizedEmail,
+    )
+
+    // Skip the current user UNLESS they are an admin
+    if (normalizedEmail === currentUserEmail?.toLowerCase().trim() && !recipientIsAdmin) continue
+
+    // Get user ID for reliable filtering
+    let recipientUserId = null
+    try {
+      const recipientProfile = await profilesService.getByEmail(email)
+      recipientUserId = recipientProfile?.id
+    } catch (e) {
+      /* skip */
+    }
+
+    const notification = await createNotification({
+      type,
+      title: `Status changed: "${project.title}"`,
+      description,
+      projectId: project.id,
+      projectType: project.project_type,
+      recipientEmail: email,
+      recipientUserId,
+      createdBy: actionBy,
+      workflowLabel,
+    })
+
+    if (notification) {
+      notifications.push(notification)
+      notifiedEmails.add(normalizedEmail)
+      console.log('✅ Notification sent to:', email)
+    }
+  }
+
+  console.log('📬 Total notifications sent:', notifications.length)
+  return notifications
 }

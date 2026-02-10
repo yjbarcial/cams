@@ -556,8 +556,9 @@ const submitApproval = async () => {
           ? 'Creative Director'
           : 'Technical Editor'
 
-        // Send notification to the other editor that it's their turn
+        // Send notification to the other editor that it's their turn + admins
         try {
+          // Notify the other editor
           const { data: otherEditors } = await supabase
             .from('profiles')
             .select('id, email, first_name, last_name')
@@ -576,6 +577,34 @@ const submitApproval = async () => {
                 createdBy: displayName,
               })
               console.log(`✅ Notified ${waitingForRole}:`, editor.email)
+            }
+          }
+
+          // Also notify admins so they can track the workflow
+          const adminEmails = [
+            'yssahjulianah.barcial@carsu.edu.ph',
+            'lovellhudson.clavel@carsu.edu.ph',
+            'altheaguila.gorres@carsu.edu.ph',
+          ]
+          for (const adminEmail of adminEmails) {
+            const { data: adminProfile } = await supabase
+              .from('profiles')
+              .select('id, email')
+              .eq('email', adminEmail)
+              .single()
+
+            if (adminProfile) {
+              await createNotification({
+                type: 'Info',
+                title: `Status changed: "${updatedProject.title}"`,
+                description: `${displayName} (${approverRole}) approved "${updatedProject.title}". Waiting for ${waitingForRole} approval.`,
+                projectId: updatedProject.id,
+                projectType: updatedProject.project_type,
+                recipientEmail: adminProfile.email,
+                recipientUserId: adminProfile.id,
+                createdBy: displayName,
+                workflowLabel: `${approverRole} Approved → Waiting for ${waitingForRole}`,
+              })
             }
           }
         } catch (error) {
