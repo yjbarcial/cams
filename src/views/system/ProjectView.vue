@@ -568,7 +568,8 @@ const canViewProject = computed(() => {
     accessRole === 'creative_director' ||
     accessRole === 'editor_in_chief' ||
     accessRole === 'chief_adviser' ||
-    accessRole === 'archival_manager'
+    accessRole === 'archival_manager' ||
+    accessRole === 'online_accounts_manager'
   ) {
     return true
   }

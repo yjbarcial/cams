@@ -236,9 +236,9 @@ const debouncedSave = () => {
 const approvalActions = computed(() => {
   const actions = [
     // Return to writer button
-    { value: 'return', text: 'Return to Writer', color: 'warning' },
+    { value: 'return', text: 'Return to Writer', color: 'warning', icon: 'mdi-arrow-u-left-top' },
     // Request to edit text
-    { value: 'edit', text: 'Request to Edit', color: 'dark' },
+    { value: 'edit', text: 'Request to Edit', color: 'dark', icon: 'mdi-pencil' },
   ]
 
   // Approve button - disabled if user already approved
@@ -247,6 +247,7 @@ const approvalActions = computed(() => {
       value: 'approve',
       text: 'Approved',
       color: 'success',
+      icon: 'mdi-check-circle',
       disabled: true,
       tooltip: 'You have already approved this project',
     })
@@ -255,6 +256,7 @@ const approvalActions = computed(() => {
       value: 'approve',
       text: 'Approve',
       color: 'success',
+      icon: 'mdi-check-circle',
     })
   }
 
@@ -263,6 +265,7 @@ const approvalActions = computed(() => {
     value: 'publish',
     text: 'Publish',
     color: 'grey',
+    icon: 'mdi-publish',
     disabled: true,
     tooltip: 'Only Editor-in-Chief can publish after approval',
   })
@@ -428,8 +431,16 @@ const submitApproval = async () => {
 
         // Check if CD already approved
         if (currentProject.creative_director_approved_by) {
-          updateData.status = 'to_editor_in_chief'
-          console.log('✅ Both approved! Moving to EIC (TE approved, CD already approved)')
+          // For "Other" projects, route to Online Accounts Manager first
+          if (currentProject.project_type === 'other') {
+            updateData.status = 'to_online_accounts_manager'
+            console.log(
+              '✅ Both approved! Moving to Online Accounts Manager for Other project (TE approved, CD already approved)',
+            )
+          } else {
+            updateData.status = 'to_editor_in_chief'
+            console.log('✅ Both approved! Moving to EIC (TE approved, CD already approved)')
+          }
         } else {
           console.log('⏳ TE approved, waiting for CD approval')
         }
@@ -440,8 +451,16 @@ const submitApproval = async () => {
 
         // Check if TE already approved
         if (currentProject.technical_editor_approved_by) {
-          updateData.status = 'to_editor_in_chief'
-          console.log('✅ Both approved! Moving to EIC (CD approved, TE already approved)')
+          // For "Other" projects, route to Online Accounts Manager first
+          if (currentProject.project_type === 'other') {
+            updateData.status = 'to_online_accounts_manager'
+            console.log(
+              '✅ Both approved! Moving to Online Accounts Manager for Other project (CD approved, TE already approved)',
+            )
+          } else {
+            updateData.status = 'to_editor_in_chief'
+            console.log('✅ Both approved! Moving to EIC (CD approved, TE already approved)')
+          }
         } else {
           console.log('⏳ CD approved, waiting for TE approval')
         }
@@ -507,7 +526,20 @@ const submitApproval = async () => {
       const approverRole = isTechnicalEditor.value ? 'Technical Editor' : 'Creative Director'
       console.log('📢 Showing notification for:', approverRole, 'Status:', updatedProject.status)
 
-      if (updatedProject.status === 'to_editor_in_chief') {
+      if (updatedProject.status === 'to_online_accounts_manager') {
+        // Both editors approved - notify Online Accounts Manager (for Other projects)
+        await notifyStatusChange({
+          project: updatedProject,
+          oldStatus: 'to_technical_editor',
+          newStatus: 'to_online_accounts_manager',
+          actionBy: displayName,
+          comments: approvalComments.value || `Both editors approved the project.`,
+        })
+        showNotification(
+          'Both editors have approved! Project sent to Online Accounts Manager.',
+          'success',
+        )
+      } else if (updatedProject.status === 'to_editor_in_chief') {
         // Both editors approved - notify EIC
         await notifyStatusChange({
           project: updatedProject,

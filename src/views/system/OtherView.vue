@@ -218,6 +218,8 @@ const handleView = (projectId) => {
     project.status === 'to_creative_director'
   ) {
     router.push(`/technical-editor/${projectId}?type=${actualType}`)
+  } else if (project.status === 'to_online_accounts_manager') {
+    router.push(`/archival-manager/${projectId}?type=${actualType}`)
   } else if (
     project.status === 'to_editor_in_chief' ||
     project.status === 'EIC Review' ||
