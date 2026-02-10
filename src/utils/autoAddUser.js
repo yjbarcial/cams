@@ -49,14 +49,11 @@ const TECHNICAL_EDITOR_EMAILS = ['jonee.elopre@carsu.edu.ph']
 // CREATIVE DIRECTOR - Single user
 const CREATIVE_DIRECTOR_EMAILS = ['levibrian.cejuela@carsu.edu.ph']
 
-// CHIEF ADVISER - Need to identify the user
-// TODO: Add Chief Adviser email once identified
-const CHIEF_ADVISER_EMAILS = [
-  // 'chief.adviser@carsu.edu.ph',  // PLACEHOLDER - needs to be defined
-]
+// CHIEF ADVISER - Jules Leo Reserva
+const CHIEF_ADVISER_EMAILS = ['julesleo.reserva@carsu.edu.ph']
 
-// ARCHIVAL MANAGERS - Two users
-const ARCHIVAL_MANAGER_EMAILS = ['julesleo.reserva@carsu.edu.ph', 'eizzielmarie.bacoy@carsu.edu.ph']
+// ARCHIVAL MANAGERS - One user
+const ARCHIVAL_MANAGER_EMAILS = ['eizzielmarie.bacoy@carsu.edu.ph']
 
 // ONLINE ACCOUNTS MANAGER - Single user for social media publishing
 const ONLINE_ACCOUNTS_MANAGER_EMAILS = ['kentadriane.vinatero@carsu.edu.ph']
