@@ -386,7 +386,6 @@ export const createStatusChangeNotification = ({
   projectId,
   projectType,
   projectTitle,
-  oldStatus,
   newStatus,
   actionBy,
   recipient,
@@ -435,13 +434,6 @@ export const createStatusChangeNotification = ({
   ) {
     type = 'Returned'
     description = `${actionBy} returned "${projectTitle}" for edits.`
-    if (comments) {
-      description += ` ${comments}`
-    }
-  } else if (newStatus === 'returned_by_section_head' && oldStatus === 'To Chief Adviser') {
-    // Special case: Rejection by Chief Adviser sends it back to artist/writer
-    type = 'Rejected'
-    description = `${actionBy} rejected "${projectTitle}" and sent it back for major revisions.`
     if (comments) {
       description += ` ${comments}`
     }
@@ -537,7 +529,7 @@ export const getProjectInvolvedUsers = async (project) => {
           involvedEmails.push(userData.user.email)
           console.log('✅ Added project creator:', userData.user.email)
         }
-      } catch (error) {
+      } catch {
         // Admin API not available in client, skip creator
         console.log('⚠️ Could not fetch creator (admin API not available), skipping')
       }
@@ -583,7 +575,7 @@ export const getProjectInvolvedUsers = async (project) => {
 
     // 4. Get all workflow role users based on project status
     const workflowRoles = getWorkflowRolesByStatus(project.status)
-    const workflowDesignations = getDesignationsByStatus(project.status)
+    const workflowDesignations = getDesignationsByStatus(project.status, project)
     console.log('👥 Workflow roles for status', project.status, ':', workflowRoles)
     console.log('👥 Workflow designations for status', project.status, ':', workflowDesignations)
 
@@ -635,9 +627,10 @@ const getWorkflowRolesByStatus = (status) => {
     to_section_head: ['section_head'],
     to_technical_editor: ['technical_editor'],
     to_creative_director: ['creative_director'],
+    to_online_accounts_manager: ['online_accounts_manager'],
     to_editor_in_chief: ['editor_in_chief'],
     to_chief_adviser: ['chief_adviser'],
-    for_publish: ['archival_manager'],
+    for_publish: ['archival_manager', 'online_accounts_manager'],
     published: ['admin', 'archival_manager'],
   }
   return rolesByStatus[status?.toLowerCase()?.replace(/\s+/g, '_')] || []
@@ -646,22 +639,38 @@ const getWorkflowRolesByStatus = (status) => {
 /**
  * Get designation labels that match workflow roles
  * @param {string} status - Project status
+ * @param {Object} project - Optional project object for type-specific filtering
  * @returns {Array<string>} Array of designation labels
  */
-const getDesignationsByStatus = (status) => {
+const getDesignationsByStatus = (status, project = null) => {
   const designationsByStatus = {
     // For to_section_head: Don't include 'Section Head' since we fetch specific section_head_id from the project
     // Instead include Managing Editor and Associate Managing Editor
     to_section_head: ['Managing Editor', 'Associate Managing Editor'],
     to_technical_editor: ['Technical Editor'],
     to_creative_director: ['Creative Director'],
+    to_online_accounts_manager: ['Online Accounts Manager'],
     to_editor_in_chief: ['Editor-in-Chief'],
     to_chief_adviser: ['Chief Adviser'],
     to_archival_manager: ['Archival Manager', 'Circulations Manager'],
-    for_publish: ['Archival Manager', 'Circulations Manager'],
+    for_publish: ['Archival Manager', 'Circulations Manager', 'Online Accounts Manager'],
     published: ['Admin', 'Archival Manager'],
   }
-  return designationsByStatus[status?.toLowerCase()?.replace(/\s+/g, '_')] || []
+
+  let designations = designationsByStatus[status?.toLowerCase()?.replace(/\s+/g, '_')] || []
+
+  // For for_publish status, filter based on project type
+  if (status?.toLowerCase()?.replace(/\s+/g, '_') === 'for_publish' && project) {
+    if (project.project_type === 'other' || project.type === 'other') {
+      // For "Other" projects, only notify Online Accounts Manager
+      designations = ['Online Accounts Manager']
+    } else {
+      // For other project types, only notify Archival Managers
+      designations = ['Archival Manager', 'Circulations Manager']
+    }
+  }
+
+  return designations
 }
 
 /**
@@ -806,6 +815,7 @@ const getWorkflowLabel = (oldStatus, newStatus) => {
     to_section_head: 'Section Head Review',
     to_technical_editor: 'Technical Editor Review',
     to_creative_director: 'Creative Director Review',
+    to_online_accounts_manager: 'Online Accounts Manager Review',
     to_editor_in_chief: 'Editor-in-Chief Review',
     to_chief_adviser: 'Chief Adviser Review',
     to_archival_manager: 'Archival Manager Review',
@@ -891,6 +901,7 @@ export const notifyStatusChange = async ({
   } else if (
     newStatus === 'to_technical_editor' ||
     newStatus === 'to_creative_director' ||
+    newStatus === 'to_online_accounts_manager' ||
     newStatus === 'to_editor_in_chief' ||
     newStatus === 'to_chief_adviser' ||
     newStatus === 'to_archival_manager' ||
