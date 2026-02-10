@@ -270,13 +270,15 @@ const submitApproval = async () => {
 
     console.log(`✅ Project ${action}ed via Supabase`)
 
-    project.value.status = newStatus
+    // Reload project with all relationships for notification
+    const updatedProject = await projectsService.getById(projectId)
+    project.value.status = updatedProject.status
 
     // Create notification with workflow labels
     try {
       const displayName = getDisplayName(currentUserProfile.value)
       await notifyStatusChange({
-        project: project.value,
+        project: updatedProject,
         oldStatus: action === 'approve' ? 'to_online_accounts_manager' : 'for_publish',
         newStatus: newStatus,
         actionBy: displayName,
