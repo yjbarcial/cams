@@ -37,7 +37,6 @@ const SECTION_HEAD_EMAILS = [
   'megumierika.labaja@carsu.edu.ph',
   'elainepearl.silagan@carsu.edu.ph',
   'samuellhoide.ursales@carsu.edu.ph',
-  'kentadriane.vinatero@carsu.edu.ph',
 ]
 
 // Content Administrators - Separate roles for each position
@@ -58,6 +57,9 @@ const CHIEF_ADVISER_EMAILS = [
 
 // ARCHIVAL MANAGERS - Two users
 const ARCHIVAL_MANAGER_EMAILS = ['julesleo.reserva@carsu.edu.ph', 'eizzielmarie.bacoy@carsu.edu.ph']
+
+// ONLINE ACCOUNTS MANAGER - Single user for social media publishing
+const ONLINE_ACCOUNTS_MANAGER_EMAILS = ['kentadriane.vinatero@carsu.edu.ph']
 
 // Generic EDITOR_EMAILS - for other editorial roles if needed
 const EDITOR_EMAILS = [
@@ -135,6 +137,9 @@ function getAccessRole(userRole, email, designationLabel) {
   if (ARCHIVAL_MANAGER_EMAILS.includes(normalizedEmail)) {
     return 'archival_manager'
   }
+  if (ONLINE_ACCOUNTS_MANAGER_EMAILS.includes(normalizedEmail)) {
+    return 'online_accounts_manager'
+  }
 
   // Fall back to designation_label if email not in specific lists
   if (designationLabel) {
@@ -154,6 +159,9 @@ function getAccessRole(userRole, email, designationLabel) {
     }
     if (label.includes('archival manager') || label.includes('archive manager')) {
       return 'archival_manager'
+    }
+    if (label.includes('online accounts manager')) {
+      return 'online_accounts_manager'
     }
   }
 
@@ -189,6 +197,9 @@ function getDesignationLabel(email) {
   if (ARCHIVAL_MANAGER_EMAILS.includes(normalizedEmail)) {
     return 'Archival Manager'
   }
+  if (ONLINE_ACCOUNTS_MANAGER_EMAILS.includes(normalizedEmail)) {
+    return 'Online Accounts Manager'
+  }
 
   return null
 }
@@ -206,13 +217,14 @@ function getUserRole(email) {
     return 'admin'
   }
 
-  // 2. Content Administrators - EIC, Technical Editor, Creative Director, Chief Adviser, Archive Managers
+  // 2. Content Administrators - EIC, Technical Editor, Creative Director, Chief Adviser, Archive Managers, Online Accounts Manager
   if (
     EDITOR_IN_CHIEF_EMAILS.includes(normalizedEmail) ||
     TECHNICAL_EDITOR_EMAILS.includes(normalizedEmail) ||
     CREATIVE_DIRECTOR_EMAILS.includes(normalizedEmail) ||
     CHIEF_ADVISER_EMAILS.includes(normalizedEmail) ||
     ARCHIVAL_MANAGER_EMAILS.includes(normalizedEmail) ||
+    ONLINE_ACCOUNTS_MANAGER_EMAILS.includes(normalizedEmail) ||
     EDITOR_EMAILS.includes(normalizedEmail)
   ) {
     return 'editor'

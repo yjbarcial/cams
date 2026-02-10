@@ -134,7 +134,11 @@ const requireArchivalManager = (to, from, next) => {
   const accessRole = localStorage.getItem('accessRole')
   const userEmail = localStorage.getItem('userEmail')
 
-  if (accessRole === 'archival_manager' || (userEmail && adminEmails.includes(userEmail))) {
+  if (
+    accessRole === 'archival_manager' ||
+    accessRole === 'online_accounts_manager' ||
+    (userEmail && adminEmails.includes(userEmail))
+  ) {
     next()
   } else {
     showAccessDenied('archival_manager')

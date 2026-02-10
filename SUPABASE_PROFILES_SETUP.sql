@@ -179,7 +179,7 @@ INSERT INTO public.profiles (
   ('Missi Vidka M.', 'Santillan', 'missividka.santillan@carsu.edu.ph', 'Opinion Writer', 'Literary Editor', 'writer', 'active', 'member'),
   ('Elaine Pearl M.', 'Silagan', 'elainepearl.silagan@carsu.edu.ph', 'Photojournalist', 'Sr. Cinematographer', 'artist', 'active', 'member'),
   ('Samuel Lhoide G.', 'Ursales', 'samuellhoide.ursales@carsu.edu.ph', 'Literary Writer', NULL, 'writer', 'active', 'member'),
-  ('Kent Adriane', 'Vinatero', 'kentadriane.vinatero@carsu.edu.ph', 'Videographer', NULL, 'artist', 'active', 'member')
+  ('Kent Adriane', 'Vinatero', 'kentadriane.vinatero@carsu.edu.ph', 'Videographer', 'Online Accounts Manager', 'artist', 'active', 'editor')
 ON CONFLICT (email) 
 DO UPDATE SET
   first_name = EXCLUDED.first_name,

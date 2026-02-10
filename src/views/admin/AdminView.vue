@@ -126,11 +126,13 @@ const loadAllProjects = async () => {
   try {
     console.log('🔍 Fetching all projects from Supabase...')
 
-    // Fetch only published projects with user profile information
-    const { data: apiProjects, error } = await supabase
-      .from('projects')
-      .select(
-        `
+    // Get user's access role to determine which projects to show
+    const accessRole = localStorage.getItem('accessRole')
+    const userRole = localStorage.getItem('userRole')
+
+    // Build query based on user role
+    let query = supabase.from('projects').select(
+      `
         *,
         profiles!created_by (
           id,
@@ -139,9 +141,40 @@ const loadAllProjects = async () => {
           last_name
         )
       `,
-      )
-      .eq('status', 'Published')
-      .order('created_at', { ascending: false })
+    )
+
+    // Filter projects based on user role
+    if (userRole === 'admin') {
+      // System admins see only published projects
+      query = query.eq('status', 'Published')
+    } else if (userRole === 'editor') {
+      // Content administrators see projects at their workflow stage
+      if (accessRole === 'online_accounts_manager') {
+        // Online Accounts Manager sees: to_online_accounts_manager and for_publish for 'other' projects
+        query = query.or(
+          'status.eq.to_online_accounts_manager,and(status.eq.For Publish,project_type.eq.other)',
+        )
+      } else if (accessRole === 'archival_manager') {
+        // Archival Managers see: for_publish for non-'other' projects
+        query = query.and('status.eq.For Publish').neq('project_type', 'other')
+      } else if (accessRole === 'editor_in_chief') {
+        query = query.eq('status', 'to_editor_in_chief')
+      } else if (accessRole === 'technical_editor' || accessRole === 'creative_director') {
+        query = query.or('status.eq.to_technical_editor,status.eq.to_creative_director')
+      } else if (accessRole === 'chief_adviser') {
+        query = query.eq('status', 'to_chief_adviser')
+      } else {
+        // Default for other editors: show published
+        query = query.eq('status', 'Published')
+      }
+    } else {
+      // Other roles (section_head, member) see only published projects
+      query = query.eq('status', 'Published')
+    }
+
+    query = query.order('created_at', { ascending: false })
+
+    const { data: apiProjects, error } = await query
 
     if (error) {
       console.error('❌ Supabase error:', error)
