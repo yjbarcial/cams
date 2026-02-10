@@ -360,7 +360,8 @@ const saveEdit = async () => {
     await projectsService.update(editingProject.value.id, {
       title: editingProject.value.title,
       description: editingProject.value.description,
-      deadline: editingProject.value.deadline,
+      due_date: editingProject.value.deadline || editingProject.value.due_date || null,
+      status: editingProject.value.status,
     })
 
     const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
