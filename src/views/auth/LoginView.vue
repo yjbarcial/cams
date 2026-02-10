@@ -561,7 +561,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 .content {
   position: relative;
   z-index: 1;
-  padding: 48px 12px 28px;
+  padding: 48px 12px 80px;
 }
 
 .logo {
