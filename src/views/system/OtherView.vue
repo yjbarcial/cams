@@ -332,7 +332,7 @@ const canEditProject = (project) => {
     return true
   }
 
-  // Check if user is assigned as section head for THIS specific project
+  // Assigned section heads can edit their own projects
   if (userRole === 'section_head') {
     if (project.sectionHeadId && userId) {
       return parseInt(project.sectionHeadId) === parseInt(userId)
@@ -340,16 +340,7 @@ const canEditProject = (project) => {
     return false
   }
 
-  // Editors can edit ONLY if they are NOT assigned as writer/artist to this project
-  if (userRole === 'editor') {
-    // If editor is assigned as writer/artist to this project, they cannot edit
-    if (project.memberIds && userId && project.memberIds.includes(parseInt(userId))) {
-      return false
-    }
-    return true
-  }
-
-  // Members (writers/artists) cannot edit from the list view
+  // All other users cannot edit from the list view
   return false
 }
 
