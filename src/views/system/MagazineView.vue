@@ -571,7 +571,7 @@ const cancelBulkDelete = () => {
 
         <!-- Projects Table -->
         <v-container fluid class="projects-table pa-0">
-          <v-row class="table-header" no-gutters>
+          <v-row class="table-header" :class="{ 'no-checkbox': !isAdmin }" no-gutters>
             <v-col v-if="isAdmin" class="header-cell checkbox-header" cols="auto">
               <v-checkbox v-model="selectAll" hide-details density="compact" color="primary" />
             </v-col>
@@ -587,6 +587,7 @@ const cancelBulkDelete = () => {
               v-for="project in filteredProjects"
               :key="project.id"
               class="table-row"
+              :class="{ 'no-checkbox': !isAdmin }"
               no-gutters
             >
               <v-col v-if="isAdmin" class="table-cell checkbox-cell" cols="auto">
@@ -1036,6 +1037,10 @@ const cancelBulkDelete = () => {
   grid-template-columns: 60px 2fr 1fr 1fr 1fr 120px !important;
 }
 
+.table-header.no-checkbox {
+  grid-template-columns: 2fr 1fr 1fr 1fr 120px !important;
+}
+
 .header-cell {
   padding: 20px 20px !important;
   font-weight: 600 !important;
@@ -1068,6 +1073,10 @@ const cancelBulkDelete = () => {
   display: grid !important;
   grid-template-columns: 60px 2fr 1fr 1fr 1fr 120px !important;
   align-items: center !important;
+}
+
+.table-row.no-checkbox {
+  grid-template-columns: 2fr 1fr 1fr 1fr 120px !important;
 }
 
 .checkbox-cell {
