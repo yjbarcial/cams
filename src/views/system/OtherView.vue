@@ -153,6 +153,11 @@ const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
 
+// Snackbar for delete success
+const showSnackbar = ref(false)
+const snackbarMessage = ref('')
+const snackbarColor = ref('success')
+
 // Bulk delete functionality
 const selectedProjects = ref([])
 const showBulkDeleteConfirm = ref(false)
@@ -404,23 +409,31 @@ const startDelete = (project) => {
 }
 
 const confirmDelete = async () => {
-  if (projectToDelete.value) {
-    try {
-      // Delete via Supabase
-      await projectsService.delete(projectToDelete.value.id)
+  if (!projectToDelete.value) return
 
-      // Delete all notifications related to this project
-      await deleteProjectNotifications(projectToDelete.value.id)
+  // Store the project ID before any async operations that might clear projectToDelete
+  const projectId = projectToDelete.value.id
 
-      // Remove from local state
-      projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
+  try {
+    // Delete via Supabase
+    await projectsService.delete(projectId)
 
-      projectToDelete.value = null
-      showDeleteConfirm.value = false
-    } catch (error) {
-      console.error('Error deleting project:', error)
-      alert('Failed to delete project: ' + (error.error?.message || error.message))
-    }
+    // Delete all notifications related to this project
+    await deleteProjectNotifications(projectId)
+
+    // Remove from local state
+    projects.value = projects.value.filter((p) => p.id !== projectId)
+
+    projectToDelete.value = null
+    showDeleteConfirm.value = false
+
+    // Show success notification
+    snackbarMessage.value = 'Project deleted successfully'
+    snackbarColor.value = 'success'
+    showSnackbar.value = true
+  } catch (error) {
+    console.error('Error deleting project:', error)
+    alert('Failed to delete project: ' + (error.error?.message || error.message))
   }
 }
 
@@ -830,6 +843,10 @@ const cancelBulkDelete = () => {
     </v-dialog>
 
     <Footer />
+
+    <v-snackbar v-model="showSnackbar" :color="snackbarColor" timeout="3000">
+      {{ snackbarMessage }}
+    </v-snackbar>
   </v-app>
 </template>
 

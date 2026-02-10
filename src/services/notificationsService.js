@@ -3,6 +3,29 @@
 import { isPushNotificationsEnabled, isEmailNotificationsEnabled } from './settingsService.js'
 import { formatStatus } from '@/utils/statusFormatter.js'
 
+// System Admin emails for displaying "Admin" instead of names
+const ADMIN_EMAILS = [
+  'yssahjulianah.barcial@carsu.edu.ph',
+  'lovellhudson.clavel@carsu.edu.ph',
+  'altheaguila.gorres@carsu.edu.ph',
+]
+
+/**
+ * Get display name for notifications - returns "Admin" if user is an admin, otherwise returns the name
+ * @param {string} nameOrEmail - User name or email
+ * @returns {string} Display name for notifications
+ */
+const getNotificationDisplayName = (nameOrEmail) => {
+  if (!nameOrEmail) return 'System'
+
+  // Check if the name/email matches an admin email (case-insensitive)
+  const isAdmin = ADMIN_EMAILS.some((adminEmail) =>
+    nameOrEmail.toLowerCase().includes(adminEmail.toLowerCase()),
+  )
+
+  return isAdmin ? 'Admin' : nameOrEmail
+}
+
 /**
  * Get all notifications for the current user
  * @returns {Array} Array of notification objects for current user
@@ -159,6 +182,47 @@ export const createNotification = async (notificationData) => {
       return null
     }
 
+    // Get ALL notifications from localStorage (not filtered)
+    const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
+
+    // Check for duplicate notifications within the last 5 seconds
+    const now = Date.now()
+    const fiveSecondsAgo = now - 5000
+    const normalizedRecipientEmail = notificationData.recipientEmail?.toLowerCase().trim()
+
+    const isDuplicate = allNotifications.some((existingNotif) => {
+      const existingTimestamp = new Date(existingNotif.timestamp).getTime()
+      const existingRecipientEmail = existingNotif.recipientEmail?.toLowerCase().trim()
+
+      // Check if notification is within 5 seconds and has matching content
+      const isRecent = existingTimestamp > fiveSecondsAgo
+      const sameTitle = existingNotif.title === notificationData.title
+      const sameDescription = existingNotif.description === notificationData.description
+      const sameProject = existingNotif.projectId === notificationData.projectId
+      const sameRecipient = existingRecipientEmail === normalizedRecipientEmail
+      const sameType = existingNotif.type === notificationData.type
+
+      const matches =
+        isRecent && sameTitle && sameDescription && sameProject && sameRecipient && sameType
+
+      if (matches) {
+        console.log('🚫 DUPLICATE NOTIFICATION DETECTED and prevented:', {
+          title: notificationData.title,
+          recipient: notificationData.recipientEmail,
+          projectId: notificationData.projectId,
+          existingId: existingNotif.id,
+          timeGap: now - existingTimestamp,
+        })
+      }
+
+      return matches
+    })
+
+    // If duplicate found, return null without creating
+    if (isDuplicate) {
+      return null
+    }
+
     const notification = {
       id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: notificationData.type || 'Info',
@@ -177,8 +241,13 @@ export const createNotification = async (notificationData) => {
       workflowLabel: notificationData.workflowLabel || null, // Workflow label for admins
     }
 
-    // Get ALL notifications from localStorage (not filtered)
-    const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
+    console.log('✨ Creating NEW notification:', {
+      id: notification.id,
+      title: notification.title,
+      recipient: notification.recipientEmail,
+      projectId: notification.projectId,
+    })
+
     allNotifications.unshift(notification)
 
     // Keep only last 100 notifications to prevent storage bloat
@@ -398,11 +467,12 @@ export const createStatusChangeNotification = ({
 
   // Get human-readable status name
   const statusDisplay = getStatusDisplayName(newStatus)
+  const displayName = getNotificationDisplayName(actionBy)
 
   // Determine notification type and description based on status change
   if (newStatus === 'To Section Head' || newStatus === 'to_section_head') {
     type = 'Request'
-    description = `${actionBy} submitted "${projectTitle}" for ${statusDisplay} review.`
+    description = `${displayName} submitted "${projectTitle}" for ${statusDisplay} review.`
   } else if (
     newStatus === 'To Technical Editor' ||
     newStatus === 'to_technical_editor' ||
@@ -413,13 +483,13 @@ export const createStatusChangeNotification = ({
     newStatus === 'to_chief_adviser'
   ) {
     type = 'Forwarded'
-    description = `${actionBy} moved "${projectTitle}" to ${statusDisplay}.`
+    description = `${displayName} moved "${projectTitle}" to ${statusDisplay}.`
   } else if (newStatus === 'For Publish' || newStatus === 'for_publish') {
     type = 'Approved'
-    description = `${actionBy} approved "${projectTitle}" for publication.`
+    description = `${displayName} approved "${projectTitle}" for publication.`
   } else if (newStatus === 'Published' || newStatus === 'published') {
     type = 'Published'
-    description = `${actionBy} published "${projectTitle}".`
+    description = `${displayName} published "${projectTitle}".`
   } else if (
     newStatus === 'Returned by Section Head' ||
     newStatus === 'returned_by_section_head' ||
@@ -433,7 +503,7 @@ export const createStatusChangeNotification = ({
     newStatus === 'returned_by_chief_adviser'
   ) {
     type = 'Returned'
-    description = `${actionBy} returned "${projectTitle}" for edits.`
+    description = `${displayName} returned "${projectTitle}" for edits.`
     if (comments) {
       description += ` ${comments}`
     }
@@ -443,17 +513,17 @@ export const createStatusChangeNotification = ({
     newStatus.includes('rejected')
   ) {
     type = 'Rejected'
-    description = `${actionBy} rejected "${projectTitle}".`
+    description = `${displayName} rejected "${projectTitle}".`
     if (comments) {
       description += ` ${comments}`
     }
   } else if (newStatus === 'Draft' || newStatus === 'draft') {
     type = 'Info'
-    description = `${actionBy} saved "${projectTitle}" as draft.`
+    description = `${displayName} saved "${projectTitle}" as draft.`
   } else {
     // Default fallback with clean status display
     type = 'Forwarded'
-    description = `${actionBy} moved "${projectTitle}" to ${statusDisplay}.`
+    description = `${displayName} moved "${projectTitle}" to ${statusDisplay}.`
     if (comments) {
       description += ` ${comments}`
     }
@@ -492,10 +562,11 @@ export const createCommentNotification = ({
   recipient,
   recipientEmail,
 }) => {
+  const displayName = getNotificationDisplayName(commentAuthor)
   return createNotification({
     type: 'Comment',
     title: `Comment on "${projectTitle}"`,
-    description: `${commentAuthor} posted a comment: "${commentText.substring(0, 100)}${commentText.length > 100 ? '...' : ''}"`,
+    description: `${displayName} posted a comment: "${commentText.substring(0, 100)}${commentText.length > 100 ? '...' : ''}"`,
     projectId,
     projectType,
     actions: [{ label: 'View', type: 'view', color: '#3b82f6' }],
@@ -513,10 +584,23 @@ export const createCommentNotification = ({
 export const getProjectInvolvedUsers = async (project) => {
   try {
     const involvedEmails = []
+    const emailSources = new Map() // Track where each email came from
     const { supabase } = await import('@/utils/supabase.js')
     const { profilesService } = await import('./supabaseService.js')
 
     console.log('🔍 Getting involved users for project:', project.id, project.title)
+
+    // Helper function to add email with source tracking
+    const addEmail = (email, source) => {
+      if (email) {
+        involvedEmails.push(email)
+        const normalizedEmail = email.toLowerCase().trim()
+        if (!emailSources.has(normalizedEmail)) {
+          emailSources.set(normalizedEmail, [])
+        }
+        emailSources.get(normalizedEmail).push(source)
+      }
+    }
 
     // 1. Get project creator's email from created_by (UUID)
     // Note: profiles.id is BIGSERIAL, not UUID, so we can't directly join
@@ -526,7 +610,7 @@ export const getProjectInvolvedUsers = async (project) => {
         // Try to get the user's email from auth
         const { data: userData } = await supabase.auth.admin.getUserById(project.created_by)
         if (userData?.user?.email) {
-          involvedEmails.push(userData.user.email)
+          addEmail(userData.user.email, 'project_creator')
           console.log('✅ Added project creator:', userData.user.email)
         }
       } catch {
@@ -540,7 +624,7 @@ export const getProjectInvolvedUsers = async (project) => {
       try {
         const sectionHeadProfile = await profilesService.getById(project.section_head_id)
         if (sectionHeadProfile?.email) {
-          involvedEmails.push(sectionHeadProfile.email)
+          addEmail(sectionHeadProfile.email, 'section_head')
           console.log('✅ Added section head:', sectionHeadProfile.email)
         }
       } catch (error) {
@@ -561,7 +645,7 @@ export const getProjectInvolvedUsers = async (project) => {
           try {
             const memberProfile = await profilesService.getById(member.user_id)
             if (memberProfile?.email) {
-              involvedEmails.push(memberProfile.email)
+              addEmail(memberProfile.email, 'project_member')
               console.log('✅ Added project member:', memberProfile.email)
             }
           } catch (error) {
@@ -594,7 +678,7 @@ export const getProjectInvolvedUsers = async (project) => {
           )
           designationProfiles.forEach((profile) => {
             if (profile.email) {
-              involvedEmails.push(profile.email)
+              addEmail(profile.email, `workflow_designation:${designation}`)
               console.log(`  ➡️ Added ${designation}:`, profile.email)
             }
           })
@@ -606,9 +690,31 @@ export const getProjectInvolvedUsers = async (project) => {
       }
     }
 
-    // Remove duplicates and empty values
-    const uniqueEmails = [...new Set(involvedEmails.filter((email) => email))]
-    console.log('📧 Total unique involved users:', uniqueEmails.length, uniqueEmails)
+    // Remove duplicates and empty values (case-insensitive for emails)
+    const emailMap = new Map()
+    involvedEmails
+      .filter((email) => email && email.trim())
+      .forEach((email) => {
+        const normalizedEmail = email.toLowerCase().trim()
+        if (!emailMap.has(normalizedEmail)) {
+          emailMap.set(normalizedEmail, email) // Keep original casing for display
+        }
+      })
+
+    const uniqueEmails = Array.from(emailMap.values())
+
+    // Log duplicate detection
+    console.log('📧 Before deduplication:', involvedEmails.length, 'emails')
+    console.log('📧 After deduplication:', uniqueEmails.length, 'emails')
+
+    // Show which emails appeared multiple times and from where
+    emailSources.forEach((sources, email) => {
+      if (sources.length > 1) {
+        console.log(`🔄 Email ${email} appeared ${sources.length} times from:`, sources)
+      }
+    })
+
+    console.log('📧 Final unique emails:', uniqueEmails)
 
     return uniqueEmails
   } catch (error) {
@@ -644,9 +750,9 @@ const getWorkflowRolesByStatus = (status) => {
  */
 const getDesignationsByStatus = (status, project = null) => {
   const designationsByStatus = {
-    // For to_section_head: Don't include 'Section Head' since we fetch specific section_head_id from the project
-    // Instead include Managing Editor and Associate Managing Editor
-    to_section_head: ['Managing Editor', 'Associate Managing Editor'],
+    // For to_section_head: Only notify the specific assigned section head (fetched separately via section_head_id)
+    // Don't notify all Managing Editors to avoid duplicate notifications
+    to_section_head: [],
     to_technical_editor: ['Technical Editor'],
     to_creative_director: ['Creative Director'],
     to_online_accounts_manager: ['Online Accounts Manager'],
@@ -697,11 +803,24 @@ export const notifyAllInvolvedUsers = async ({
     const { profilesService } = await import('./supabaseService.js')
     const currentUserEmail = localStorage.getItem('userEmail')
 
+    console.log('📬 Notifying users for project:', project.id, project.title)
+    console.log('📬 Involved emails before processing:', involvedEmails)
+
     const notifications = []
+    const notifiedEmails = new Set() // Track already notified emails
 
     for (const email of involvedEmails) {
+      const normalizedEmail = email.toLowerCase().trim()
+
+      // Skip if already notified this email
+      if (notifiedEmails.has(normalizedEmail)) {
+        console.log('⏭️ Skipping duplicate notification for:', email)
+        continue
+      }
+
       // Skip notifying the current user (person who performed the action)
-      if (email.toLowerCase() === currentUserEmail?.toLowerCase()) {
+      if (normalizedEmail === currentUserEmail?.toLowerCase().trim()) {
+        console.log('⏭️ Skipping current user:', email)
         continue
       }
 
@@ -728,6 +847,8 @@ export const notifyAllInvolvedUsers = async ({
 
       if (notification) {
         notifications.push(notification)
+        notifiedEmails.add(normalizedEmail)
+        console.log('✅ Notified:', email)
       }
     }
 
@@ -747,11 +868,12 @@ export const notifyAllInvolvedUsers = async ({
  * @param {string} params.uploadedBy - User who uploaded the file
  */
 export const notifyFileUpload = async ({ project, fileName, uploadedBy }) => {
+  const displayName = getNotificationDisplayName(uploadedBy)
   return notifyAllInvolvedUsers({
     project,
     type: 'Info',
     title: `File uploaded to "${project.title}"`,
-    description: `${uploadedBy} uploaded "${fileName}" to the project.`,
+    description: `${displayName} uploaded "${fileName}" to the project.`,
     actionBy: uploadedBy,
   })
 }
@@ -764,9 +886,10 @@ export const notifyFileUpload = async ({ project, fileName, uploadedBy }) => {
  * @param {string} params.changes - Description of changes (optional)
  */
 export const notifyProjectUpdate = async ({ project, updatedBy, changes }) => {
+  const displayName = getNotificationDisplayName(updatedBy)
   const description = changes
-    ? `${updatedBy} updated "${project.title}": ${changes}`
-    : `${updatedBy} made changes to "${project.title}".`
+    ? `${displayName} updated "${project.title}": ${changes}`
+    : `${displayName} made changes to "${project.title}".`
 
   return notifyAllInvolvedUsers({
     project,
@@ -785,11 +908,12 @@ export const notifyProjectUpdate = async ({ project, updatedBy, changes }) => {
  * @param {string} params.commentText - Comment text
  */
 export const notifyNewComment = async ({ project, commentAuthor, commentText }) => {
+  const displayName = getNotificationDisplayName(commentAuthor)
   return notifyAllInvolvedUsers({
     project,
     type: 'Comment',
     title: `New comment on "${project.title}"`,
-    description: `${commentAuthor} commented: "${commentText.substring(0, 100)}${commentText.length > 100 ? '...' : ''}"`,
+    description: `${displayName} commented: "${commentText.substring(0, 100)}${commentText.length > 100 ? '...' : ''}"`,
     actionBy: commentAuthor,
   })
 }
@@ -855,6 +979,7 @@ export const notifyStatusChange = async ({
     action,
     actionBy,
     comments,
+    callStack: new Error().stack?.split('\n').slice(1, 4).join('\n'), // Show where this was called from
   })
 
   let type = 'Info'
@@ -862,6 +987,7 @@ export const notifyStatusChange = async ({
 
   // Get human-readable status name
   const statusDisplay = getStatusDisplayName(newStatus)
+  const displayName = getNotificationDisplayName(actionBy)
 
   // Generate workflow label for admins to see the full flow
   const workflowLabel = getWorkflowLabel(oldStatus, newStatus)
@@ -870,31 +996,31 @@ export const notifyStatusChange = async ({
   if (action === 'return' || action === 'edit') {
     type = 'Returned'
     const actionText = action === 'return' ? 'returned' : 'requested edit on'
-    description = `${actionBy} ${actionText} "${project.title}" back to writer/artist.`
+    description = `${displayName} ${actionText} "${project.title}" back to writer/artist.`
     if (comments) {
       description += ` Comment: ${comments}`
     }
   } else if (newStatus?.includes('returned') || newStatus?.includes('Returned')) {
     type = 'Returned'
-    description = `${actionBy} returned "${project.title}" for edits.`
+    description = `${displayName} returned "${project.title}" for edits.`
     if (comments) {
       description += ` Comment: ${comments}`
     }
   } else if (newStatus?.includes('approved') || newStatus?.includes('Approved')) {
     type = 'Approved'
-    description = `${actionBy} approved "${project.title}".`
+    description = `${displayName} approved "${project.title}".`
   } else if (newStatus?.includes('rejected') || newStatus?.includes('Rejected')) {
     type = 'Rejected'
-    description = `${actionBy} rejected "${project.title}".`
+    description = `${displayName} rejected "${project.title}".`
     if (comments) {
       description += ` Reason: ${comments}`
     }
   } else if (newStatus === 'published' || newStatus === 'Published') {
     type = 'Published'
-    description = `${actionBy} published "${project.title}".`
+    description = `${displayName} published "${project.title}".`
   } else if (newStatus === 'to_section_head') {
     type = 'Request'
-    description = `${actionBy} submitted "${project.title}" for ${statusDisplay} review.`
+    description = `${displayName} submitted "${project.title}" for ${statusDisplay} review.`
     if (comments) {
       description += ` Comments: ${comments}`
     }
@@ -908,19 +1034,19 @@ export const notifyStatusChange = async ({
     newStatus === 'To Chief Adviser'
   ) {
     type = 'Forwarded'
-    description = `${actionBy} moved "${project.title}" to ${statusDisplay}.`
+    description = `${displayName} moved "${project.title}" to ${statusDisplay}.`
     if (comments) {
       description += ` Comments: ${comments}`
     }
   } else if (newStatus === 'for_publish' || newStatus === 'For Publish') {
     type = 'Approved'
-    description = `${actionBy} approved "${project.title}" for publication.`
+    description = `${displayName} approved "${project.title}" for publication.`
     if (comments) {
       description += ` Comments: ${comments}`
     }
   } else {
     // Default fallback with clean status display
-    description = `${actionBy} moved "${project.title}" to ${statusDisplay}.`
+    description = `${displayName} moved "${project.title}" to ${statusDisplay}.`
     if (comments) {
       description += ` Comments: ${comments}`
     }

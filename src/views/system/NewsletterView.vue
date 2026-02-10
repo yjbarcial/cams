@@ -152,6 +152,11 @@ const showEditDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const projectToDelete = ref(null)
 
+// Snackbar for delete success
+const showSnackbar = ref(false)
+const snackbarMessage = ref('')
+const snackbarColor = ref('success')
+
 // Bulk delete functionality
 const selectedProjects = ref([])
 const showBulkDeleteConfirm = ref(false)
@@ -394,18 +399,29 @@ const startDelete = (project) => {
 }
 
 const confirmDelete = async () => {
-  if (projectToDelete.value) {
-    try {
-      await projectsService.delete(projectToDelete.value.id)
+  if (!projectToDelete.value) {
+    showDeleteConfirm.value = false
+    return
+  }
 
-      // Delete all notifications related to this project
-      await deleteProjectNotifications(projectToDelete.value.id)
+  // Store project ID before deletion to avoid null reference errors
+  const projectId = projectToDelete.value.id
 
-      projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
-    } catch (error) {
-      console.error('Error deleting project:', error)
-      alert('Failed to delete project')
-    }
+  try {
+    await projectsService.delete(projectId)
+
+    // Delete all notifications related to this project
+    await deleteProjectNotifications(projectId)
+
+    projects.value = projects.value.filter((p) => p.id !== projectId)
+
+    // Show success notification
+    snackbarMessage.value = 'Project deleted successfully'
+    snackbarColor.value = 'success'
+    showSnackbar.value = true
+  } catch (error) {
+    console.error('Error deleting project:', error)
+    alert('Failed to delete project: ' + (error.message || 'Unknown error'))
   }
 
   showDeleteConfirm.value = false
@@ -846,6 +862,10 @@ const updateDueDate = (newDate) => {
     </v-dialog>
 
     <Footer />
+
+    <v-snackbar v-model="showSnackbar" :color="snackbarColor" timeout="3000">
+      {{ snackbarMessage }}
+    </v-snackbar>
   </v-app>
 </template>
 
