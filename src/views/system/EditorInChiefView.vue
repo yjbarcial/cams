@@ -174,18 +174,21 @@ const approvalActions = computed(() => {
       value: 'forward',
       text: 'Forward to Chief Adviser',
       color: 'purple',
+      icon: 'mdi-arrow-right-circle',
       disabled: false,
     },
     {
       value: 'approve',
       text: 'Approve',
       color: 'success',
+      icon: 'mdi-check-circle',
       disabled: false,
     },
     {
       value: 'publish',
       text: 'Publish',
       color: 'primary',
+      icon: 'mdi-publish',
       disabled: true,
       tooltip: 'Only Editor-in-Chief can publish after approval',
     },
@@ -363,7 +366,10 @@ const submitApproval = async () => {
     approvalPriority.value = 'Medium'
 
     if (action === 'approve') {
-      showNotification('Project approved and sent to Archival Manager for publishing!', 'success')
+      // Determine who will handle the publishing based on project type
+      const publishHandler =
+        updatedProject.project_type === 'other' ? 'Online Accounts Manager' : 'Archival Manager'
+      showNotification(`Project approved and sent to ${publishHandler} for publishing!`, 'success')
       setTimeout(() => {
         // Route based on project type
         const routePath =

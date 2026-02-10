@@ -161,14 +161,20 @@ const debouncedSave = () => {
 const approvalActions = computed(() => {
   return [
     // Return to writer button available to all
-    { value: 'return', text: 'Return to Writer/Artist', color: 'warning' },
+    {
+      value: 'return',
+      text: 'Return to Writer/Artist',
+      color: 'warning',
+      icon: 'mdi-arrow-u-left-top',
+    },
     // Request to edit for text changes
-    { value: 'edit', text: 'Request to Edit', color: 'dark' },
-    { value: 'approve', text: 'Approve', color: 'success' },
+    { value: 'edit', text: 'Request to Edit', color: 'dark', icon: 'mdi-pencil' },
+    { value: 'approve', text: 'Approve', color: 'success', icon: 'mdi-check-circle' },
     {
       value: 'publish',
       text: 'Publish',
       color: 'primary',
+      icon: 'mdi-publish',
       disabled: true,
       tooltip: 'Only Editor-in-Chief can publish after approval',
     },
