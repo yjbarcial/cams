@@ -192,7 +192,7 @@ const assignProject = async () => {
       due_date: deadline.value || null,
       status: 'draft',
       section_head_id: selectedSectionHead.value ? parseInt(selectedSectionHead.value) : null,
-      created_by: user?.id || null, // Set the creator's auth UUID
+      created_by: currentUserProfile?.id || null, // Set the creator's profile ID (bigint, not UUID)
       created_by_profile_id: currentUserProfile?.id || null, // Set the creator's profile ID
     }
 

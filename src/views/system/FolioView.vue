@@ -1005,7 +1005,7 @@ const cancelBulkDelete = () => {
 }
 
 .header-cell {
-  padding: 12px 16px !important;
+  padding: 20px 20px !important;
   font-weight: 600 !important;
   color: #2f2f2f !important;
   font-size: 14px !important;
