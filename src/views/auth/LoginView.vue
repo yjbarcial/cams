@@ -25,6 +25,7 @@ const AUTHORIZED_USERS = [
   'yssahjulianah.barcial@carsu.edu.ph',
   'lovellhudson.clavel@carsu.edu.ph',
   'altheaguila.gorres@carsu.edu.ph',
+  'paduga@carsu.edu.ph',
 
   // Section Heads
   'lexzyrrehdevonnaire.abellanosa@carsu.edu.ph',

@@ -9,9 +9,9 @@ export const register = async (req, res, next) => {
     // Check if user exists
     const existingUser = await ProfileModel.findByEmail(email);
     if (existingUser) {
-      return res.status(400).json({ 
-        success: false, 
-        error: { message: 'Email already registered' } 
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Email already registered' }
       });
     }
 
@@ -56,42 +56,43 @@ export const login = async (req, res, next) => {
       'lovellhudson.clavel@carsu.edu.ph',
       'yssahjulianah.barcial@carsu.edu.ph',
       'altheaguila.gorres@carsu.edu.ph',
+      'paduga@carsu.edu.ph',
     ];
 
     // ⭐ Check if email is from CARSU domain
     if (!email.endsWith('@carsu.edu.ph')) {
-      return res.status(403).json({ 
-        success: false, 
-        error: { message: 'Only CARSU email addresses are allowed' } 
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Only CARSU email addresses are allowed' }
       });
     }
 
     // Find user
     let user = await ProfileModel.findByEmail(email);
-    
+
     // ⭐ If user doesn't exist, auto-create them (auto-signup)
     if (!user) {
       console.log('🆕 New user detected, auto-creating profile for:', email);
-      
+
       // Determine role based on email
       const isAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
       const userRole = isAdmin ? 'admin' : 'member';
-      
+
       // Create new profile
       user = await ProfileModel.create({
         email,
         role: userRole,  // Use 'role' not 'user_role'
         status: 'active',
       });
-      
+
       console.log(`✅ Auto-created user with role: ${userRole}`);
     }
 
     // Check status
     if (user.status !== 'active') {
-      return res.status(403).json({ 
-        success: false, 
-        error: { message: 'Account is not active' } 
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Account is not active' }
       });
     }
 
