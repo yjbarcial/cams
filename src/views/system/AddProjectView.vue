@@ -67,6 +67,37 @@ const loading = ref({
   artists: false,
 })
 
+const normalizeText = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+
+const getMemberType = (user) => {
+  const positionsLabel = normalizeText(user.positions_label)
+  const designationLabel = normalizeText(user.designation_label)
+  const legacyRole = normalizeText(user.role)
+
+  if (positionsLabel.includes('writer')) return 'writer'
+  if (positionsLabel.includes('artist')) return 'artist'
+  if (designationLabel.includes('writer')) return 'writer'
+  if (designationLabel.includes('artist')) return 'artist'
+  if (legacyRole === 'writer' || legacyRole === 'artist') return legacyRole
+
+  return null
+}
+
+const isSectionHeadCandidate = (user) => {
+  const role = normalizeText(user.role)
+  const designation = normalizeText(user.designation_label)
+
+  return (
+    role === 'section_head' ||
+    designation.includes('editor-in-chief') ||
+    designation.includes('editor in chief') ||
+    designation.includes('managing editor')
+  )
+}
+
 // Load users from Supabase
 const loadUsers = async () => {
   try {
@@ -77,20 +108,9 @@ const loadUsers = async () => {
     // Fetch all users from Supabase
     const allUsers = await profilesService.getAll()
 
-    // Filter by positions_label (Writer/Artist) and role (section_head)
-    users.value.sectionHeads = allUsers.filter(
-      (u) =>
-        u.role === 'section_head' ||
-        u.role === 'Section Head' ||
-        (u.designation_label && u.designation_label.toLowerCase().includes('editor-in-chief')) ||
-        (u.designation_label && u.designation_label.toLowerCase().includes('managing editor')),
-    )
-    users.value.writers = allUsers.filter(
-      (u) => u.positions_label === 'Writer' || u.role === 'writer' || u.role === 'Writer',
-    )
-    users.value.artists = allUsers.filter(
-      (u) => u.positions_label === 'Artist' || u.role === 'artist' || u.role === 'Artist',
-    )
+    users.value.sectionHeads = allUsers.filter(isSectionHeadCandidate)
+    users.value.writers = allUsers.filter((u) => getMemberType(u) === 'writer')
+    users.value.artists = allUsers.filter((u) => getMemberType(u) === 'artist')
 
     console.log('✅ Users loaded from Supabase:', {
       sectionHeads: users.value.sectionHeads.length,
