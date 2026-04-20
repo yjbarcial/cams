@@ -73,8 +73,8 @@ onMounted(async () => {
     // Already logged in - redirect immediately
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem('userEmail', session.user.email)
-    // Don't await - let it run in background, redirect now
-    addUserToProfiles(session.user)
+    // Ensure role/accessRole are available before redirecting
+    await addUserToProfiles(session.user)
     router.replace('/dashboard')
     return
   }
@@ -113,7 +113,7 @@ async function signInWithPassword() {
 
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem('userEmail', data.user.email)
-    addUserToProfiles(data.user)
+    await addUserToProfiles(data.user)
     router.replace('/dashboard')
   } catch (error) {
     if (error.message?.includes('Invalid login credentials')) {
@@ -179,7 +179,7 @@ async function signUpWithPassword() {
     if (data.user && data.session) {
       localStorage.setItem('isLoggedIn', 'true')
       localStorage.setItem('userEmail', data.user.email)
-      addUserToProfiles(data.user)
+      await addUserToProfiles(data.user)
       successMessage.value = 'Account created successfully! Redirecting...'
 
       // Short delay to show success message

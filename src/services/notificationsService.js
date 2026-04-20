@@ -3,20 +3,8 @@
 import { isPushNotificationsEnabled, isEmailNotificationsEnabled } from './settingsService.js'
 import { formatStatus } from '@/utils/statusFormatter.js'
 
-// System Admin emails for displaying "Admin" instead of names
-const ADMIN_EMAILS = [
-  'yssahjulianah.barcial@carsu.edu.ph',
-  'lovellhudson.clavel@carsu.edu.ph',
-  'altheaguila.gorres@carsu.edu.ph',
-]
-
-// Direct email lookups for all workflow roles - mirrors autoAddUser.js
-const TECHNICAL_EDITOR_EMAILS = ['jonee.elopre@carsu.edu.ph']
-const CREATIVE_DIRECTOR_EMAILS = ['levibrian.cejuela@carsu.edu.ph']
-const EDITOR_IN_CHIEF_EMAILS = ['melede.ganoy@carsu.edu.ph']
-const CHIEF_ADVISER_EMAILS = ['julesleo.reserva@carsu.edu.ph']
-const ARCHIVAL_MANAGER_EMAILS = ['eizzielmarie.bacoy@carsu.edu.ph']
-const ONLINE_ACCOUNTS_MANAGER_EMAILS = ['kentadriane.vinatero@carsu.edu.ph']
+// Note: All role-based access is now database-driven via designation_label and role fields
+// See userDisplay.js for centralized admin email checking if needed
 
 /**
  * Get display name for notifications
@@ -116,26 +104,15 @@ export const getNotifications = async () => {
       return []
     }
 
-    // System Admins - can see ALL notifications
-    const ADMIN_EMAILS = [
-      'yssahjulianah.barcial@carsu.edu.ph',
-      'lovellhudson.clavel@carsu.edu.ph',
-      'altheaguila.gorres@carsu.edu.ph',
-    ]
-
-    // Check if current user is a system admin by email or role
-    const currentUserRole = localStorage.getItem('userRole')
-    const isAdminByEmail = ADMIN_EMAILS.some(
-      (email) => email.toLowerCase() === currentUserEmail.toLowerCase(),
-    )
-    const isAdminByRole = currentUserRole === 'admin'
-    const isAdmin = isAdminByEmail || isAdminByRole
+    // System Admins can see all notifications.
+    // Fallback to accessRole to handle early-login timing before userRole is written.
+    const currentAccessRole = localStorage.getItem('accessRole')
+    const currentUserRole = localStorage.getItem('userRole') || currentAccessRole
+    const isAdmin = currentUserRole === 'admin' || currentAccessRole === 'admin'
 
     console.log('👤 Current user:', {
       email: currentUserEmail,
       role: currentUserRole,
-      isAdminByEmail,
-      isAdminByRole,
       isAdmin,
     })
 
@@ -165,7 +142,6 @@ export const getNotifications = async () => {
     }
 
     // Also check accessRole from localStorage for more precise matching
-    const currentAccessRole = localStorage.getItem('accessRole')
 
     // Direct email lists for source-based matching
     const EMAIL_BY_SOURCE = {
@@ -335,38 +311,6 @@ export const createNotification = async (notificationData) => {
     let description = notificationData.description || ''
     const createdByName = notificationData.createdBy || 'System'
 
-    // Check if recipient is an admin
-    const recipientIsAdmin =
-      notificationData.recipientEmail &&
-      ADMIN_EMAILS.some(
-        (adminEmail) => adminEmail.toLowerCase() === notificationData.recipientEmail.toLowerCase(),
-      )
-
-    // Check if creator is an admin
-    const creatorIsAdmin = ADMIN_EMAILS.some((adminEmail) =>
-      createdByName.toLowerCase().includes(adminEmail.toLowerCase()),
-    )
-
-    // If recipient is NOT admin and creator IS admin, replace admin name with "Admin"
-    if (!recipientIsAdmin && creatorIsAdmin) {
-      // Find and replace any admin name in the description with "Admin"
-      ADMIN_EMAILS.forEach((adminEmail) => {
-        const adminParts = adminEmail.split('@')[0].split('.')
-        // Try to match common name formats in the description
-        const possibleNames = [
-          adminParts.join(' '),
-          adminParts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' '),
-          createdByName,
-        ]
-
-        possibleNames.forEach((name) => {
-          if (description.includes(name)) {
-            description = description.replace(new RegExp(name, 'g'), 'Admin')
-          }
-        })
-      })
-    }
-
     const notification = {
       id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: notificationData.type || 'Info',
@@ -455,21 +399,12 @@ export const markAllAsRead = async () => {
     // Get ALL notifications from localStorage (not filtered)
     const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
     const currentUserEmail = localStorage.getItem('userEmail')
-    const currentUserRole = localStorage.getItem('userRole')
+    const currentAccessRole = localStorage.getItem('accessRole')
+    const currentUserRole = localStorage.getItem('userRole') || currentAccessRole
 
     // System Admins - can see ALL notifications
-    const ADMIN_EMAILS = [
-      'yssahjulianah.barcial@carsu.edu.ph',
-      'lovellhudson.clavel@carsu.edu.ph',
-      'altheaguila.gorres@carsu.edu.ph',
-    ]
-
-    // Check if current user is admin
-    const isAdminByEmail = ADMIN_EMAILS.some(
-      (email) => email.toLowerCase() === currentUserEmail?.toLowerCase(),
-    )
-    const isAdminByRole = currentUserRole === 'admin'
-    const isAdmin = isAdminByEmail || isAdminByRole
+    // Check if current user is admin via database role (source of truth)
+    const isAdmin = currentUserRole === 'admin' || currentAccessRole === 'admin'
 
     if (isAdmin) {
       // Admins: Mark only Published notifications as read
@@ -1202,29 +1137,7 @@ const getTargetedRecipients = async (project, newStatus, action) => {
       }
     }
 
-    // Direct email lookups for ALL workflow roles (most reliable)
-    if (normalizedStatus === 'to_technical_editor') {
-      TECHNICAL_EDITOR_EMAILS.forEach((email) => addRecipient(email, 'technical_editor'))
-    }
-    if (normalizedStatus === 'to_creative_director') {
-      CREATIVE_DIRECTOR_EMAILS.forEach((email) => addRecipient(email, 'creative_director'))
-    }
-    if (normalizedStatus === 'to_editor_in_chief') {
-      EDITOR_IN_CHIEF_EMAILS.forEach((email) => addRecipient(email, 'editor_in_chief'))
-    }
-    if (normalizedStatus === 'to_chief_adviser') {
-      CHIEF_ADVISER_EMAILS.forEach((email) => addRecipient(email, 'chief_adviser'))
-    }
-    if (normalizedStatus === 'to_archival_manager' || normalizedStatus === 'for_publish') {
-      ARCHIVAL_MANAGER_EMAILS.forEach((email) => addRecipient(email, 'archival_manager'))
-    }
-    if (normalizedStatus === 'to_online_accounts_manager') {
-      ONLINE_ACCOUNTS_MANAGER_EMAILS.forEach((email) =>
-        addRecipient(email, 'online_accounts_manager'),
-      )
-    }
-
-    // Also query by designation_label as fallback (for any roles not in direct email lists)
+    // Query recipients by designation_label (database-driven, source of truth)
     for (const designation of designations) {
       try {
         const { data: profiles } = await supabase

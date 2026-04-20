@@ -1,22 +1,22 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
-import ProfileModel from '../models/profile.model.js';
+import jwt from 'jsonwebtoken'
+import bcrypt from 'bcrypt'
+import ProfileModel from '../models/profile.model.js'
 
 export const register = async (req, res, next) => {
   try {
-    const { email, password, first_name, last_name, phone } = req.body;
+    const { email, password, first_name, last_name, phone } = req.body
 
     // Check if user exists
-    const existingUser = await ProfileModel.findByEmail(email);
+    const existingUser = await ProfileModel.findByEmail(email)
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Email already registered' }
-      });
+        error: { message: 'Email already registered' },
+      })
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10)
 
     // Create profile
     const profile = await ProfileModel.create({
@@ -25,75 +25,64 @@ export const register = async (req, res, next) => {
       last_name,
       phone,
       role: 'member',
-      status: 'active'
-    });
+      status: 'active',
+    })
 
     // Generate token
     const token = jwt.sign(
       { userId: profile.id, email: profile.email, role: profile.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+    )
 
     res.status(201).json({
       success: true,
       data: {
         user: profile,
-        token
-      }
-    });
+        token,
+      },
+    })
   } catch (error) {
-    next(error);
+    next(error)
   }
-};
+}
 
 export const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body
 
-    // ⭐ Admin emails - automatically get Admin role
-    const ADMIN_EMAILS = [
-      'lovellhudson.clavel@carsu.edu.ph',
-      'yssahjulianah.barcial@carsu.edu.ph',
-      'altheaguila.gorres@carsu.edu.ph',
-      'paduga@carsu.edu.ph',
-    ];
-
-    // ⭐ Check if email is from CARSU domain
+    // Check if email is from CARSU domain
     if (!email.endsWith('@carsu.edu.ph')) {
       return res.status(403).json({
         success: false,
-        error: { message: 'Only CARSU email addresses are allowed' }
-      });
+        error: { message: 'Only CARSU email addresses are allowed' },
+      })
     }
 
     // Find user
-    let user = await ProfileModel.findByEmail(email);
+    let user = await ProfileModel.findByEmail(email)
 
-    // ⭐ If user doesn't exist, auto-create them (auto-signup)
+    // If user doesn't exist, auto-create them (auto-signup)
+    // All new users start as 'member'; admins manage roles via admin panel
     if (!user) {
-      console.log('🆕 New user detected, auto-creating profile for:', email);
+      console.log('🆕 New user detected, auto-creating profile for:', email)
 
-      // Determine role based on email
-      const isAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
-      const userRole = isAdmin ? 'admin' : 'member';
-
-      // Create new profile
+      // Create new profile with default 'member' role
       user = await ProfileModel.create({
         email,
-        role: userRole,  // Use 'role' not 'user_role'
+        role: 'member', // All new users start as member
         status: 'active',
-      });
+      })
 
-      console.log(`✅ Auto-created user with role: ${userRole}`);
+      console.log(`✅ Auto-created user with role: member`)
     }
 
     // Check status
     if (user.status !== 'active') {
       return res.status(403).json({
         success: false,
-        error: { message: 'Account is not active' }
-      });
+        error: { message: 'Account is not active' },
+      })
     }
 
     // ⭐ For CARSU emails, we don't verify password - it's SSO-like behavior
@@ -103,11 +92,11 @@ export const login = async (req, res, next) => {
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+    )
 
     // Update last active/login
-    await ProfileModel.updateLastActive(user.id);
+    await ProfileModel.updateLastActive(user.id)
 
     res.json({
       success: true,
@@ -125,40 +114,40 @@ export const login = async (req, res, next) => {
           avatar_url: user.avatar_url,
           status: user.status,
         },
-        token
-      }
-    });
+        token,
+      },
+    })
   } catch (error) {
-    next(error);
+    next(error)
   }
-};
+}
 
 export const verifyToken = async (req, res, next) => {
   try {
     res.json({
       success: true,
       data: {
-        user: req.user
-      }
-    });
+        user: req.user,
+      },
+    })
   } catch (error) {
-    next(error);
+    next(error)
   }
-};
+}
 
 export const refreshToken = async (req, res, next) => {
   try {
     const token = jwt.sign(
       { userId: req.user.id, email: req.user.email, role: req.user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+    )
 
     res.json({
       success: true,
-      data: { token }
-    });
+      data: { token },
+    })
   } catch (error) {
-    next(error);
+    next(error)
   }
-};
+}

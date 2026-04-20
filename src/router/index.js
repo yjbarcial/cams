@@ -22,14 +22,6 @@ import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 import ArchivalManagerView from '@/views/system/ArchivalManagerView.vue'
 import { showAccessDenied } from '@/stores/accessDenied'
 
-// SYSTEM ADMINS ONLY - Access to admin panel and system settings
-// These are NOT content admins (EIC, Technical Editor, etc.)
-const adminEmails = [
-  'yssahjulianah.barcial@carsu.edu.ph',
-  'lovellhudson.clavel@carsu.edu.ph',
-  'altheaguila.gorres@carsu.edu.ph',
-]
-
 const getEffectiveUserRole = () => {
   return localStorage.getItem('debugRole') || localStorage.getItem('userRole')
 }
@@ -52,8 +44,8 @@ const requireAdmin = (to, from, next) => {
     return
   }
 
-  const userEmail = localStorage.getItem('userEmail')
-  if (!userEmail || !adminEmails.includes(userEmail)) {
+  const userRole = getEffectiveUserRole()
+  if (userRole !== 'admin') {
     // Not a System Admin - redirect to dashboard
     next({ name: 'dashboard' })
   } else {
@@ -71,10 +63,9 @@ const requireSectionHead = (to, from, next) => {
   }
 
   const userRole = getEffectiveUserRole()
-  const userEmail = localStorage.getItem('userEmail')
 
   // Allow if admin or section head
-  if (userRole === 'section_head' || (userEmail && adminEmails.includes(userEmail))) {
+  if (userRole === 'section_head' || userRole === 'admin') {
     next()
   } else {
     showAccessDenied('section_head')
@@ -91,10 +82,9 @@ const requireEditor = (to, from, next) => {
   }
 
   const userRole = getEffectiveUserRole()
-  const userEmail = localStorage.getItem('userEmail')
 
   // Allow if editor (content admin) or system admin
-  if (userRole === 'editor' || (userEmail && adminEmails.includes(userEmail))) {
+  if (userRole === 'editor' || userRole === 'admin') {
     next()
   } else {
     showAccessDenied('editor')
@@ -106,9 +96,9 @@ const requireEditor = (to, from, next) => {
 const requireEditorInChief = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
   const accessRole = localStorage.getItem('accessRole')
-  const userEmail = localStorage.getItem('userEmail')
+  const userRole = getEffectiveUserRole()
 
-  if (accessRole === 'editor_in_chief' || (userEmail && adminEmails.includes(userEmail))) {
+  if (accessRole === 'editor_in_chief' || userRole === 'admin') {
     next()
   } else {
     showAccessDenied('editor_in_chief')
@@ -119,9 +109,9 @@ const requireEditorInChief = (to, from, next) => {
 const requireChiefAdviser = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
   const accessRole = localStorage.getItem('accessRole')
-  const userEmail = localStorage.getItem('userEmail')
+  const userRole = getEffectiveUserRole()
 
-  if (accessRole === 'chief_adviser' || (userEmail && adminEmails.includes(userEmail))) {
+  if (accessRole === 'chief_adviser' || userRole === 'admin') {
     next()
   } else {
     showAccessDenied('chief_adviser')
@@ -132,12 +122,12 @@ const requireChiefAdviser = (to, from, next) => {
 const requireArchivalManager = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
   const accessRole = localStorage.getItem('accessRole')
-  const userEmail = localStorage.getItem('userEmail')
+  const userRole = getEffectiveUserRole()
 
   if (
     accessRole === 'archival_manager' ||
     accessRole === 'online_accounts_manager' ||
-    (userEmail && adminEmails.includes(userEmail))
+    userRole === 'admin'
   ) {
     next()
   } else {
@@ -149,9 +139,9 @@ const requireArchivalManager = (to, from, next) => {
 const requireTechnicalEditor = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
   const accessRole = localStorage.getItem('accessRole')
-  const userEmail = localStorage.getItem('userEmail')
+  const userRole = getEffectiveUserRole()
 
-  if (accessRole === 'technical_editor' || (userEmail && adminEmails.includes(userEmail))) {
+  if (accessRole === 'technical_editor' || userRole === 'admin') {
     next()
   } else {
     showAccessDenied('technical_editor')
@@ -163,12 +153,12 @@ const requireTechnicalEditor = (to, from, next) => {
 const requireEditorReview = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
   const accessRole = localStorage.getItem('accessRole')
-  const userEmail = localStorage.getItem('userEmail')
+  const userRole = getEffectiveUserRole()
 
   if (
     accessRole === 'technical_editor' ||
     accessRole === 'creative_director' ||
-    (userEmail && adminEmails.includes(userEmail))
+    userRole === 'admin'
   ) {
     next()
   } else {
@@ -196,14 +186,9 @@ const requireMember = (to, from, next) => {
   }
 
   const userRole = getEffectiveUserRole()
-  const userEmail = localStorage.getItem('userEmail')
 
   // Allow if member (writer/artist) or admin
-  if (
-    userRole === 'member' ||
-    userRole === 'admin' ||
-    (userEmail && adminEmails.includes(userEmail))
-  ) {
+  if (userRole === 'member' || userRole === 'admin') {
     next()
   } else {
     showAccessDenied('member')

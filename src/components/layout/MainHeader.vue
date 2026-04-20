@@ -52,18 +52,10 @@ const handleStorageChange = (e) => {
   }
 }
 
-// SYSTEM ADMINS ONLY - Access to admin panel and system settings
-// These are NOT content admins (EIC, Technical Editor, etc.)
-const adminEmails = [
-  'yssahjulianah.barcial@carsu.edu.ph',
-  'lovellhudson.clavel@carsu.edu.ph',
-  'altheaguila.gorres@carsu.edu.ph',
-]
-
-// Check if current user is a System Admin
+// Check if current user is a System Admin (database-driven)
 const isAdmin = computed(() => {
-  const userEmail = localStorage.getItem('userEmail')
-  return userEmail && adminEmails.includes(userEmail)
+  const userRole = localStorage.getItem('userRole')
+  return userRole === 'admin'
 })
 
 const handleProfile = () => {

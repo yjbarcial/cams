@@ -7,13 +7,6 @@ import { projectsService, profilesService } from '@/services/supabaseService'
 import { createNotification } from '@/services/notificationsService'
 import { supabase } from '@/utils/supabase'
 
-// System Admin emails for displaying "Admin" in notifications
-const ADMIN_EMAILS = [
-  'yssahjulianah.barcial@carsu.edu.ph',
-  'lovellhudson.clavel@carsu.edu.ph',
-  'altheaguila.gorres@carsu.edu.ph',
-]
-
 // Accept optional prop; also support reading from route param/query
 const props = defineProps({ type: { type: String, default: '' } })
 const route = useRoute()
