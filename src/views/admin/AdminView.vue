@@ -26,7 +26,6 @@ const refreshing = ref(false)
 const error = ref(null)
 let projectsSubscription = null
 const search = ref('')
-const departmentFilter = ref('all')
 const showAllDialog = ref(false)
 const showAllType = ref('')
 const allRecords = ref([])
@@ -39,6 +38,16 @@ const showDeleteDialog = ref(false)
 const publicationToDelete = ref(null)
 const showDeleteProjectDialog = ref(false)
 const projectToDelete = ref(null)
+
+// User edit dialog state
+const showEditUserDialog = ref(false)
+const editingUser = ref(null)
+const editFormData = ref({
+  role: '',
+  designation_label: '',
+  positions_label: '',
+})
+const editLoading = ref(false)
 
 // Notification state
 const showNotification = ref(false)
@@ -65,9 +74,6 @@ const handleUploadSuccess = (message) => {
 const handleUploadError = (message) => {
   displayNotification(message || 'Upload failed', 'error')
 }
-
-// Departments for filtering
-const departments = ['Creatives', 'Scribes']
 
 const activeTab = ref('users')
 
@@ -329,13 +335,6 @@ const deleteProject = async () => {
   }
 }
 
-// System Admin emails to hide from user management
-const ADMIN_EMAILS = [
-  'lovellhudson.clavel@carsu.edu.ph',
-  'yssahjulianah.barcial@carsu.edu.ph',
-  'altheaguila.gorres@carsu.edu.ph',
-]
-
 // Fetch real users from Supabase
 const fetchRealUsers = async () => {
   try {
@@ -350,23 +349,30 @@ const fetchRealUsers = async () => {
       return []
     }
 
-    // ⭐ Filter out system admin emails
-    const regularUsers = data.filter(
-      (user) => user.email && !ADMIN_EMAILS.includes(user.email.toLowerCase()),
-    )
+    // Filter out admins from user management (show only regular users)
+    const regularUsers = data.filter((user) => user.role !== 'admin')
 
-    console.log('✅ Found users:', regularUsers.length, '(excluding system admins)')
+    console.log('✅ Found users:', regularUsers.length, '(excluding admins)')
 
-    return regularUsers.map((user) => ({
-      id: user.id,
-      full_name: user.full_name || 'N/A',
-      email: user.email,
-      department: user.department || 'N/A',
-      role: user.role || 'User',
-      status: user.status || 'active',
-      created_at: user.created_at,
-      last_sign_in: user.last_login,
-    }))
+    return regularUsers.map((user) => {
+      const derivedName =
+        user.full_name ||
+        [user.first_name, user.last_name].filter(Boolean).join(' ').trim() ||
+        (user.email ? user.email.split('@')[0] : 'N/A')
+
+      return {
+        id: user.id,
+        full_name: derivedName,
+        email: user.email,
+        department: user.department || 'N/A',
+        role: user.role || 'member',
+        designation_label: user.designation_label || '',
+        positions_label: user.positions_label || '',
+        status: user.status || 'active',
+        created_at: user.created_at,
+        last_sign_in: user.last_login,
+      }
+    })
   } catch (err) {
     console.error('❌ Error fetching real users:', err)
     return []
@@ -381,22 +387,7 @@ onMounted(async () => {
 
     // Fetch REAL users from Supabase
     const realUsers = await fetchRealUsers()
-
-    if (realUsers.length > 0) {
-      users.value = realUsers
-    } else {
-      users.value = [
-        {
-          id: 1,
-          full_name: 'No users yet',
-          email: 'Users will appear here when they login',
-          department: 'N/A',
-          role: 'N/A',
-          status: 'active',
-          created_at: new Date().toISOString(),
-        },
-      ]
-    }
+    users.value = realUsers
 
     // Load projects from Supabase (with localStorage fallback)
     const allProjects = await loadAllProjects()
@@ -470,6 +461,17 @@ onUnmounted(() => {
   }
 })
 
+const isNewUser = (createdAt) => {
+  if (!createdAt) return false
+
+  const createdTime = new Date(createdAt).getTime()
+  if (Number.isNaN(createdTime)) return false
+
+  const ageMs = Date.now() - createdTime
+  const dayMs = 24 * 60 * 60 * 1000
+  return ageMs >= 0 && ageMs <= dayMs
+}
+
 // Computed properties for filtered users
 const filteredUsers = computed(() => {
   const key = (search.value || '').toLowerCase()
@@ -477,12 +479,7 @@ const filteredUsers = computed(() => {
     const email = (user?.email || '').toLowerCase()
     const name = (user?.full_name || '').toLowerCase()
 
-    const matchesSearch = !key || email.includes(key) || name.includes(key)
-
-    const matchesDepartment =
-      departmentFilter.value === 'all' || user.department === departmentFilter.value
-
-    return matchesSearch && matchesDepartment
+    return !key || email.includes(key) || name.includes(key)
   })
 })
 
@@ -535,6 +532,92 @@ const removeUser = async (userId) => {
         `Failed to delete user: ${err.message}\n\nTry using Supabase Dashboard → Authentication → Users → Delete user instead.`,
       )
     }
+  }
+}
+
+// Open edit user dialog
+const openEditUserDialog = (user) => {
+  editingUser.value = {
+    ...user,
+    first_name: user.first_name || '',
+    last_name: user.last_name || '',
+  }
+  editFormData.value = {
+    role: user.role || 'member',
+    designation_label: user.designation_label || '',
+    positions_label: user.positions_label || '',
+  }
+  showEditUserDialog.value = true
+}
+
+// Close edit user dialog
+const closeEditUserDialog = () => {
+  showEditUserDialog.value = false
+  editingUser.value = null
+  editFormData.value = { role: '', designation_label: '', positions_label: '' }
+}
+
+const logRoleChangeAudit = async ({ targetUserId, targetEmail, oldRole, newRole }) => {
+  if (!targetUserId || !newRole || oldRole === newRole) return
+
+  const changedByUserId = localStorage.getItem('userId') || null
+
+  // Non-blocking hook: safe even if audit table is not created yet.
+  const { error } = await supabase.from('role_change_audit_logs').insert({
+    target_user_id: targetUserId,
+    target_email: targetEmail || null,
+    old_role: oldRole || null,
+    new_role: newRole,
+    changed_by_user_id: changedByUserId,
+    changed_at: new Date().toISOString(),
+  })
+
+  if (error && error.code !== '42P01') {
+    console.warn('Role audit log skipped:', error.message)
+  }
+}
+
+// Save user changes
+const saveUserChanges = async () => {
+  if (!editingUser.value) return
+
+  editLoading.value = true
+  try {
+    const oldRole = editingUser.value.role || null
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        role: editFormData.value.role,
+        designation_label: editFormData.value.designation_label,
+        positions_label: editFormData.value.positions_label,
+      })
+      .eq('id', editingUser.value.id)
+
+    if (error) throw error
+
+    // Update the user in the local array
+    const userIndex = users.value.findIndex((u) => u.id === editingUser.value.id)
+    if (userIndex !== -1) {
+      users.value[userIndex].role = editFormData.value.role
+      users.value[userIndex].designation_label = editFormData.value.designation_label
+      users.value[userIndex].positions_label = editFormData.value.positions_label
+    }
+
+    await logRoleChangeAudit({
+      targetUserId: editingUser.value.id,
+      targetEmail: editingUser.value.email,
+      oldRole,
+      newRole: editFormData.value.role,
+    })
+
+    displayNotification(`User ${editingUser.value.email} updated successfully!`, 'success')
+    closeEditUserDialog()
+  } catch (err) {
+    console.error('Error updating user:', err)
+    displayNotification(`Failed to update user: ${err.message}`, 'error')
+  } finally {
+    editLoading.value = false
   }
 }
 
@@ -1086,7 +1169,7 @@ const performClearClientData = async () => {
                   <v-card-text>
                     <!-- Filters -->
                     <v-row class="mb-4" align="center">
-                      <v-col cols="12" md="4">
+                      <v-col cols="12" md="6">
                         <v-text-field
                           v-model="search"
                           label="Search users"
@@ -1096,36 +1179,78 @@ const performClearClientData = async () => {
                           hide-details
                         ></v-text-field>
                       </v-col>
-                      <v-col cols="12" md="3">
-                        <v-select
-                          v-model="departmentFilter"
-                          label="Department"
-                          :items="['all', ...departments, 'Administration', 'Editorial']"
-                          variant="outlined"
-                          density="comfortable"
-                          hide-details
-                        ></v-select>
-                      </v-col>
                     </v-row>
 
                     <!-- Users Table -->
-                    <v-table>
+                    <v-table class="users-table">
                       <thead>
                         <tr>
-                          <th>Name</th>
-                          <th>Email</th>
-                          <th>Department</th>
-                          <th>Role</th>
-                          <th>Actions</th>
+                          <th class="th-name">Name</th>
+                          <th class="th-email">Email</th>
+                          <th class="th-role">Role</th>
+                          <th class="th-designation">Designation</th>
+                          <th class="th-contributor">Contributor</th>
+                          <th class="th-actions">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr v-for="user in filteredUsers" :key="user.id">
-                          <td>{{ user.full_name || 'N/A' }}</td>
-                          <td>{{ user.email }}</td>
-                          <td>{{ user.department || 'N/A' }}</td>
-                          <td>{{ user.role || 'N/A' }}</td>
-                          <td>
+                        <tr v-for="user in filteredUsers" :key="user.id" class="user-row">
+                          <td class="td-name">
+                            <div class="user-name-cell">
+                              <span class="font-weight-600">{{ user.full_name || '—' }}</span>
+                              <v-chip
+                                v-if="isNewUser(user.created_at)"
+                                size="x-small"
+                                color="#f5c52b"
+                                text-color="#2c3e50"
+                                class="new-user-badge"
+                              >
+                                New
+                              </v-chip>
+                            </div>
+                          </td>
+                          <td class="td-email">
+                            <div class="email-cell">{{ user.email }}</div>
+                          </td>
+                          <td class="td-role">
+                            <v-chip
+                              size="small"
+                              :color="user.role === 'admin' ? '#f5c52b' : '#ececec'"
+                              :text-color="user.role === 'admin' ? '#2c3e50' : '#4f4f4f'"
+                              class="role-chip"
+                            >
+                              {{ user.role || '—' }}
+                            </v-chip>
+                          </td>
+                          <td class="td-designation">
+                            <span v-if="user.designation_label" class="designation-badge">
+                              {{ user.designation_label }}
+                            </span>
+                            <span v-else class="text-grey">—</span>
+                          </td>
+                          <td class="td-contributor">
+                            <v-chip
+                              v-if="user.positions_label"
+                              size="small"
+                              color="#ececec"
+                              text-color="#4f4f4f"
+                              class="contributor-chip"
+                            >
+                              {{ user.positions_label }}
+                            </v-chip>
+                            <span v-else class="text-grey">—</span>
+                          </td>
+                          <td class="td-actions">
+                            <v-btn
+                              icon
+                              variant="text"
+                              color="primary"
+                              size="small"
+                              @click="openEditUserDialog(user)"
+                              title="Edit User"
+                            >
+                              <v-icon>mdi-pencil</v-icon>
+                            </v-btn>
                             <v-btn
                               icon
                               variant="text"
@@ -1136,6 +1261,12 @@ const performClearClientData = async () => {
                             >
                               <v-icon>mdi-delete</v-icon>
                             </v-btn>
+                          </td>
+                        </tr>
+                        <tr v-if="filteredUsers.length === 0">
+                          <td colspan="6" class="text-center text-grey py-6">
+                            No users yet. Accounts will appear here after first sign in or
+                            registration.
                           </td>
                         </tr>
                       </tbody>
@@ -1223,6 +1354,107 @@ const performClearClientData = async () => {
         </v-card>
       </transition>
     </Teleport>
+
+    <!-- Edit User Dialog -->
+    <v-dialog v-model="showEditUserDialog" max-width="500px">
+      <v-card class="edit-user-card">
+        <!-- Header -->
+        <v-card-title class="edit-user-header">
+          <div class="header-content">
+            <v-avatar size="40" color="#f5c52b" class="mr-2">
+              <span class="font-weight-bold" style="color: #2c3e50">
+                {{ editingUser?.email?.charAt(0).toUpperCase() }}
+              </span>
+            </v-avatar>
+            <div>
+              <div class="font-weight-bold">Edit User</div>
+              <div class="text-caption" style="color: rgba(0, 0, 0, 0.6)">
+                {{ editingUser?.email }}
+              </div>
+            </div>
+          </div>
+        </v-card-title>
+
+        <v-divider></v-divider>
+
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="saveUserChanges">
+            <div class="form-section">
+              <label class="section-label">System Role</label>
+              <v-select
+                v-model="editFormData.role"
+                :items="[
+                  { title: 'Admin', value: 'admin' },
+                  { title: 'Editor', value: 'editor' },
+                  { title: 'Section Head', value: 'section_head' },
+                  { title: 'Member', value: 'member' },
+                  { title: 'Viewer', value: 'viewer' },
+                ]"
+                variant="outlined"
+                density="comfortable"
+                :disabled="editLoading"
+              />
+            </div>
+
+            <div class="form-section">
+              <label class="section-label">Workflow Designation</label>
+              <v-select
+                v-model="editFormData.designation_label"
+                :items="[
+                  { title: 'Technical Editor', value: 'Technical Editor' },
+                  { title: 'Creative Director', value: 'Creative Director' },
+                  { title: 'Editor-in-Chief', value: 'Editor-in-Chief' },
+                  { title: 'Chief Adviser', value: 'Chief Adviser' },
+                  { title: 'Archival Manager', value: 'Archival Manager' },
+                  { title: 'Online Accounts Manager', value: 'Online Accounts Manager' },
+                  { title: 'Section Head', value: 'Section Head' },
+                ]"
+                variant="outlined"
+                density="comfortable"
+                clearable
+                :disabled="editLoading"
+              />
+            </div>
+
+            <div class="form-section">
+              <label class="section-label">Contributor Type</label>
+              <v-select
+                v-model="editFormData.positions_label"
+                :items="[
+                  { title: 'Writer', value: 'Writer' },
+                  { title: 'Artist', value: 'Artist' },
+                ]"
+                variant="outlined"
+                density="comfortable"
+                clearable
+                :disabled="editLoading"
+              />
+            </div>
+
+            <v-card class="info-message" elevation="0">
+              <v-card-text class="pa-3">
+                <div class="text-caption">
+                  <strong>Note:</strong> Leave designation and contributor type blank for basic
+                  members.
+                </div>
+              </v-card-text>
+            </v-card>
+          </v-form>
+        </v-card-text>
+
+        <v-divider></v-divider>
+
+        <v-card-actions class="pa-4">
+          <v-spacer></v-spacer>
+          <v-btn variant="text" color="#666" @click="closeEditUserDialog" :disabled="editLoading">
+            Cancel
+          </v-btn>
+          <v-btn color="white" class="save-btn" @click="saveUserChanges" :loading="editLoading">
+            Save
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
@@ -1231,17 +1463,11 @@ const performClearClientData = async () => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
-}
-
-.main-content {
-  flex: 1;
   padding: 0 !important;
 }
 
 /* Dashboard Header */
 .dashboard-header {
-  border-radius: 16px !important;
   background: white;
   border-left: 4px solid #f5c52b;
 }
@@ -1249,12 +1475,6 @@ const performClearClientData = async () => {
 .icon-wrapper {
   width: 56px;
   height: 56px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #2c3e50;
-  box-shadow: 0 4px 12px rgba(44, 62, 80, 0.2);
 }
 
 .icon-wrapper-small {
@@ -1267,25 +1487,149 @@ const performClearClientData = async () => {
   background: #2c3e50;
 }
 
-.icon-wrapper-small.primary {
-  background: #f5c52b;
-}
-
 .icon-wrapper-small.success {
-  background: #4caf50;
+  background: #f5c52b;
 }
 
 .refresh-btn,
 .clear-btn {
   text-transform: none !important;
   letter-spacing: normal !important;
-  font-weight: 500;
-  border-radius: 8px !important;
   padding: 0 20px !important;
 }
 
 .gap-2 {
   gap: 8px;
+}
+
+/* Edit User Dialog */
+.edit-user-card {
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12) !important;
+  border: none !important;
+}
+
+.edit-user-header {
+  background: linear-gradient(135deg, #f5c52b 0%, #ffd966 100%) !important;
+  padding: 18px 20px !important;
+  display: flex;
+  align-items: center;
+  border: none !important;
+}
+
+.edit-user-header .header-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.form-section {
+  margin-bottom: 20px;
+}
+
+.section-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-message {
+  background: rgba(245, 197, 43, 0.08) !important;
+  border-left: 3px solid #f5c52b !important;
+  margin-top: 16px;
+}
+
+.save-btn {
+  background: #2c3e50 !important;
+  color: white !important;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* User Table Styling */
+.users-table {
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+.th-name,
+.th-email,
+.th-role,
+.th-designation,
+.th-contributor,
+.th-actions {
+  text-align: left !important;
+}
+
+.user-row {
+  border-bottom: 1px solid #f0f0f0;
+  transition: all 0.2s ease;
+}
+
+.user-row:hover {
+  background-color: #fffbea !important;
+}
+
+.user-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.new-user-badge {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px;
+}
+
+.email-cell {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 13px;
+  color: #4a4a4a;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.role-chip {
+  text-transform: capitalize;
+  font-weight: 600;
+  border: 1px solid #d9d9d9;
+}
+
+.designation-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  padding: 4px 10px;
+  background: #f2f2f2;
+  color: #4f4f4f;
+  border: 1px solid #d9d9d9;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.contributor-chip {
+  font-weight: 600;
+  border: 1px solid #d9d9d9;
+}
+
+.td-actions {
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.user-row:hover .td-actions {
+  opacity: 1;
 }
 
 /* Stats Cards */

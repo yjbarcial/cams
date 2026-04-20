@@ -19,76 +19,7 @@ const confirmPassword = ref('')
 const showConfirmPassword = ref(false)
 const successMessage = ref('')
 
-// AUTHORIZED USERS ONLY - Complete whitelist
-const AUTHORIZED_USERS = [
-  // System Admins
-  'yssahjulianah.barcial@carsu.edu.ph',
-  'lovellhudson.clavel@carsu.edu.ph',
-  'altheaguila.gorres@carsu.edu.ph',
-  'paduga@carsu.edu.ph',
-
-  // Section Heads
-  'lexzyrrehdevonnaire.abellanosa@carsu.edu.ph',
-  'jessahmei.allard@carsu.edu.ph',
-  'nevlim.baldelovar@carsu.edu.ph',
-  'rexter.etang@carsu.edu.ph',
-  'jerbyclaire.factularin@carsu.edu.ph',
-  'jofredjames.gerasmio@carsu.edu.ph',
-  'megumierika.labaja@carsu.edu.ph',
-  'elainepearl.silagan@carsu.edu.ph',
-  'samuellhoide.ursales@carsu.edu.ph',
-  'kentadriane.vinatero@carsu.edu.ph',
-
-  // Editors (Technical Editor, Creative Director, Editor-in-Chief, Archive Managers)
-  'jonee.elopre@carsu.edu.ph',
-  'levibrian.cejuela@carsu.edu.ph',
-  'melede.ganoy@carsu.edu.ph',
-  'julesleo.reserva@carsu.edu.ph',
-  'eizzielmarie.bacoy@carsu.edu.ph',
-
-  // Writers
-  'nissi.abes@carsu.edu.ph',
-  'sophija.bentulan@carsu.edu.ph',
-  'joshuajosh.coralde@carsu.edu.ph',
-  'lordelie.darog@carsu.edu.ph',
-  'jezwer.delima@carsu.edu.ph',
-  'jellanaille.denonong@carsu.edu.ph',
-  'devorahgrace.esguerra@carsu.edu.ph',
-  'shienygriethzer.lozada@carsu.edu.ph',
-  'kayadanielle.nason@carsu.edu.ph',
-  'glennferdinan.rojas@carsu.edu.ph',
-  'missividka.santillan@carsu.edu.ph',
-  'samanthajezette.maestrado@carsu.edu.ph',
-
-  // Artists
-  'teejay.abello@carsu.edu.ph',
-  'belleblanchekyle.abiol@carsu.edu.ph',
-  'jonhian.alfaras@carsu.edu.ph',
-  'lendon.almocera@carsu.edu.ph',
-  'robertlouis.bebis@carsu.edu.ph',
-  'ryanchristianbenignos@carsu.edu.ph',
-  'peterlorenzo.calo@carsu.edu.ph',
-  'josefa.cruzada@carsu.edu.ph',
-  'mattandrew.graban@carsu.edu.ph',
-  'hannahfaith.labadan@carsu.edu.ph',
-  'anne.lanzon@carsu.edu.ph',
-  'gerzaallea.lim@carsu.edu.ph',
-  'jhondavid.lloren@carsu.edu.ph',
-  'jaylor.malnegro@carsu.edu.ph',
-  'majulianny.navarez@carsu.edu.ph',
-  'edwin.mori@carsu.edu.ph',
-  'mhegan.niez@carsu.edu.ph',
-  'kurtclyde.pablo@carsu.edu.ph',
-  'jharedmiguel.paderna@carsu.edu.ph',
-  'jevan.racaza@carsu.edu.ph',
-]
-
-// Check if email is authorized
-function isAuthorizedUser(emailToCheck) {
-  return AUTHORIZED_USERS.includes(emailToCheck.toLowerCase().trim())
-}
-
-// CARSU email validator with authorization check
+// CARSU email validator
 const carsuEmailValidator = (value) => {
   const requiredValidation = requiredValidator(value)
   if (requiredValidation !== true) return requiredValidation
@@ -98,10 +29,6 @@ const carsuEmailValidator = (value) => {
 
   if (!value.endsWith('@carsu.edu.ph')) {
     return 'Must be a CARSU email address'
-  }
-
-  if (!isAuthorizedUser(value)) {
-    return 'This email is not authorized to access the system'
   }
 
   return true
@@ -143,15 +70,6 @@ onMounted(async () => {
   } = await supabase.auth.getSession()
 
   if (session) {
-    // Verify user is authorized
-    if (!isAuthorizedUser(session.user.email)) {
-      await supabase.auth.signOut()
-      localStorage.setItem('isLoggedIn', 'false')
-      errorMessage.value = 'Your account is not authorized to access this system.'
-      loading.value = false
-      return
-    }
-
     // Already logged in - redirect immediately
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem('userEmail', session.user.email)
@@ -192,15 +110,6 @@ async function signInWithPassword() {
     })
 
     if (error) throw error
-
-    // Verify user is authorized
-    if (!isAuthorizedUser(data.user.email)) {
-      await supabase.auth.signOut()
-      localStorage.setItem('isLoggedIn', 'false')
-      errorMessage.value = 'Your account is not authorized to access this system.'
-      loading.value = false
-      return
-    }
 
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem('userEmail', data.user.email)
@@ -310,13 +219,6 @@ async function submit() {
   if (!email.value.endsWith('@carsu.edu.ph')) {
     showDomainPopup.value = true
     errorMessage.value = 'Only CARSU email addresses (@carsu.edu.ph) are allowed.'
-    return
-  }
-
-  // Check if user is authorized BEFORE doing anything else
-  if (!isAuthorizedUser(email.value)) {
-    errorMessage.value =
-      'This email is not authorized to access the system. Please contact a System Admin.'
     return
   }
 
