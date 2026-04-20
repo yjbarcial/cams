@@ -3,6 +3,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUnreadCount } from '@/services/notificationsService.js'
 import { supabase } from '@/utils/supabase'
+import { setProfileStatusByEmail } from '@/utils/autoAddUser'
 
 const router = useRouter()
 const showAccountMenu = ref(false)
@@ -82,6 +83,11 @@ const handleLogout = async () => {
 
   try {
     console.log('Logout clicked')
+
+    const userEmail = localStorage.getItem('userEmail')
+
+    // Mark profile inactive before ending auth session.
+    await setProfileStatusByEmail(userEmail, 'inactive')
 
     // Sign out from Supabase
     await supabase.auth.signOut()
