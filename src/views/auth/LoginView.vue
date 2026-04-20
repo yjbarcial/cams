@@ -375,35 +375,36 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 required
               />
 
+              <div v-if="!isSignupMode" style="text-align: right; margin-bottom: 16px">
+                <v-btn
+                  variant="text"
+                  color="#999"
+                  size="x-small"
+                  @click="requestPasswordReset"
+                  :disabled="loading || !email"
+                  style="padding: 0"
+                >
+                  Forgot Password?
+                </v-btn>
+              </div>
+
               <v-btn type="submit" class="primary-btn" :loading="loading" :disabled="loading">
-                {{ isSignupMode ? 'CREATE ACCOUNT' : 'SIGN IN' }}
+                {{ isSignupMode ? 'CREATE ACCOUNT' : 'LOG IN' }}
               </v-btn>
 
               <div class="text-center mt-3">
                 <v-btn
                   variant="text"
-                  color="primary"
+                  color="#999"
                   size="small"
                   @click="toggleMode"
                   :disabled="loading"
                 >
                   {{
                     isSignupMode
-                      ? 'Already have an account? Sign in'
+                      ? 'Already have an account? Log in'
                       : "Don't have an account? Create one"
                   }}
-                </v-btn>
-              </div>
-
-              <div class="text-center mt-2" v-if="!isSignupMode">
-                <v-btn
-                  variant="text"
-                  color="primary"
-                  size="small"
-                  @click="requestPasswordReset"
-                  :disabled="loading || !email"
-                >
-                  Forgot Password?
                 </v-btn>
               </div>
 
