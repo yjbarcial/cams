@@ -494,6 +494,36 @@ const formatDate = (date) => {
   })
 }
 
+// Get time ago format (e.g., "2 hrs ago")
+const getTimeAgo = (date) => {
+  if (!date) return 'unknown'
+
+  const now = new Date()
+  const past = new Date(date)
+  const diffMs = now - past
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`
+  if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+
+  return formatDate(date)
+}
+
+// Format text by removing underscores and capitalizing (e.g., "section_head" -> "Section Head")
+const formatText = (text) => {
+  if (!text) return '—'
+
+  return text
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
 // Remove user from Supabase
 const removeUser = async (userId) => {
   const user = users.value.find((u) => u.id === userId)
@@ -1221,7 +1251,7 @@ const performClearClientData = async () => {
                                 user.role === 'admin' ? 'role-chip-admin' : 'role-chip-default'
                               "
                             >
-                              {{ user.role || '—' }}
+                              {{ formatText(user.role) }}
                             </v-chip>
                           </td>
                           <td class="td-designation">
@@ -1241,30 +1271,33 @@ const performClearClientData = async () => {
                                   : 'status-chip-offline'
                               "
                             >
-                              {{ user.status === 'active' ? 'Active' : 'Offline' }}
+                              <span v-if="user.status === 'active'">Active</span>
+                              <span v-else>Offline — {{ getTimeAgo(user.updated_at) }}</span>
                             </v-chip>
                           </td>
                           <td class="td-actions">
-                            <v-btn
-                              icon
-                              variant="text"
-                              color="primary"
-                              size="small"
-                              @click="openEditUserDialog(user)"
-                              title="Edit User"
-                            >
-                              <v-icon>mdi-pencil</v-icon>
-                            </v-btn>
-                            <v-btn
-                              icon
-                              variant="text"
-                              color="error"
-                              size="small"
-                              @click="removeUser(user.id)"
-                              title="Remove User"
-                            >
-                              <v-icon>mdi-delete</v-icon>
-                            </v-btn>
+                            <div style="display: flex; gap: 4px; justify-content: center">
+                              <v-btn
+                                icon
+                                variant="text"
+                                color="primary"
+                                size="small"
+                                @click="openEditUserDialog(user)"
+                                title="Edit User"
+                              >
+                                <v-icon>mdi-pencil</v-icon>
+                              </v-btn>
+                              <v-btn
+                                icon
+                                variant="text"
+                                color="error"
+                                size="small"
+                                @click="removeUser(user.id)"
+                                title="Remove User"
+                              >
+                                <v-icon>mdi-delete</v-icon>
+                              </v-btn>
+                            </div>
                           </td>
                         </tr>
                         <tr v-if="filteredUsers.length === 0">
