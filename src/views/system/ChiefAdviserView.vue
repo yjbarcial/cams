@@ -366,15 +366,23 @@ const submitApproval = async () => {
     try {
       // Only call Supabase if project has a valid id
       if (projectId) {
+        const userEmail = localStorage.getItem('userEmail') || ''
+        const fullName = currentUserProfile.value
+          ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+          : ''
+        const author = fullName || userEmail || 'Unknown User'
+
         await createProjectVersionSupabase(
+          projectType.value,
           projectId,
-          editorContent.value || '',
+          project.value,
           action === 'approve'
             ? 'Approved by Chief Adviser - Ready for Publishing'
             : action === 'return'
               ? 'Returned by Chief Adviser for reconsideration'
               : 'Rejected by Chief Adviser - Returned to Artist and Writer',
-          currentUser.value,
+          author,
+          'approval',
         )
         console.log('Project version saved to Supabase successfully')
       } else {
