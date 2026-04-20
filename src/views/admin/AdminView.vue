@@ -1475,6 +1475,16 @@ const performClearClientData = async () => {
 .icon-wrapper {
   width: 56px;
   height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2c3e50;
+  box-shadow: 0 4px 12px rgba(44, 62, 80, 0.2);
+}
+
+.icon-wrapper.primary {
+  background: #2c3e50;
 }
 
 .icon-wrapper-small {
