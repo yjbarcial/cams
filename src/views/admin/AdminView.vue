@@ -1189,7 +1189,7 @@ const performClearClientData = async () => {
                           <th class="th-email">Email</th>
                           <th class="th-role">Role</th>
                           <th class="th-designation">Designation</th>
-                          <th class="th-contributor">Contributor</th>
+                          <th class="th-status">Status</th>
                           <th class="th-actions">Actions</th>
                         </tr>
                       </thead>
@@ -1216,8 +1216,10 @@ const performClearClientData = async () => {
                             <v-chip
                               size="small"
                               :color="user.role === 'admin' ? '#f5c52b' : '#ececec'"
-                              :text-color="user.role === 'admin' ? '#2c3e50' : '#4f4f4f'"
                               class="role-chip"
+                              :class="
+                                user.role === 'admin' ? 'role-chip-admin' : 'role-chip-default'
+                              "
                             >
                               {{ user.role || '—' }}
                             </v-chip>
@@ -1228,17 +1230,19 @@ const performClearClientData = async () => {
                             </span>
                             <span v-else class="text-grey">—</span>
                           </td>
-                          <td class="td-contributor">
+                          <td class="td-status">
                             <v-chip
-                              v-if="user.positions_label"
                               size="small"
-                              color="#ececec"
-                              text-color="#4f4f4f"
-                              class="contributor-chip"
+                              :color="user.status === 'active' ? '#e8f5e9' : '#f3f4f6'"
+                              class="status-chip"
+                              :class="
+                                user.status === 'active'
+                                  ? 'status-chip-active'
+                                  : 'status-chip-offline'
+                              "
                             >
-                              {{ user.positions_label }}
+                              {{ user.status === 'active' ? 'Active' : 'Offline' }}
                             </v-chip>
-                            <span v-else class="text-grey">—</span>
                           </td>
                           <td class="td-actions">
                             <v-btn
@@ -1571,7 +1575,7 @@ const performClearClientData = async () => {
 .th-email,
 .th-role,
 .th-designation,
-.th-contributor,
+.th-status,
 .th-actions {
   text-align: left !important;
 }
@@ -1612,6 +1616,14 @@ const performClearClientData = async () => {
   border: 1px solid #d9d9d9;
 }
 
+.role-chip-admin {
+  color: #2c3e50 !important;
+}
+
+.role-chip-default {
+  color: #374151 !important;
+}
+
 .designation-badge {
   display: inline-flex;
   align-items: center;
@@ -1628,9 +1640,19 @@ const performClearClientData = async () => {
   white-space: normal;
 }
 
-.contributor-chip {
+.status-chip {
   font-weight: 600;
   border: 1px solid #d9d9d9;
+}
+
+.status-chip-active {
+  color: #1b5e20 !important;
+  border-color: #81c784 !important;
+}
+
+.status-chip-offline {
+  color: #374151 !important;
+  border-color: #9ca3af !important;
 }
 
 .td-actions {
