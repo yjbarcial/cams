@@ -77,12 +77,17 @@ export async function setProfileStatusByEmail(email, status = 'inactive') {
   }
 }
 
-export async function addUserToProfiles(user) {
+export async function addUserToProfiles(user, profileData = {}) {
   try {
     if (!user || !user.email) {
       console.warn('❌ No user data provided')
       return
     }
+
+    const userMetadata = user.user_metadata || {}
+    const requestedDesignation =
+      profileData.designation_label || userMetadata.designation_label || null
+    const requestedPosition = profileData.positions_label || userMetadata.positions_label || null
 
     console.log('🔄 Checking if user exists:', user.email)
 
@@ -106,6 +111,13 @@ export async function addUserToProfiles(user) {
       const updateData = {
         status: 'active',
         last_active: new Date().toISOString(),
+      }
+
+      if (!existingUser.designation_label && requestedDesignation) {
+        updateData.designation_label = requestedDesignation
+      }
+      if (!existingUser.positions_label && requestedPosition) {
+        updateData.positions_label = requestedPosition
       }
 
       const { error: updateError } = await supabase
@@ -137,6 +149,8 @@ export async function addUserToProfiles(user) {
       role: 'member',
       status: 'active',
       last_active: new Date().toISOString(),
+      designation_label: requestedDesignation,
+      positions_label: requestedPosition,
     }
 
     console.log('📝 User to insert:', newUser)
