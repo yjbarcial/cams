@@ -7,6 +7,20 @@ import { ADMIN_EMAILS } from '@/utils/userDisplay.js'
 // Note: All role-based access is now database-driven via designation_label and role fields
 // See userDisplay.js for centralized admin email checking if needed
 
+let hasLoggedProfileFetchNetworkIssue = false
+
+const isTransientNetworkFetchError = (error) => {
+  const message = String(error?.message || '').toLowerCase()
+  const details = String(error?.details || '').toLowerCase()
+
+  return (
+    message.includes('failed to fetch') ||
+    message.includes('err_connection_closed') ||
+    details.includes('failed to fetch') ||
+    details.includes('err_connection_closed')
+  )
+}
+
 /**
  * Clean up duplicate notifications from localStorage
  * This removes notifications that are duplicates based on:
@@ -93,12 +107,22 @@ export const getNotifications = async () => {
     try {
       const currentProfile = await profilesService.getByEmail(currentUserEmail)
       currentUserId = currentProfile?.id
+      hasLoggedProfileFetchNetworkIssue = false
       console.log('🔑 Current user details:', {
         email: currentUserEmail,
         userId: currentUserId,
       })
     } catch (error) {
-      console.error('Error fetching current user profile:', error)
+      if (isTransientNetworkFetchError(error)) {
+        if (!hasLoggedProfileFetchNetworkIssue) {
+          console.warn(
+            '⚠️ Temporary network issue while fetching user profile for notifications. Using email-based filtering fallback.',
+          )
+          hasLoggedProfileFetchNetworkIssue = true
+        }
+      } else {
+        console.error('Error fetching current user profile:', error)
+      }
     }
 
     // Role mapping for notification recipients (maps designation label → userRole)
