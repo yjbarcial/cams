@@ -371,6 +371,8 @@ const fetchRealUsers = async () => {
         status: user.status || 'active',
         created_at: user.created_at,
         last_sign_in: user.last_login,
+        last_active: user.last_active,
+        updated_at: user.updated_at,
       }
     })
   } catch (err) {
@@ -494,23 +496,9 @@ const formatDate = (date) => {
   })
 }
 
-// Get time ago format (e.g., "2 hrs ago")
-const getTimeAgo = (date) => {
-  if (!date) return 'unknown'
-
-  const now = new Date()
-  const past = new Date(date)
-  const diffMs = now - past
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  const diffDays = Math.floor(diffMs / 86400000)
-
-  if (diffMins < 1) return 'just now'
-  if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`
-  if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`
-  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
-
-  return formatDate(date)
+const getUserStatusLabel = (user) => {
+  if (user?.status === 'active') return 'Active now'
+  return 'Offline'
 }
 
 // Format text by removing underscores and capitalizing (e.g., "section_head" -> "Section Head")
@@ -1197,146 +1185,162 @@ const performClearClientData = async () => {
                 <!-- User Management Tab -->
                 <v-window-item value="users">
                   <v-card-text>
-                    <!-- Filters -->
-                    <v-row class="mb-4" align="center">
-                      <v-col cols="12" md="6">
-                        <v-text-field
-                          v-model="search"
-                          label="Search users"
-                          prepend-inner-icon="mdi-magnify"
-                          variant="outlined"
-                          density="comfortable"
-                          hide-details
-                        ></v-text-field>
-                      </v-col>
-                    </v-row>
+                    <div class="user-management-panel">
+                      <div class="user-management-header">
+                        <div>
+                          <div class="text-subtitle-1 font-weight-bold">User Management</div>
+                          <div class="text-caption text-grey-darken-1">
+                            Manage account access, workflow designation, and status
+                          </div>
+                        </div>
+                        <div class="user-management-search">
+                          <v-text-field
+                            v-model="search"
+                            label="Search users"
+                            prepend-inner-icon="mdi-magnify"
+                            variant="outlined"
+                            density="comfortable"
+                            hide-details
+                          ></v-text-field>
+                        </div>
+                      </div>
 
-                    <!-- Users Table -->
-                    <v-table class="users-table">
-                      <thead>
-                        <tr>
-                          <th class="th-name">Name</th>
-                          <th class="th-email">Email</th>
-                          <th class="th-role">Role</th>
-                          <th class="th-designation">Designation</th>
-                          <th class="th-status">Status</th>
-                          <th class="th-actions">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="user in filteredUsers" :key="user.id" class="user-row">
-                          <td class="td-name">
-                            <div class="user-name-cell">
-                              <span class="font-weight-600">{{ user.full_name || '—' }}</span>
+                      <v-table class="users-table">
+                        <thead>
+                          <tr>
+                            <th class="th-name">Name</th>
+                            <th class="th-email">Email</th>
+                            <th class="th-role">Role</th>
+                            <th class="th-designation">Designation</th>
+                            <th class="th-status">Status</th>
+                            <th class="th-actions">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="user in filteredUsers" :key="user.id" class="user-row">
+                            <td class="td-name">
+                              <div class="user-name-cell">
+                                <span class="font-weight-600">{{ user.full_name || '—' }}</span>
+                                <v-chip
+                                  v-if="isNewUser(user.created_at)"
+                                  size="x-small"
+                                  color="#f5c52b"
+                                  text-color="#2c3e50"
+                                  class="new-user-badge"
+                                >
+                                  New
+                                </v-chip>
+                              </div>
+                            </td>
+                            <td class="td-email">
+                              <div class="email-cell">{{ user.email }}</div>
+                            </td>
+                            <td class="td-role">
                               <v-chip
-                                v-if="isNewUser(user.created_at)"
-                                size="x-small"
-                                color="#f5c52b"
-                                text-color="#2c3e50"
-                                class="new-user-badge"
+                                size="small"
+                                :color="user.role === 'admin' ? '#f5c52b' : '#ececec'"
+                                class="role-chip"
+                                :class="
+                                  user.role === 'admin' ? 'role-chip-admin' : 'role-chip-default'
+                                "
                               >
-                                New
+                                {{ formatText(user.role) }}
                               </v-chip>
-                            </div>
-                          </td>
-                          <td class="td-email">
-                            <div class="email-cell">{{ user.email }}</div>
-                          </td>
-                          <td class="td-role">
-                            <v-chip
-                              size="small"
-                              :color="user.role === 'admin' ? '#f5c52b' : '#ececec'"
-                              class="role-chip"
-                              :class="
-                                user.role === 'admin' ? 'role-chip-admin' : 'role-chip-default'
-                              "
-                            >
-                              {{ formatText(user.role) }}
-                            </v-chip>
-                          </td>
-                          <td class="td-designation">
-                            <span v-if="user.designation_label" class="designation-badge">
-                              {{ user.designation_label }}
-                            </span>
-                            <span v-else class="text-grey">—</span>
-                          </td>
-                          <td class="td-status">
-                            <v-chip
-                              size="small"
-                              :color="user.status === 'active' ? '#e8f5e9' : '#f3f4f6'"
-                              class="status-chip"
-                              :class="
-                                user.status === 'active'
-                                  ? 'status-chip-active'
-                                  : 'status-chip-offline'
-                              "
-                            >
-                              <span v-if="user.status === 'active'">Active</span>
-                              <span v-else>Offline — {{ getTimeAgo(user.updated_at) }}</span>
-                            </v-chip>
-                          </td>
-                          <td class="td-actions">
-                            <div style="display: flex; gap: 4px; justify-content: center">
-                              <v-btn
-                                icon
-                                variant="text"
-                                color="primary"
+                            </td>
+                            <td class="td-designation">
+                              <span v-if="user.designation_label" class="designation-badge">
+                                {{ user.designation_label }}
+                              </span>
+                              <span v-else class="text-grey">—</span>
+                            </td>
+                            <td class="td-status">
+                              <v-chip
                                 size="small"
-                                @click="openEditUserDialog(user)"
-                                title="Edit User"
+                                :color="user.status === 'active' ? '#e8f5e9' : '#f3f4f6'"
+                                class="status-chip"
+                                :class="
+                                  user.status === 'active'
+                                    ? 'status-chip-active'
+                                    : 'status-chip-offline'
+                                "
                               >
-                                <v-icon>mdi-pencil</v-icon>
-                              </v-btn>
-                              <v-btn
-                                icon
-                                variant="text"
-                                color="error"
-                                size="small"
-                                @click="removeUser(user.id)"
-                                title="Remove User"
-                              >
-                                <v-icon>mdi-delete</v-icon>
-                              </v-btn>
-                            </div>
-                          </td>
-                        </tr>
-                        <tr v-if="filteredUsers.length === 0">
-                          <td colspan="6" class="text-center text-grey py-6">
-                            No users yet. Accounts will appear here after first sign in or
-                            registration.
-                          </td>
-                        </tr>
-                      </tbody>
-                    </v-table>
+                                <span>{{ getUserStatusLabel(user) }}</span>
+                              </v-chip>
+                            </td>
+                            <td class="td-actions">
+                              <div style="display: flex; gap: 4px; justify-content: center">
+                                <v-btn
+                                  icon
+                                  variant="text"
+                                  color="primary"
+                                  size="small"
+                                  @click="openEditUserDialog(user)"
+                                  title="Edit User"
+                                >
+                                  <v-icon>mdi-pencil</v-icon>
+                                </v-btn>
+                                <v-btn
+                                  icon
+                                  variant="text"
+                                  color="error"
+                                  size="small"
+                                  @click="removeUser(user.id)"
+                                  title="Remove User"
+                                >
+                                  <v-icon>mdi-delete</v-icon>
+                                </v-btn>
+                              </div>
+                            </td>
+                          </tr>
+                          <tr v-if="filteredUsers.length === 0">
+                            <td colspan="6" class="text-center text-grey py-6">
+                              No users yet. Accounts will appear here after first sign in or
+                              registration.
+                            </td>
+                          </tr>
+                        </tbody>
+                      </v-table>
+                    </div>
                   </v-card-text>
                 </v-window-item>
 
                 <!-- Content Management Tab -->
                 <v-window-item value="content">
                   <v-card-text>
-                    <div v-if="!showUploadView" class="content-management">
-                      <div class="text-center py-8">
-                        <v-icon size="64" color="#f5c52b">mdi-folder-multiple</v-icon>
-                        <h3 class="text-h6 mt-4">Content Management</h3>
-                        <p class="text-grey">
-                          Manage newsletters, folios, and other content submissions
-                        </p>
-                        <v-btn
-                          color="#f5c52b"
-                          class="mt-4 upload-content-btn"
-                          @click="showUploadView = true"
-                        >
-                          <v-icon start color="#2c3e50">mdi-cloud-upload</v-icon>
-                          <span style="color: #2c3e50; font-weight: 600">Upload Content</span>
-                        </v-btn>
+                    <div class="content-management-panel">
+                      <div class="content-management-header">
+                        <div>
+                          <div class="text-subtitle-1 font-weight-bold">Content Management</div>
+                          <div class="text-caption text-grey-darken-1">
+                            Manage uploads, publications, and archive-ready content
+                          </div>
+                        </div>
                       </div>
+
+                      <div v-if="!showUploadView" class="content-management">
+                        <div class="text-center py-8">
+                          <v-icon size="64" color="#f5c52b">mdi-folder-multiple</v-icon>
+                          <h3 class="text-h6 mt-4">Upload Content</h3>
+                          <p class="text-grey">
+                            Manage newsletters, folios, and other content submissions
+                          </p>
+                          <v-btn
+                            color="#f5c52b"
+                            class="mt-4 upload-content-btn"
+                            @click="showUploadView = true"
+                          >
+                            <v-icon start color="#2c3e50">mdi-cloud-upload</v-icon>
+                            <span style="color: #2c3e50; font-weight: 600">Upload Content</span>
+                          </v-btn>
+                        </div>
+                      </div>
+                      <UploadView
+                        v-else
+                        @close="showUploadView = false"
+                        @upload-success="handleUploadSuccess"
+                        @upload-error="handleUploadError"
+                      />
                     </div>
-                    <UploadView
-                      v-else
-                      @close="showUploadView = false"
-                      @upload-success="handleUploadSuccess"
-                      @upload-error="handleUploadError"
-                    />
                   </v-card-text>
                 </v-window-item>
               </v-window>
@@ -1598,10 +1602,48 @@ const performClearClientData = async () => {
 }
 
 /* User Table Styling */
+.user-management-panel {
+  background: #ffffff;
+  border: 1px solid #ececec;
+  border-left: 4px solid #f5c52b;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.content-management-panel {
+  background: #ffffff;
+  border: 1px solid #ececec;
+  border-left: 4px solid #f5c52b;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.user-management-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.user-management-search {
+  width: 100%;
+  max-width: 340px;
+}
+
+.content-management-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
 .users-table {
-  border-radius: 12px !important;
+  border-radius: 10px !important;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+  border: 1px solid #efefef;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06) !important;
 }
 
 .th-name,
@@ -1611,6 +1653,9 @@ const performClearClientData = async () => {
 .th-status,
 .th-actions {
   text-align: left !important;
+  background: #fafafa;
+  font-size: 12px;
+  letter-spacing: 0.3px;
 }
 
 .user-row {
@@ -1620,6 +1665,20 @@ const performClearClientData = async () => {
 
 .user-row:hover {
   background-color: #fffbea !important;
+}
+
+@media (max-width: 900px) {
+  .user-management-header {
+    flex-direction: column;
+  }
+
+  .content-management-header {
+    flex-direction: column;
+  }
+
+  .user-management-search {
+    max-width: none;
+  }
 }
 
 .user-name-cell {
