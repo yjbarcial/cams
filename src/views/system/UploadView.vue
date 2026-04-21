@@ -89,9 +89,7 @@ const uploadFiles = async () => {
     for (const file of selectedFiles.value) {
       // Upload file to Supabase Storage
       const fileName = `${Date.now()}-${file.name}`
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('archives')
-        .upload(fileName, file)
+      const { error: uploadError } = await supabase.storage.from('archives').upload(fileName, file)
 
       if (uploadError) throw uploadError
 

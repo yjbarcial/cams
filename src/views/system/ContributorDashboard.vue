@@ -1,10 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
-
-const router = useRouter()
 
 // Prevent back navigation to login page
 const preventBackToLogin = () => {
@@ -13,7 +10,7 @@ const preventBackToLogin = () => {
 }
 
 // Handle browser back button
-const handlePopState = (event) => {
+const handlePopState = () => {
   // Push the current state again to prevent going back
   window.history.pushState(history.state, '', window.location.href)
 }

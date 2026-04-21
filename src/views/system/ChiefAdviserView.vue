@@ -51,8 +51,6 @@ const loadCurrentUserProfile = async () => {
 const projectType = ref('magazine')
 
 // User role - CHIEF ADVISER ONLY
-const currentUserRole = ref('Chief Adviser')
-const currentUser = ref('Chief Adviser User')
 
 // Project data
 const project = ref({
@@ -94,7 +92,6 @@ const lastNotificationTime = ref(null)
 const showApprovalDialog = ref(false)
 const approvalAction = ref('')
 const approvalComments = ref('')
-const approvalPriority = ref('Medium')
 
 // History and comments
 const comments = ref([])
@@ -425,6 +422,10 @@ const cancelApproval = () => {
   approvalComments.value = ''
 }
 
+const getActualStorageKey = () => {
+  return { type: projectType.value }
+}
+
 const goBack = () => {
   if (isEditorEditable.value && hasUnsavedChanges.value) {
     saveContentChanges()
@@ -655,7 +656,7 @@ const formatCommentTime = (timestamp) => {
     if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
 
     return date.toLocaleDateString()
-  } catch (error) {
+  } catch {
     return timestamp
   }
 }

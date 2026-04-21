@@ -17,8 +17,8 @@ const createAuthClient = () => {
     baseURL: API_BASE_URL,
     headers: {
       Authorization: token ? `Bearer ${token}` : '',
-      'Content-Type': 'application/json'
-    }
+      'Content-Type': 'application/json',
+    },
   })
 }
 
@@ -27,7 +27,14 @@ const createAuthClient = () => {
  */
 const countWords = (text) => {
   if (!text) return 0
-  return text.trim().split(/\s+/).filter(word => word.length > 0).length
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0).length
+}
+
+const getHistoryKey = (projectType, projectId) => {
+  return `project_history_${projectType}_${projectId}`
 }
 
 /**
@@ -50,7 +57,7 @@ export const createProjectVersion = async (
 ) => {
   try {
     const client = createAuthClient()
-    
+
     const historyData = {
       change_description: changeDescription || 'No description provided',
       project_data: {
@@ -71,9 +78,9 @@ export const createProjectVersion = async (
         wordCount: projectData.content ? countWords(projectData.content) : 0,
         characterCount: projectData.content ? projectData.content.length : 0,
         lastModified: new Date().toISOString(),
-      }
+      },
     }
-    
+
     const response = await client.post(`/projects/${projectId}/history`, historyData)
     return response.data.data
   } catch (error) {
@@ -152,7 +159,7 @@ export const getProjectStatistics = async (projectType, projectId) => {
       latest_version: 0,
       first_change: null,
       last_change: null,
-      unique_contributors: 0
+      unique_contributors: 0,
     }
   }
 }
@@ -166,7 +173,7 @@ export const getProjectStatistics = async (projectType, projectId) => {
 export const compareVersions = (version1, version2) => {
   const data1 = version1.project_data || {}
   const data2 = version2.project_data || {}
-  
+
   const differences = {
     title: data1.title !== data2.title,
     description: data1.description !== data2.description,

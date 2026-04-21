@@ -475,6 +475,8 @@ export const restoreProjectVersion = async (projectType, projectId, versionId) =
  */
 export const addVersionComment = async (projectType, projectId, versionId, comment, author) => {
   try {
+    void comment
+    void author
     // version_comments table doesn't exist, so skip comment creation
     console.warn('version_comments table does not exist - comments are not supported')
 

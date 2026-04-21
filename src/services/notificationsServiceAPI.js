@@ -2,23 +2,6 @@ import { notificationsAPI } from './apiService'
 import { isPushNotificationsEnabled, isEmailNotificationsEnabled } from './settingsService.js'
 
 /**
- * Get type color based on notification type
- */
-const getTypeColor = (type) => {
-  const colors = {
-    Request: '#f59e0b',
-    Comment: '#3b82f6',
-    Approved: '#10b981',
-    Rejected: '#ef4444',
-    Info: '#6b7280',
-    Warning: '#f59e0b',
-    Success: '#10b981',
-    Error: '#ef4444',
-  }
-  return colors[type] || '#6b7280'
-}
-
-/**
  * Get all notifications
  * @returns {Promise<Array>} Array of notification objects
  */

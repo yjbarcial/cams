@@ -193,7 +193,7 @@ export const restoreProjectVersion = (projectType, projectId, versionId) => {
       lastModifiedISO: new Date().toISOString(),
     }
 
-    const restorationVersion = createProjectVersion(
+    createProjectVersion(
       projectType,
       projectId,
       restoredProject,

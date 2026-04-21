@@ -1,40 +1,11 @@
 // Notifications Service
 // Storage key: 'notifications'
-import { isPushNotificationsEnabled, isEmailNotificationsEnabled } from './settingsService.js'
+import { isEmailNotificationsEnabled } from './settingsService.js'
 import { formatStatus } from '@/utils/statusFormatter.js'
+import { ADMIN_EMAILS } from '@/utils/userDisplay.js'
 
 // Note: All role-based access is now database-driven via designation_label and role fields
 // See userDisplay.js for centralized admin email checking if needed
-
-/**
- * Get display name for notifications
- * - Admins see real names of everyone (for tracking purposes)
- * - Non-admins see "Admin" when an admin performs an action
- * @param {string} nameOrEmail - User name or email of the person performing action
- * @param {string} recipientEmail - Email of the person receiving the notification
- * @returns {string} Display name for notifications
- */
-const getNotificationDisplayName = (nameOrEmail, recipientEmail = null) => {
-  if (!nameOrEmail) return 'System'
-
-  // Check if the actor (person performing action) is an admin
-  const actorIsAdmin = ADMIN_EMAILS.some((adminEmail) =>
-    nameOrEmail.toLowerCase().includes(adminEmail.toLowerCase()),
-  )
-
-  // Check if the recipient is an admin
-  const recipientIsAdmin =
-    recipientEmail &&
-    ADMIN_EMAILS.some((adminEmail) => adminEmail.toLowerCase() === recipientEmail.toLowerCase())
-
-  // If recipient is admin, show real name of actor
-  // If recipient is not admin and actor is admin, show "Admin"
-  if (actorIsAdmin && !recipientIsAdmin) {
-    return 'Admin'
-  }
-
-  return nameOrEmail
-}
 
 /**
  * Clean up duplicate notifications from localStorage
@@ -309,8 +280,6 @@ export const createNotification = async (notificationData) => {
 
     // Prepare description based on recipient type
     let description = notificationData.description || ''
-    const createdByName = notificationData.createdBy || 'System'
-
     const notification = {
       id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: notificationData.type || 'Info',
@@ -1097,8 +1066,8 @@ const getTargetedRecipients = async (project, newStatus, action) => {
       try {
         const creatorProfile = await profilesService.getById(project.created_by_profile_id)
         if (creatorProfile?.email) addRecipient(creatorProfile.email, 'writer_creator')
-      } catch (e) {
-        console.warn('Could not fetch creator:', e)
+      } catch (err) {
+        console.warn('Could not fetch creator:', err)
       }
     }
     // Notify project members (writers/artists)
@@ -1112,13 +1081,13 @@ const getTargetedRecipients = async (project, newStatus, action) => {
           try {
             const memberProfile = await profilesService.getById(member.user_id)
             if (memberProfile?.email) addRecipient(memberProfile.email, 'project_member')
-          } catch (e) {
+          } catch {
             /* skip */
           }
         }
       }
-    } catch (e) {
-      console.warn('Could not fetch members:', e)
+    } catch (err) {
+      console.warn('Could not fetch members:', err)
     }
   } else {
     // For forward/approve/submit actions: notify only the NEXT role in the workflow
@@ -1132,8 +1101,8 @@ const getTargetedRecipients = async (project, newStatus, action) => {
       try {
         const shProfile = await profilesService.getById(project.section_head_id)
         if (shProfile?.email) addRecipient(shProfile.email, 'section_head')
-      } catch (e) {
-        console.warn('Could not fetch section head:', e)
+      } catch (err) {
+        console.warn('Could not fetch section head:', err)
       }
     }
 
@@ -1149,8 +1118,8 @@ const getTargetedRecipients = async (project, newStatus, action) => {
             if (p.email) addRecipient(p.email, `target_role:${designation}`)
           })
         }
-      } catch (e) {
-        console.warn(`Could not fetch ${designation}:`, e)
+      } catch (err) {
+        console.warn(`Could not fetch ${designation}:`, err)
       }
     }
 
@@ -1160,7 +1129,7 @@ const getTargetedRecipients = async (project, newStatus, action) => {
         try {
           const creatorProfile = await profilesService.getById(project.created_by_profile_id)
           if (creatorProfile?.email) addRecipient(creatorProfile.email, 'writer_published')
-        } catch (e) {
+        } catch {
           /* skip */
         }
       }
@@ -1282,7 +1251,7 @@ export const notifyStatusChange = async ({
     try {
       const recipientProfile = await profilesService.getByEmail(email)
       recipientUserId = recipientProfile?.id
-    } catch (e) {
+    } catch {
       /* skip */
     }
 

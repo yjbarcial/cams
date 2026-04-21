@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import ProjectHistory from './ProjectHistory.vue'
 
-const props = defineProps({
+defineProps({
   projectId: {
     type: [String, Number],
     required: true,

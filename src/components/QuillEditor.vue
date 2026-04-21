@@ -674,7 +674,7 @@ const addCommentIndicator = (comment) => {
   if (!quill.value) return
 
   try {
-    const [leaf, offset] = quill.value.getLeaf(comment.range.index)
+    const [leaf] = quill.value.getLeaf(comment.range.index)
     if (leaf && leaf.domNode) {
       const node = leaf.domNode
 
@@ -894,7 +894,7 @@ const deleteHighlightComment = (commentId) => {
               // Clear background format - this removes the highlight but keeps the text
               quill.value.formatText(comment.range.index, comment.range.length, 'background', false)
             }
-          } catch (error) {
+          } catch {
             // If range is invalid, try to find the text and clear it
             const allText = quill.value.getText()
             const commentText = comment.text || comment.actualText

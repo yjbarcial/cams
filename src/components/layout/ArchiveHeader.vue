@@ -6,10 +6,6 @@ const router = useRouter()
 const goToPublications = () => {
   router.push('/archive')
 }
-
-const goToLogin = () => {
-  router.push('/login')
-}
 </script>
 
 <template>

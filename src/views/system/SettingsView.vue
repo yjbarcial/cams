@@ -2,7 +2,7 @@
 import { ref, onMounted, watch } from 'vue'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
-import { getSettings, saveSettings, updateSetting } from '@/services/settingsService.js'
+import { getSettings, updateSetting } from '@/services/settingsService.js'
 
 // Settings state - loaded from localStorage
 const pushNotifications = ref(true)

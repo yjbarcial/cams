@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import { projectsService, profilesService } from '@/services/supabaseService'
 import { createNotification } from '@/services/notificationsService'
 import { supabase } from '@/utils/supabase'
+import { ADMIN_EMAILS } from '@/utils/userDisplay.js'
 
 // Accept optional prop; also support reading from route param/query
 const props = defineProps({ type: { type: String, default: '' } })
@@ -37,7 +38,6 @@ const categoryLabel = computed(() => {
 
 // Form state
 const title = ref('')
-const sectionHead = ref('')
 const deadline = ref('')
 const description = ref('')
 
@@ -364,9 +364,6 @@ const saveAsDraft = () => {
 
   const writersString = writerNames.length > 0 ? writerNames.join(', ') : 'Not assigned'
   const artistsString = artistNames.length > 0 ? artistNames.join(', ') : 'Not assigned'
-
-  // Determine storage key
-  const storageKey = `${routeType.value}_projects`
 
   const draftProject = {
     id: Date.now(),

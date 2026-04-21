@@ -73,25 +73,6 @@ const requireSectionHead = (to, from, next) => {
   }
 }
 
-// Editor (Content Admin) - can access technical-editor, editor-in-chief, chief-adviser, archival-manager views
-const requireEditor = (to, from, next) => {
-  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
-  if (!isLoggedIn) {
-    next({ name: 'login', query: { redirect: to.fullPath } })
-    return
-  }
-
-  const userRole = getEffectiveUserRole()
-
-  // Allow if editor (content admin) or system admin
-  if (userRole === 'editor' || userRole === 'admin') {
-    next()
-  } else {
-    showAccessDenied('editor')
-    next(false)
-  }
-}
-
 // Specific editor role guards
 const requireEditorInChief = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
@@ -136,19 +117,6 @@ const requireArchivalManager = (to, from, next) => {
   }
 }
 
-const requireTechnicalEditor = (to, from, next) => {
-  if (!checkAuth(to, from, next)) return
-  const accessRole = localStorage.getItem('accessRole')
-  const userRole = getEffectiveUserRole()
-
-  if (accessRole === 'technical_editor' || userRole === 'admin') {
-    next()
-  } else {
-    showAccessDenied('technical_editor')
-    next(false)
-  }
-}
-
 // Combined guard for unified Editor Review (both Technical Editor and Creative Director)
 const requireEditorReview = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
@@ -175,25 +143,6 @@ const checkAuth = (to, from, next) => {
     return false
   }
   return true
-}
-
-// Member (Writer/Artist) - can only access their own project view
-const requireMember = (to, from, next) => {
-  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
-  if (!isLoggedIn) {
-    next({ name: 'login', query: { redirect: to.fullPath } })
-    return
-  }
-
-  const userRole = getEffectiveUserRole()
-
-  // Allow if member (writer/artist) or admin
-  if (userRole === 'member' || userRole === 'admin') {
-    next()
-  } else {
-    showAccessDenied('member')
-    next(false)
-  }
 }
 
 const router = createRouter({

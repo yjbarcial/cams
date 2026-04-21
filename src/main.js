@@ -40,7 +40,7 @@ const setFavicon = () => {
     if (!link.parentNode) {
       document.head.appendChild(link)
     }
-  } catch (e) {
+  } catch {
     // no-op fallback to existing favicon
   }
 }

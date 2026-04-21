@@ -12,7 +12,6 @@ const router = useRouter()
 const publication = ref(null)
 const loading = ref(true)
 const currentPage = ref(1)
-const zoomLevel = ref(1)
 const viewMode = ref('single') // 'single' or 'double'
 const pages = ref([])
 const numPages = ref(null)
@@ -106,21 +105,6 @@ async function loadPDF(pdfUrl) {
     pdfLoading.value = false
     alert('Failed to load PDF: ' + error.message)
   }
-}
-
-// Render remaining pages progressively without blocking UI
-async function renderRemainingPages(pdf, startIndex) {
-  for (let i = startIndex; i < pdf.numPages; i++) {
-    // Check if page is already being rendered
-    if (renderQueue.has(i) || pages.value[i + 1] !== null) continue
-
-    // Render page
-    await renderPage(pdf, i)
-
-    // Give browser time to breathe after each page for smoother UI
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  }
-  console.log('✅ All pages rendered')
 }
 
 // Render a single PDF page to canvas (optimized for performance)
@@ -414,17 +398,6 @@ function toggleViewMode() {
   viewMode.value = viewMode.value === 'single' ? 'double' : 'single'
 }
 
-// Handle flip start to preload adjacent pages
-function onFlipStart() {
-  // Preload next 2 pages when flip animation starts
-  if (pdfDocument && currentPage.value < numPages.value - 2) {
-    const nextIdx = currentPage.value + 2
-    if (pages.value[nextIdx] === '' && !renderQueue.has(nextIdx)) {
-      renderPage(pdfDocument, nextIdx).catch((err) => console.warn('Preload error:', err))
-    }
-  }
-}
-
 function fullscreen() {
   const viewer = document.querySelector('.viewer-container')
   if (viewer) {
@@ -432,10 +405,6 @@ function fullscreen() {
       viewer.requestFullscreen()
     }
   }
-}
-
-function handleImageError(event) {
-  event.target.style.display = 'none'
 }
 
 // Keyboard navigation for better user experience

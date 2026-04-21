@@ -1,10 +1,9 @@
 import jwt from 'jsonwebtoken'
-import bcrypt from 'bcrypt'
 import ProfileModel from '../models/profile.model.js'
 
 export const register = async (req, res, next) => {
   try {
-    const { email, password, first_name, last_name, phone } = req.body
+    const { email, first_name, last_name, phone } = req.body
 
     // Check if user exists
     const existingUser = await ProfileModel.findByEmail(email)
@@ -14,9 +13,6 @@ export const register = async (req, res, next) => {
         error: { message: 'Email already registered' },
       })
     }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10)
 
     // Create profile
     const profile = await ProfileModel.create({
@@ -49,7 +45,7 @@ export const register = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body
+    const { email } = req.body
 
     // Check if email is from CARSU domain
     if (!email.endsWith('@carsu.edu.ph')) {

@@ -101,7 +101,7 @@ const formatTime = (timestamp) => {
     if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
 
     return date.toLocaleDateString()
-  } catch (error) {
+  } catch {
     return timestamp
   }
 }

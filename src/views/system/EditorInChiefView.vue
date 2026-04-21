@@ -15,7 +15,6 @@ import {
   deleteProjectComment,
   toggleCommentApproval,
 } from '@/services/commentsService.js'
-import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import { notifyStatusChange, notifyProjectUpdate } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
 import { formatStatus } from '@/utils/statusFormatter.js'
@@ -51,8 +50,6 @@ const loadCurrentUserProfile = async () => {
 const projectType = ref('magazine')
 
 // User role - EDITOR-IN-CHIEF ONLY
-const currentUserRole = ref('Editor-in-Chief')
-const currentUser = ref('Editor-in-Chief User')
 
 // Project data
 const project = ref({
@@ -415,6 +412,10 @@ const cancelApproval = () => {
   approvalComments.value = ''
 }
 
+const getActualStorageKey = () => {
+  return { type: projectType.value }
+}
+
 const goBack = () => {
   if (isEditorEditable.value && hasUnsavedChanges.value) {
     saveContentChanges()
@@ -647,7 +648,7 @@ const formatCommentTime = (timestamp) => {
     if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`
 
     return date.toLocaleDateString()
-  } catch (error) {
+  } catch {
     return timestamp
   }
 }

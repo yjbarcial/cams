@@ -160,7 +160,7 @@ async function saveProfile() {
     if (imageFile.value) {
       try {
         avatarUrl = await uploadImage()
-      } catch (uploadErr) {
+      } catch {
         const errorMsg = 'Failed to process image. Please try again.'
         error.value = errorMsg
         displayNotification(errorMsg, 'error')
@@ -429,7 +429,7 @@ onMounted(() => {
 
                           <p
                             v-if="canViewAccountRole"
-                            class="text-caption text-medium-emphasis mb-0 account-access-text"
+                            class="text-caption text-medium-emphasis mb-0"
                           >
                             Account Access: {{ roleLabel }}
                           </p>
@@ -843,15 +843,6 @@ onMounted(() => {
   color: #2c3e50 !important;
 }
 
-.profile-header-actions {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  width: 100%;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-}
-
 .profile-name {
   color: #2c3e50;
   word-break: break-word;
@@ -950,10 +941,6 @@ onMounted(() => {
 
 .contributor-chip :deep(.v-icon) {
   color: #455a64 !important;
-}
-
-.gap-4 {
-  gap: 1.25rem;
 }
 
 .gap-2 {
@@ -1061,10 +1048,6 @@ onMounted(() => {
 
   .profile-email {
     text-align: center;
-  }
-
-  .gap-4 {
-    gap: 0.75rem;
   }
 
   :deep(.v-card-text) {

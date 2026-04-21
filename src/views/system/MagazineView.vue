@@ -26,9 +26,6 @@ const canAddProject = computed(() => {
   return userRole === 'section_head' || isAdmin
 })
 
-// Sample magazine projects data
-const defaultProjects = []
-
 // Initialize projects with localStorage data
 const projects = ref([])
 
@@ -240,11 +237,6 @@ const handleView = (projectId) => {
   }
 }
 // ...existing code...
-
-const handleAddProject = () => {
-  console.log('Add new magazine project')
-  // Handle add project logic here
-}
 
 const toggleStar = async (projectId) => {
   const project = projects.value.find((p) => p.id === projectId)
