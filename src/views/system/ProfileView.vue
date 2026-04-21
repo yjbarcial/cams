@@ -20,6 +20,13 @@ const uploadingImage = ref(false)
 const showNotification = ref(false)
 const notificationMessage = ref('')
 const notificationType = ref('success')
+const updatingStatus = ref(false)
+
+const statusOptions = [
+  { value: 'active', label: 'Active', icon: 'mdi-circle', color: 'success' },
+  { value: 'inactive', label: 'Offline', icon: 'mdi-sleep', color: 'warning' },
+  { value: 'suspended', label: 'Do Not Disturb', icon: 'mdi-minus-circle', color: 'error' },
+]
 
 // Edit form data
 const editForm = ref({
@@ -200,6 +207,25 @@ function cancelEdit() {
   }
 }
 
+async function updatePresenceStatus(nextStatus) {
+  if (!isOwnProfile.value || !profile.value || !nextStatus) return
+  if (profile.value.status === nextStatus) return
+
+  updatingStatus.value = true
+  try {
+    const updated = await profilesService.update(profile.value.id, {
+      status: nextStatus,
+    })
+    profile.value = updated
+    displayNotification(`Status updated to ${statusLabel.value}.`, 'success')
+  } catch (err) {
+    console.error('Error updating status:', err)
+    displayNotification('Failed to update status. Please try again.', 'error')
+  } finally {
+    updatingStatus.value = false
+  }
+}
+
 // Guard to prevent editing other users' profiles
 function startEdit() {
   if (!isOwnProfile.value) {
@@ -236,10 +262,34 @@ const statusColor = computed(() => {
       : 'error'
 })
 
+const statusLabel = computed(() => {
+  const current = statusOptions.find((option) => option.value === profile.value?.status)
+  return current?.label || 'Active'
+})
+
+const statusIcon = computed(() => {
+  const current = statusOptions.find((option) => option.value === profile.value?.status)
+  return current?.icon || 'mdi-circle'
+})
+
 const roleLabel = computed(() => {
   if (!profile.value?.role) return 'Member'
   if (profile.value.role === 'admin') return 'System Admin'
+  if (profile.value.role === 'section_head') return 'Section Head'
   return profile.value.role.charAt(0).toUpperCase() + profile.value.role.slice(1)
+})
+
+const canViewAccountRole = computed(() => {
+  if (!currentUser.value) return false
+  return isOwnProfile.value || currentUser.value.role === 'admin'
+})
+
+const designationLabel = computed(() => {
+  return profile.value?.designation_label || 'Not assigned'
+})
+
+const contributorTypeLabel = computed(() => {
+  return profile.value?.positions_label || 'Not assigned'
 })
 
 onMounted(() => {
@@ -323,21 +373,66 @@ onMounted(() => {
                           <p class="text-body-1 profile-email mb-4">{{ profile.email }}</p>
 
                           <div class="d-flex gap-2 flex-wrap mb-3">
+                            <v-menu location="bottom" :close-on-content-click="true">
+                              <template #activator="{ props }">
+                                <v-btn
+                                  v-bind="props"
+                                  :color="statusColor"
+                                  size="small"
+                                  variant="flat"
+                                  class="status-chip"
+                                  :loading="updatingStatus"
+                                  :disabled="!isOwnProfile || updatingStatus"
+                                >
+                                  <v-icon start size="small">{{ statusIcon }}</v-icon>
+                                  {{ statusLabel }}
+                                  <v-icon end size="small" v-if="isOwnProfile"
+                                    >mdi-chevron-down</v-icon
+                                  >
+                                </v-btn>
+                              </template>
+
+                              <v-list density="compact" min-width="220">
+                                <v-list-item
+                                  v-for="option in statusOptions"
+                                  :key="option.value"
+                                  :title="option.label"
+                                  @click="updatePresenceStatus(option.value)"
+                                >
+                                  <template #prepend>
+                                    <v-icon :color="option.color" size="small">{{
+                                      option.icon
+                                    }}</v-icon>
+                                  </template>
+                                </v-list-item>
+                              </v-list>
+                            </v-menu>
+
                             <v-chip
-                              :color="statusColor"
                               size="small"
-                              variant="flat"
-                              class="status-chip"
+                              variant="outlined"
+                              class="meta-chip designation-chip"
                             >
-                              <v-icon start size="small">mdi-circle</v-icon>
-                              {{ profile.status || 'Active' }}
+                              <v-icon start size="small">mdi-account-tie</v-icon>
+                              Designation: {{ designationLabel }}
                             </v-chip>
 
-                            <v-chip color="#f5c52b" size="small" variant="flat" class="role-chip">
-                              <v-icon start size="small">mdi-shield-account</v-icon>
-                              {{ roleLabel }}
+                            <v-chip
+                              size="small"
+                              variant="outlined"
+                              class="meta-chip contributor-chip"
+                            >
+                              <v-icon start size="small">mdi-pencil-ruler</v-icon>
+                              Contributor: {{ contributorTypeLabel }}
                             </v-chip>
                           </div>
+
+                          <p
+                            v-if="canViewAccountRole"
+                            class="text-caption text-medium-emphasis mb-0 account-access-text"
+                          >
+                            Account Access: {{ roleLabel }}
+                          </p>
                         </div>
 
                         <v-btn
@@ -398,10 +493,38 @@ onMounted(() => {
                       </div>
                     </v-col>
 
+                    <v-col cols="12" md="6">
+                      <div class="mb-4">
+                        <p class="text-caption text-medium-emphasis mb-1">Workflow Designation</p>
+                        <p class="text-body-1">{{ designationLabel }}</p>
+                      </div>
+                    </v-col>
+
+                    <v-col cols="12" md="6">
+                      <div class="mb-4">
+                        <p class="text-caption text-medium-emphasis mb-1">Contributor Type</p>
+                        <p class="text-body-1">{{ contributorTypeLabel }}</p>
+                      </div>
+                    </v-col>
+
                     <v-col cols="12">
                       <div class="mb-4">
                         <p class="text-caption text-medium-emphasis mb-1">Bio</p>
                         <p class="text-body-1">{{ profile.bio || 'No bio added yet' }}</p>
+                      </div>
+                    </v-col>
+
+                    <v-col v-if="canViewAccountRole" cols="12" md="6">
+                      <div class="mb-4">
+                        <p class="text-caption text-medium-emphasis mb-1">Account Access</p>
+                        <p class="text-body-1">{{ roleLabel }}</p>
+                      </div>
+                    </v-col>
+
+                    <v-col cols="12" md="6">
+                      <div class="mb-4">
+                        <p class="text-caption text-medium-emphasis mb-1">Status</p>
+                        <p class="text-body-1">{{ statusLabel }}</p>
                       </div>
                     </v-col>
 
@@ -793,23 +916,40 @@ onMounted(() => {
   font-size: 0.85rem;
 }
 
-.role-chip {
+.meta-chip {
   font-weight: 600;
   letter-spacing: 0.2px;
   padding: 0 14px !important;
   height: 30px !important;
-  background: #f5c52b !important;
-  border: none !important;
   font-size: 0.85rem;
 }
 
-.role-chip :deep(.v-chip__content) {
-  color: #2c3e50 !important;
+.designation-chip {
+  background: rgba(245, 197, 43, 0.12) !important;
+  border-color: rgba(245, 197, 43, 0.55) !important;
+}
+
+.designation-chip :deep(.v-chip__content) {
+  color: #705b00 !important;
   font-weight: 600;
 }
 
-.role-chip :deep(.v-icon) {
-  color: #2c3e50 !important;
+.designation-chip :deep(.v-icon) {
+  color: #705b00 !important;
+}
+
+.contributor-chip {
+  background: #f8fafb !important;
+  border-color: #cfd8dc !important;
+}
+
+.contributor-chip :deep(.v-chip__content) {
+  color: #455a64 !important;
+  font-weight: 600;
+}
+
+.contributor-chip :deep(.v-icon) {
+  color: #455a64 !important;
 }
 
 .gap-4 {
