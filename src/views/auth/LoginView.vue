@@ -18,20 +18,6 @@ const isSignupMode = ref(false)
 const confirmPassword = ref('')
 const showConfirmPassword = ref(false)
 const successMessage = ref('')
-const signupDesignationLabel = ref('')
-const signupPositionsLabel = ref('')
-
-const designationItems = [
-  'Section Head',
-  'Technical Editor',
-  'Creative Director',
-  'Editor-in-Chief',
-  'Chief Adviser',
-  'Archival Manager',
-  'Online Accounts Manager',
-]
-
-const contributorTypeItems = ['Writer', 'Artist']
 
 // CARSU email validator
 const carsuEmailValidator = (value) => {
@@ -55,23 +41,6 @@ const form = ref(null)
 
 function togglePassword() {
   showPassword.value = !showPassword.value
-}
-
-async function hasExistingProfile(emailAddress) {
-  if (!emailAddress) return false
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('email', emailAddress)
-    .maybeSingle()
-
-  if (error && error.code !== 'PGRST116') {
-    console.warn('Could not check existing profile:', error.message)
-    return false
-  }
-
-  return Boolean(data?.id)
 }
 
 // Handle back button navigation prevention
@@ -185,25 +154,11 @@ async function signUpWithPassword() {
   }
 
   try {
-    const existingProfile = await hasExistingProfile(email.value)
-
-    if (!existingProfile && !signupPositionsLabel.value) {
-      errorMessage.value = 'Please select if the user is Writer or Artist.'
-      loading.value = false
-      return
-    }
-
-    const signupProfile = {
-      designation_label: signupDesignationLabel.value || null,
-      positions_label: signupPositionsLabel.value || null,
-    }
-
     const { data, error } = await supabase.auth.signUp({
       email: email.value,
       password: password.value,
       options: {
         emailRedirectTo: `${window.location.origin}/login`,
-        data: signupProfile,
       },
     })
 
@@ -216,8 +171,6 @@ async function signUpWithPassword() {
       isSignupMode.value = false // Switch back to login mode
       password.value = '' // Clear password for security
       confirmPassword.value = ''
-      signupDesignationLabel.value = ''
-      signupPositionsLabel.value = ''
       loading.value = false
       return
     }
@@ -226,7 +179,7 @@ async function signUpWithPassword() {
     if (data.user && data.session) {
       localStorage.setItem('isLoggedIn', 'true')
       localStorage.setItem('userEmail', data.user.email)
-      await addUserToProfiles(data.user, signupProfile)
+      await addUserToProfiles(data.user)
       successMessage.value = 'Account created successfully! Redirecting...'
 
       // Short delay to show success message
@@ -239,8 +192,6 @@ async function signUpWithPassword() {
       isSignupMode.value = false
       password.value = ''
       confirmPassword.value = ''
-      signupDesignationLabel.value = ''
-      signupPositionsLabel.value = ''
     }
   } catch (error) {
     if (error.message?.includes('already registered')) {
@@ -291,8 +242,6 @@ function toggleMode() {
   successMessage.value = ''
   password.value = ''
   confirmPassword.value = ''
-  signupDesignationLabel.value = ''
-  signupPositionsLabel.value = ''
 }
 
 // Request password reset
@@ -426,35 +375,16 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
                 required
               />
 
-              <v-select
+              <v-alert
                 v-if="isSignupMode"
-                v-model="signupDesignationLabel"
-                :items="designationItems"
-                label="Designation (optional)"
-                placeholder="Select designation (optional)"
-                persistent-placeholder
-                prepend-inner-icon="mdi-badge-account-outline"
-                variant="outlined"
-                class="input-group"
+                type="info"
+                variant="tonal"
+                class="mb-4"
                 density="compact"
-                :disabled="loading"
-                clearable
-              />
-
-              <v-select
-                v-if="isSignupMode"
-                v-model="signupPositionsLabel"
-                :items="contributorTypeItems"
-                label="Contributor Type"
-                placeholder="Select contributor type (Writer or Artist)"
-                persistent-placeholder
-                prepend-inner-icon="mdi-account-edit-outline"
-                variant="outlined"
-                class="input-group"
-                density="compact"
-                :disabled="loading"
-                required
-              />
+              >
+                Role, designation, and contributor type are assigned by admin after account
+                creation.
+              </v-alert>
 
               <div v-if="!isSignupMode" style="text-align: right; margin-bottom: 16px">
                 <v-btn
