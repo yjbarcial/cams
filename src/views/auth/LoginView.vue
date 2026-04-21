@@ -22,13 +22,13 @@ const signupDesignationLabel = ref('')
 const signupPositionsLabel = ref('')
 
 const designationItems = [
+  'Section Head',
   'Technical Editor',
   'Creative Director',
   'Editor-in-Chief',
   'Chief Adviser',
   'Archival Manager',
   'Online Accounts Manager',
-  'Section Head',
 ]
 
 const contributorTypeItems = ['Writer', 'Artist']
