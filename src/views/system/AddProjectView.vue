@@ -65,15 +65,42 @@ const normalizeText = (value) =>
     .trim()
     .toLowerCase()
 
+const getProfileName = (user) => {
+  const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim()
+  if (fullName) return fullName
+
+  const existingName = String(user.full_name || '').trim()
+  if (existingName && existingName !== user.email) return existingName
+
+  const emailName = String(user.email || '').split('@')[0]
+  return emailName
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+const getProfileRoleLabel = (user) =>
+  user.designation_label || user.positions_label || (user.role === 'section_head' ? 'Section Head' : user.role)
+
+const withDisplayFields = (user) => ({
+  ...user,
+  display_name: getProfileName(user),
+  display_role_label: getProfileRoleLabel(user),
+})
+
 const getMemberType = (user) => {
   const positionsLabel = normalizeText(user.positions_label)
   const designationLabel = normalizeText(user.designation_label)
   const legacyRole = normalizeText(user.role)
+  const artistPositions = ['layout artist', 'illustrator', 'photojournalist', 'videographer']
 
   if (positionsLabel.includes('writer')) return 'writer'
   if (positionsLabel.includes('artist')) return 'artist'
+  if (artistPositions.some((position) => positionsLabel.includes(position))) return 'artist'
   if (designationLabel.includes('writer')) return 'writer'
   if (designationLabel.includes('artist')) return 'artist'
+  if (artistPositions.some((position) => designationLabel.includes(position))) return 'artist'
   if (legacyRole === 'writer' || legacyRole === 'artist') return legacyRole
 
   return null
@@ -85,6 +112,7 @@ const isSectionHeadCandidate = (user) => {
 
   return (
     role === 'section_head' ||
+    designation.includes('section head') ||
     designation.includes('editor-in-chief') ||
     designation.includes('editor in chief') ||
     designation.includes('managing editor')
@@ -99,9 +127,14 @@ const loadUsers = async () => {
     loading.value.artists = true
 
     // Fetch all users from Supabase
-    const allUsers = await profilesService.getAll()
+    const allUsers = (await profilesService.getAll()).map(withDisplayFields)
 
-    users.value.sectionHeads = allUsers.filter(isSectionHeadCandidate)
+    users.value.sectionHeads = allUsers.filter(isSectionHeadCandidate).sort((a, b) => {
+      const aIsSectionHead = normalizeText(a.designation_label).includes('section head')
+      const bIsSectionHead = normalizeText(b.designation_label).includes('section head')
+      if (aIsSectionHead !== bIsSectionHead) return aIsSectionHead ? -1 : 1
+      return a.display_name.localeCompare(b.display_name)
+    })
     users.value.writers = allUsers.filter((u) => getMemberType(u) === 'writer')
     users.value.artists = allUsers.filter((u) => getMemberType(u) === 'artist')
 
@@ -117,15 +150,15 @@ const loadUsers = async () => {
     users.value.sectionHeads = [
       { id: 'sh_1', full_name: 'John Smith', role: 'Section Head', department: 'Editorial' },
       { id: 'sh_2', full_name: 'Sarah Johnson', role: 'Section Head', department: 'Editorial' },
-    ]
+    ].map(withDisplayFields)
     users.value.writers = [
       { id: 'writer_1', full_name: 'Emily Davis', role: 'Writer', department: 'Editorial' },
       { id: 'writer_2', full_name: 'Michael Brown', role: 'Writer', department: 'Editorial' },
-    ]
+    ].map(withDisplayFields)
     users.value.artists = [
       { id: 'artist_1', full_name: 'David Wilson', role: 'Artist', department: 'Design' },
       { id: 'artist_2', full_name: 'Lisa Anderson', role: 'Artist', department: 'Design' },
-    ]
+    ].map(withDisplayFields)
   } finally {
     loading.value.sectionHeads = false
     loading.value.writers = false
@@ -351,15 +384,15 @@ const saveAsDraft = () => {
 
   // Get selected user names (if any selected)
   const sectionHeadName = selectedSectionHead.value
-    ? users.value.sectionHeads.find((sh) => sh.id === selectedSectionHead.value)?.full_name ||
+    ? users.value.sectionHeads.find((sh) => sh.id === selectedSectionHead.value)?.display_name ||
       'Not assigned'
     : 'Not assigned'
 
   const writerNames = selectedWriters.value.map(
-    (id) => users.value.writers.find((w) => w.id === id)?.full_name || 'Unknown',
+    (id) => users.value.writers.find((w) => w.id === id)?.display_name || 'Unknown',
   )
   const artistNames = selectedArtists.value.map(
-    (id) => users.value.artists.find((a) => a.id === id)?.full_name || 'Unknown',
+    (id) => users.value.artists.find((a) => a.id === id)?.display_name || 'Unknown',
   )
 
   const writersString = writerNames.length > 0 ? writerNames.join(', ') : 'Not assigned'
@@ -427,7 +460,7 @@ const saveAsDraft = () => {
                       <v-select
                         v-model="selectedSectionHead"
                         :items="users.sectionHeads"
-                        item-title="full_name"
+                        item-title="display_name"
                         item-value="id"
                         variant="outlined"
                         density="comfortable"
@@ -439,13 +472,13 @@ const saveAsDraft = () => {
                           <v-list-item v-bind="itemProps">
                             <template v-slot:title>
                               <div class="d-flex align-center">
-                                <span class="text-body-1">{{ item.raw.full_name }}</span>
+                                <span class="text-body-1">{{ item.raw.display_name }}</span>
                                 <v-chip size="small" class="ml-2" color="primary" variant="tonal">
-                                  {{ item.raw.role }}
+                                  {{ item.raw.display_role_label }}
                                 </v-chip>
                               </div>
                               <div class="text-caption text-medium-emphasis">
-                                {{ item.raw.department }}
+                                {{ item.raw.positions_label || item.raw.designation_label || 'Member' }}
                               </div>
                             </template>
                           </v-list-item>
@@ -494,7 +527,7 @@ const saveAsDraft = () => {
                             <v-select
                               v-model="selectedWriters"
                               :items="users.writers"
-                              item-title="full_name"
+                              item-title="display_name"
                               item-value="id"
                               variant="outlined"
                               density="comfortable"
@@ -516,7 +549,7 @@ const saveAsDraft = () => {
                                     )
                                   "
                                 >
-                                  {{ item.raw.full_name }}
+                                  {{ item.raw.display_name }}
                                 </v-chip>
                                 <span
                                   v-else-if="index === 3"
@@ -529,18 +562,18 @@ const saveAsDraft = () => {
                                 <v-list-item v-bind="itemProps">
                                   <template v-slot:title>
                                     <div class="d-flex align-center">
-                                      <span class="text-body-1">{{ item.raw.full_name }}</span>
+                                      <span class="text-body-1">{{ item.raw.display_name }}</span>
                                       <v-chip
                                         size="small"
                                         class="ml-2"
                                         color="primary"
                                         variant="tonal"
                                       >
-                                        {{ item.raw.role }}
+                                        {{ item.raw.display_role_label }}
                                       </v-chip>
                                     </div>
                                     <div class="text-caption text-medium-emphasis">
-                                      {{ item.raw.department }}
+                                      {{ item.raw.positions_label || item.raw.designation_label || 'Member' }}
                                     </div>
                                   </template>
                                 </v-list-item>
@@ -558,7 +591,7 @@ const saveAsDraft = () => {
                                 "
                               >
                                 {{
-                                  users.writers.find((w) => w.id === writerId)?.full_name ||
+                                  users.writers.find((w) => w.id === writerId)?.display_name ||
                                   'Unknown'
                                 }}
                               </v-chip>
@@ -576,7 +609,7 @@ const saveAsDraft = () => {
                             <v-select
                               v-model="selectedArtists"
                               :items="users.artists"
-                              item-title="full_name"
+                              item-title="display_name"
                               item-value="id"
                               variant="outlined"
                               density="comfortable"
@@ -598,7 +631,7 @@ const saveAsDraft = () => {
                                     )
                                   "
                                 >
-                                  {{ item.raw.full_name }}
+                                  {{ item.raw.display_name }}
                                 </v-chip>
                                 <span
                                   v-else-if="index === 3"
@@ -612,18 +645,18 @@ const saveAsDraft = () => {
                                 <v-list-item v-bind="itemProps">
                                   <template v-slot:title>
                                     <div class="d-flex align-center">
-                                      <span class="text-body-1">{{ item.raw.full_name }}</span>
+                                      <span class="text-body-1">{{ item.raw.display_name }}</span>
                                       <v-chip
                                         size="small"
                                         class="ml-2"
                                         color="primary"
                                         variant="tonal"
                                       >
-                                        {{ item.raw.role }}
+                                        {{ item.raw.display_role_label }}
                                       </v-chip>
                                     </div>
                                     <div class="text-caption text-medium-emphasis">
-                                      {{ item.raw.department }}
+                                      {{ item.raw.positions_label || item.raw.designation_label || 'Member' }}
                                     </div>
                                   </template>
                                 </v-list-item>
@@ -642,7 +675,7 @@ const saveAsDraft = () => {
                                 "
                               >
                                 {{
-                                  users.artists.find((a) => a.id === artistId)?.full_name ||
+                                  users.artists.find((a) => a.id === artistId)?.display_name ||
                                   'Unknown'
                                 }}
                               </v-chip>

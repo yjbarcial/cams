@@ -3,7 +3,12 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { requiredValidator, emailValidator } from '@/utils/validators'
 import { supabase } from '@/utils/supabase'
-import { addUserToProfiles, createUserProfile, isUserRegistered } from '@/utils/autoAddUser'
+import {
+  addUserToProfiles,
+  createUserProfile,
+  getUserProfileByEmail,
+  isUserRegistered,
+} from '@/utils/autoAddUser'
 import libBg from '/images/lib-hd.jpg'
 
 const router = useRouter()
@@ -70,11 +75,24 @@ onMounted(async () => {
   } = await supabase.auth.getSession()
 
   if (session) {
-    // Already logged in - redirect immediately
+    const success = await addUserToProfiles(session.user)
+
+    if (!success) {
+      await supabase.auth.signOut()
+      localStorage.setItem('isLoggedIn', 'false')
+      localStorage.removeItem('userRole')
+      localStorage.removeItem('accessRole')
+      localStorage.removeItem('userId')
+      localStorage.removeItem('userEmail')
+      errorMessage.value =
+        'Your account is waiting for administrator approval. Please check back after an admin approves your access.'
+      loading.value = false
+      return
+    }
+
+    // Already logged in and approved - redirect immediately
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem('userEmail', session.user.email)
-    // Ensure role/accessRole are available before redirecting
-    await addUserToProfiles(session.user)
     router.replace('/dashboard')
     return
   }
@@ -123,12 +141,31 @@ async function signInWithPassword() {
       return
     }
 
-    // User is registered, update their profile status
+    const profile = await getUserProfileByEmail(data.user.email)
+
+    if (profile?.status === 'pending') {
+      await supabase.auth.signOut()
+      errorMessage.value =
+        'Your account is pending approval. Please check back after a system administrator approves your access.'
+      loading.value = false
+      return
+    }
+
+    if (profile?.status === 'suspended') {
+      await supabase.auth.signOut()
+      errorMessage.value =
+        'Your account has been suspended. Please contact the organization administrator.'
+      loading.value = false
+      return
+    }
+
+    // User is registered and approved, update their login status
     const success = await addUserToProfiles(data.user)
 
     if (!success) {
       await supabase.auth.signOut()
-      errorMessage.value = 'Unable to load your profile. Please try again or contact support.'
+      errorMessage.value =
+        'Unable to load an approved profile. Please wait for administrator approval or contact support.'
       loading.value = false
       return
     }
@@ -146,7 +183,7 @@ async function signInWithPassword() {
     } else {
       errorMessage.value = error.message || 'Failed to sign in.'
     }
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && !error.message?.includes('Invalid login credentials')) {
       console.error('❌ Password sign in error:', error)
     }
   } finally {
@@ -188,7 +225,7 @@ async function signUpWithPassword() {
     // Check if email confirmation is required
     if (data.user && !data.session) {
       // Email verification required - show clear instructions
-      successMessage.value = `✅ Account created! Check your email (${email.value}) for the verification link. Click it to activate your account, then return here to sign in.`
+      successMessage.value = `Account created. Check ${email.value} for the verification link. After verification, your account will wait for administrator approval.`
       isSignupMode.value = false // Switch back to login mode
       password.value = '' // Clear password for security
       confirmPassword.value = ''
@@ -202,14 +239,17 @@ async function signUpWithPassword() {
         // Create user profile in the system
         await createUserProfile(data.user)
 
-        localStorage.setItem('isLoggedIn', 'true')
-        localStorage.setItem('userEmail', data.user.email)
-        successMessage.value = 'Account created successfully! Redirecting...'
-
-        // Short delay to show success message
-        setTimeout(() => {
-          router.replace('/dashboard')
-        }, 1000)
+        await supabase.auth.signOut()
+        localStorage.setItem('isLoggedIn', 'false')
+        localStorage.removeItem('userRole')
+        localStorage.removeItem('accessRole')
+        localStorage.removeItem('userId')
+        localStorage.removeItem('userEmail')
+        successMessage.value =
+          'Account created successfully. Please wait for a system administrator to approve your access.'
+        isSignupMode.value = false
+        password.value = ''
+        confirmPassword.value = ''
       } catch (profileError) {
         console.error('❌ Error creating profile:', profileError)
         errorMessage.value =
@@ -221,7 +261,7 @@ async function signUpWithPassword() {
       }
     } else if (data.user) {
       // Fallback - user created but needs email confirmation
-      successMessage.value = `Account created! Check ${email.value} for verification link, then sign in.`
+      successMessage.value = `Account created. Check ${email.value} for the verification link, then wait for administrator approval.`
       isSignupMode.value = false
       password.value = ''
       confirmPassword.value = ''
@@ -526,7 +566,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
   background: #fff !important;
   border-radius: 10px !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
-  padding: 22px 20px 18px !important;
+  padding: 24px 22px 20px !important;
   margin-top: 12px;
   border-bottom: 5px solid #f5c52b !important;
 }
@@ -537,13 +577,14 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 }
 
 .subtext {
-  margin: 0 0 8px 0;
+  margin: 0 0 14px 0;
   text-align: center;
   color: #6b6b6b;
 }
 
 .form {
   display: grid;
+  gap: 2px;
 }
 
 .input-group :deep(.v-field) {
@@ -645,9 +686,11 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 
 /* Message Cards */
 .message-card {
-  border-radius: 12px !important;
-  padding: 14px 18px;
+  border-radius: 8px !important;
+  padding: 14px 16px;
   border-left: 4px solid;
+  margin-top: 14px;
+  margin-bottom: 16px !important;
 }
 
 .success-card {
@@ -662,17 +705,18 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
 
 .message-content {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 10px;
 }
 
 .message-icon {
   flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .message-text {
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.88rem;
+  line-height: 1.45;
   color: #2c3e50;
   flex: 1;
 }
@@ -683,7 +727,7 @@ const loginBgStyle = { '--login-bg-url': `url('${libBg}')` }
     height: 110px;
   }
   .card {
-    padding: 18px 16px 16px;
+    padding: 20px 16px 16px !important;
   }
 }
 </style>

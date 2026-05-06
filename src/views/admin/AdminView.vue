@@ -44,6 +44,7 @@ const showEditUserDialog = ref(false)
 const editingUser = ref(null)
 const editFormData = ref({
   role: '',
+  status: '',
   designation_label: '',
   positions_label: '',
 })
@@ -52,19 +53,23 @@ const editLoading = ref(false)
 const roleOptions = [
   { title: 'Admin', value: 'admin' },
   { title: 'Editor', value: 'editor' },
-  { title: 'Section Head', value: 'section_head' },
   { title: 'Member', value: 'member' },
   { title: 'Viewer', value: 'viewer' },
 ]
 
+const approvalStatusActions = [
+  { title: 'Approve', value: 'active', icon: 'mdi-check-circle-outline', color: 'success' },
+  { title: 'Reject', value: 'inactive', icon: 'mdi-close-circle-outline', color: 'error' },
+]
+
 const designationOptions = [
+  { title: 'Section Head', value: 'Section Head' },
   { title: 'Technical Editor', value: 'Technical Editor' },
   { title: 'Creative Director', value: 'Creative Director' },
   { title: 'Editor-in-Chief', value: 'Editor-in-Chief' },
   { title: 'Chief Adviser', value: 'Chief Adviser' },
   { title: 'Archival Manager', value: 'Archival Manager' },
   { title: 'Online Accounts Manager', value: 'Online Accounts Manager' },
-  { title: 'Section Head', value: 'Section Head' },
 ]
 
 const positionOptions = [
@@ -400,6 +405,7 @@ const fetchRealUsers = async () => {
         positions_label: user.positions_label || '',
         status: user.status || 'active',
         created_at: user.created_at,
+        updated_at: user.updated_at,
         last_sign_in: user.last_login,
         last_active: user.last_active,
         updated_at: user.updated_at,
@@ -504,6 +510,29 @@ const isNewUser = (createdAt) => {
   return ageMs >= 0 && ageMs <= dayMs
 }
 
+const getUserStatusColor = (status) => {
+  const colors = {
+    active: '#e8f5e9',
+    inactive: '#f3f4f6',
+    pending: '#fff8e1',
+    suspended: '#ffebee',
+  }
+
+  return colors[status] || '#f3f4f6'
+}
+
+const getUserStatusClass = (status) => {
+  if (status === 'active') return 'status-chip-active'
+  if (status === 'pending') return 'status-chip-pending'
+  if (status === 'suspended') return 'status-chip-suspended'
+  return 'status-chip-offline'
+}
+
+const getUserStatusText = (status) => {
+  if (status === 'pending') return 'Pending Approval'
+  return formatText(status)
+}
+
 // Computed properties for filtered users
 const filteredUsers = computed(() => {
   const key = (search.value || '').toLowerCase()
@@ -524,11 +553,6 @@ const formatDate = (date) => {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-const getUserStatusLabel = (user) => {
-  if (user?.status === 'active') return 'Active now'
-  return 'Offline'
 }
 
 // Format text by removing underscores and capitalizing (e.g., "section_head" -> "Section Head")
@@ -585,14 +609,17 @@ const removeUser = async (userId) => {
 
 // Open edit user dialog
 const openEditUserDialog = (user) => {
+  const isLegacySectionHead = user.role === 'section_head'
+
   editingUser.value = {
     ...user,
     first_name: user.first_name || '',
     last_name: user.last_name || '',
   }
   editFormData.value = {
-    role: user.role || 'member',
-    designation_label: user.designation_label || '',
+    role: isLegacySectionHead ? 'member' : user.role || 'member',
+    status: user.status || 'pending',
+    designation_label: isLegacySectionHead && !user.designation_label ? 'Section Head' : user.designation_label || '',
     positions_label: user.positions_label || '',
   }
   showEditUserDialog.value = true
@@ -602,7 +629,7 @@ const openEditUserDialog = (user) => {
 const closeEditUserDialog = () => {
   showEditUserDialog.value = false
   editingUser.value = null
-  editFormData.value = { role: '', designation_label: '', positions_label: '' }
+  editFormData.value = { role: '', status: '', designation_label: '', positions_label: '' }
 }
 
 const emptyToNull = (value) => {
@@ -616,24 +643,13 @@ const hasNormalizedChange = (nextValue, previousValue) => {
   return emptyToNull(nextValue) !== emptyToNull(previousValue)
 }
 
-const logRoleChangeAudit = async ({ targetUserId, targetEmail, oldRole, newRole }) => {
-  if (!targetUserId || !newRole || oldRole === newRole) return
+const setEditStatus = (status) => {
+  editFormData.value.status = status
+}
 
-  const changedByUserId = localStorage.getItem('userId') || null
-
-  // Non-blocking hook: safe even if audit table is not created yet.
-  const { error } = await supabase.from('role_change_audit_logs').insert({
-    target_user_id: targetUserId,
-    target_email: targetEmail || null,
-    old_role: oldRole || null,
-    new_role: newRole,
-    changed_by_user_id: changedByUserId,
-    changed_at: new Date().toISOString(),
-  })
-
-  if (error && error.code !== '42P01') {
-    console.warn('Role audit log skipped:', error.message)
-  }
+const applyApprovalStatus = async (status) => {
+  setEditStatus(status)
+  await saveUserChanges()
 }
 
 // Save user changes
@@ -642,9 +658,9 @@ const saveUserChanges = async () => {
 
   editLoading.value = true
   try {
-    const oldRole = editingUser.value.role || null
     const updateData = {
       role: editFormData.value.role,
+      status: editFormData.value.status,
       updated_at: new Date().toISOString(),
     }
 
@@ -667,6 +683,8 @@ const saveUserChanges = async () => {
     const userIndex = users.value.findIndex((u) => u.id === editingUser.value.id)
     if (userIndex !== -1) {
       users.value[userIndex].role = updateData.role
+      users.value[userIndex].status = updateData.status
+      users.value[userIndex].updated_at = updateData.updated_at
       if ('designation_label' in updateData) {
         users.value[userIndex].designation_label = updateData.designation_label || ''
       }
@@ -674,13 +692,6 @@ const saveUserChanges = async () => {
         users.value[userIndex].positions_label = updateData.positions_label || ''
       }
     }
-
-    await logRoleChangeAudit({
-      targetUserId: editingUser.value.id,
-      targetEmail: editingUser.value.email,
-      oldRole,
-      newRole: editFormData.value.role,
-    })
 
     displayNotification(`User ${editingUser.value.email} updated successfully!`, 'success')
     closeEditUserDialog()
@@ -1299,27 +1310,22 @@ const performClearClientData = async () => {
                               >
                                 {{ formatText(user.role) }}
                               </v-chip>
-                            </td>
-                            <td class="td-designation">
-                              <span v-if="user.designation_label" class="designation-badge">
-                                {{ user.designation_label }}
-                              </span>
-                              <span v-else class="text-grey">—</span>
-                            </td>
-                            <td class="td-status">
-                              <v-chip
-                                size="small"
-                                :color="user.status === 'active' ? '#e8f5e9' : '#f3f4f6'"
-                                class="status-chip"
-                                :class="
-                                  user.status === 'active'
-                                    ? 'status-chip-active'
-                                    : 'status-chip-offline'
-                                "
-                              >
-                                <span>{{ getUserStatusLabel(user) }}</span>
-                              </v-chip>
-                            </td>
+                              <td class="td-designation">
+                                <span v-if="user.designation_label" class="designation-badge">
+                                  {{ user.designation_label }}
+                                </span>
+                                <span v-else class="text-grey">—</span>
+                              </td>
+                              <td class="td-status">
+                                <v-chip
+                                  size="small"
+                                  :color="getUserStatusColor(user.status)"
+                                  class="status-chip"
+                                  :class="getUserStatusClass(user.status)"
+                                >
+                                  {{ getUserStatusText(user.status) }}
+                                </v-chip>
+                              </td>
                             <td class="td-actions">
                               <div style="display: flex; gap: 4px; justify-content: center">
                                 <v-btn
@@ -1450,83 +1456,125 @@ const performClearClientData = async () => {
     </Teleport>
 
     <!-- Edit User Dialog -->
-    <v-dialog v-model="showEditUserDialog" max-width="500px">
+    <v-dialog v-model="showEditUserDialog" max-width="560px">
       <v-card class="edit-user-card">
         <!-- Header -->
         <v-card-title class="edit-user-header">
           <div class="header-content">
-            <v-avatar size="40" color="#f5c52b" class="mr-2">
-              <span class="font-weight-bold" style="color: #2c3e50">
+            <v-avatar size="44" color="#2c3e50" class="edit-user-avatar">
+              <span class="font-weight-bold">
                 {{ editingUser?.email?.charAt(0).toUpperCase() }}
               </span>
             </v-avatar>
-            <div>
-              <div class="font-weight-bold">Edit User</div>
-              <div class="text-caption" style="color: rgba(0, 0, 0, 0.6)">
+            <div class="edit-user-identity">
+              <div class="edit-user-title">Edit User</div>
+              <div class="edit-user-email">
                 {{ editingUser?.email }}
               </div>
             </div>
+            <v-spacer></v-spacer>
+            <v-chip
+              size="small"
+              class="edit-status-chip"
+              :class="getUserStatusClass(editFormData.status)"
+              :color="getUserStatusColor(editFormData.status)"
+            >
+              {{ getUserStatusText(editFormData.status) }}
+            </v-chip>
           </div>
         </v-card-title>
 
-        <v-divider></v-divider>
-
-        <v-card-text class="pa-6">
+        <v-card-text class="edit-user-body">
           <v-form @submit.prevent="saveUserChanges">
-            <div class="form-section">
-              <label class="section-label">System Role</label>
-              <v-select
-                v-model="editFormData.role"
-                :items="roleOptions"
-                variant="outlined"
-                density="comfortable"
-                :disabled="editLoading"
-              />
+            <div class="dialog-section">
+              <div class="section-heading">
+                <v-icon size="18">mdi-account-check-outline</v-icon>
+                <span>Account Approval</span>
+              </div>
+              <div class="approval-actions">
+                <v-btn
+                  v-for="action in approvalStatusActions"
+                  :key="action.value"
+                  class="approval-action-btn"
+                  :class="{ 'approval-action-active': editFormData.status === action.value }"
+                  variant="outlined"
+                  size="large"
+                  :disabled="editLoading"
+                  :loading="editLoading && editFormData.status === action.value"
+                  type="button"
+                  @click="applyApprovalStatus(action.value)"
+                >
+                  <v-icon start size="16">{{ action.icon }}</v-icon>
+                  {{ action.title }}
+                </v-btn>
+              </div>
+              <div class="status-helper">
+                Approval buttons save immediately.
+              </div>
             </div>
 
-            <div class="form-section">
-              <label class="section-label">Workflow Designation</label>
-              <v-select
-                v-model="editFormData.designation_label"
-                :items="designationOptions"
-                variant="outlined"
-                density="comfortable"
-                clearable
-                :disabled="editLoading"
-              />
-            </div>
-
-            <div class="form-section">
-              <label class="section-label">Staff Position</label>
-              <v-select
-                v-model="editFormData.positions_label"
-                :items="positionOptions"
-                variant="outlined"
-                density="comfortable"
-                clearable
-                :disabled="editLoading"
-              />
-            </div>
-
-            <v-card class="info-message" elevation="0">
-              <v-card-text class="pa-3">
-                <div class="text-caption">
-                  <strong>Note:</strong> Leave designation and staff position blank for basic members.
+            <div class="dialog-section">
+              <div class="section-heading">
+                <v-icon size="18">mdi-shield-account-outline</v-icon>
+                <span>Access Details</span>
+              </div>
+              <div class="field-grid">
+                <div class="form-section">
+                  <label class="section-label">System Role</label>
+                  <v-select
+                    v-model="editFormData.role"
+                    :items="roleOptions"
+                    variant="outlined"
+                    density="comfortable"
+                    prepend-inner-icon="mdi-account-key-outline"
+                    hide-details
+                    :disabled="editLoading"
+                  />
                 </div>
-              </v-card-text>
-            </v-card>
+
+                <div class="form-section">
+                  <label class="section-label">Workflow Designation</label>
+                  <v-select
+                    v-model="editFormData.designation_label"
+                    :items="designationOptions"
+                    variant="outlined"
+                    density="comfortable"
+                    prepend-inner-icon="mdi-briefcase-outline"
+                    hide-details
+                    clearable
+                    :disabled="editLoading"
+                  />
+                </div>
+              </div>
+
+              <div class="form-section form-section-last">
+                <label class="section-label">Staff Position</label>
+                <v-select
+                  v-model="editFormData.positions_label"
+                  :items="positionOptions"
+                  variant="outlined"
+                  density="comfortable"
+                  prepend-inner-icon="mdi-card-account-details-outline"
+                  hide-details
+                  clearable
+                  :disabled="editLoading"
+                />
+              </div>
+
+              <div class="info-message">
+                Leave designation and staff position blank for basic members.
+              </div>
+            </div>
           </v-form>
         </v-card-text>
 
-        <v-divider></v-divider>
-
-        <v-card-actions class="pa-4">
+        <v-card-actions class="edit-user-actions">
           <v-spacer></v-spacer>
-          <v-btn variant="text" color="#666" @click="closeEditUserDialog" :disabled="editLoading">
+          <v-btn variant="text" class="cancel-edit-btn" @click="closeEditUserDialog" :disabled="editLoading">
             Cancel
           </v-btn>
           <v-btn color="white" class="save-btn" @click="saveUserChanges" :loading="editLoading">
-            Save
+            Save Changes
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -1590,14 +1638,15 @@ const performClearClientData = async () => {
 
 /* Edit User Dialog */
 .edit-user-card {
-  border-radius: 8px !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22) !important;
   border: none !important;
+  overflow: hidden;
 }
 
 .edit-user-header {
-  background: linear-gradient(135deg, #f5c52b 0%, #ffd966 100%) !important;
-  padding: 18px 20px !important;
+  background: #f5c52b !important;
+  padding: 18px 22px !important;
   display: flex;
   align-items: center;
   border: none !important;
@@ -1609,31 +1658,170 @@ const performClearClientData = async () => {
   width: 100%;
 }
 
+.edit-user-avatar {
+  color: #fff !important;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.edit-user-identity {
+  min-width: 0;
+}
+
+.edit-user-title {
+  color: #172033;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.edit-user-email {
+  color: rgba(23, 32, 51, 0.72);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+.edit-status-chip {
+  flex-shrink: 0;
+  font-weight: 700 !important;
+}
+
+.edit-user-body {
+  background: #f8fafc;
+  padding: 18px 22px 20px !important;
+}
+
+.dialog-section {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.dialog-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 14px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .form-section {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+}
+
+.field-grid .form-section {
+  margin-bottom: 0;
+}
+
+.form-section-last {
+  margin-top: 14px;
 }
 
 .section-label {
   display: block;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 800;
   color: #2c3e50;
-  margin-bottom: 8px;
+  margin-bottom: 7px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.04em;
+}
+
+.approval-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.approval-action-btn {
+  justify-content: center;
+  min-height: 46px;
+  border-color: #d9d9d9 !important;
+  color: #444 !important;
+  text-transform: none !important;
+  font-weight: 700;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+
+.approval-action-active {
+  background: #2c3e50 !important;
+  border-color: #2c3e50 !important;
+  color: #fff !important;
+}
+
+.status-helper {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .info-message {
-  background: rgba(245, 197, 43, 0.08) !important;
-  border-left: 3px solid #f5c52b !important;
-  margin-top: 16px;
+  background: #fff8df;
+  border: 1px solid #f3df91;
+  border-left: 4px solid #f5c52b;
+  border-radius: 8px;
+  color: #66500b;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 14px;
+  padding: 10px 12px;
+}
+
+.edit-user-actions {
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  padding: 14px 22px !important;
+}
+
+.cancel-edit-btn {
+  color: #64748b !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
 }
 
 .save-btn {
   background: #2c3e50 !important;
   color: white !important;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  border-radius: 8px !important;
+  padding: 0 22px !important;
+}
+
+@media (max-width: 600px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .edit-user-email {
+    max-width: 180px;
+  }
+
+  .edit-status-chip {
+    display: none !important;
+  }
 }
 
 /* User Table Styling */
@@ -1780,6 +1968,16 @@ const performClearClientData = async () => {
 .status-chip-offline {
   color: #374151 !important;
   border-color: #9ca3af !important;
+}
+
+.status-chip-pending {
+  color: #8a5a00 !important;
+  border-color: #f5c52b !important;
+}
+
+.status-chip-suspended {
+  color: #b71c1c !important;
+  border-color: #ef9a9a !important;
 }
 
 .td-actions {

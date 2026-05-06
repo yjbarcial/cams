@@ -22,6 +22,28 @@ export async function isUserRegistered(email) {
   }
 }
 
+export async function getUserProfileByEmail(email) {
+  try {
+    if (!email) return null
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error loading user profile:', error)
+      return null
+    }
+
+    return data
+  } catch (err) {
+    console.error('Error in getUserProfileByEmail:', err)
+    return null
+  }
+}
+
 function getAccessRole(userRole, designationLabel) {
   const label = String(designationLabel || '').toLowerCase()
 
@@ -29,7 +51,7 @@ function getAccessRole(userRole, designationLabel) {
     return 'admin'
   }
 
-  if (userRole === 'section_head') {
+  if (userRole === 'section_head' || label.includes('section head')) {
     return 'section_head'
   }
 
@@ -66,7 +88,9 @@ export async function setProfileStatusByEmail(email, status = 'inactive') {
   try {
     if (!email) return
 
-    const normalizedStatus = String(status || '').toLowerCase() === 'active' ? 'active' : 'inactive'
+    const allowedStatuses = ['active', 'inactive', 'pending', 'suspended']
+    const requestedStatus = String(status || '').toLowerCase()
+    const normalizedStatus = allowedStatuses.includes(requestedStatus) ? requestedStatus : 'inactive'
 
     const updateData = {
       status: normalizedStatus,
@@ -98,15 +122,11 @@ export async function addUserToProfiles(user, profileData = {}) {
       profileData.designation_label || userMetadata.designation_label || null
     const requestedPosition = profileData.positions_label || userMetadata.positions_label || null
 
-    console.log('Checking if user exists:', user.email)
-
     const { data: existingUser, error: checkError } = await supabase
       .from('profiles')
       .select('*')
       .eq('email', user.email)
       .maybeSingle()
-
-    console.log('Check result:', { existingUser, checkError })
 
     if (checkError && checkError.code !== 'PGRST116') {
       console.error('Error checking user:', checkError)
@@ -114,7 +134,11 @@ export async function addUserToProfiles(user, profileData = {}) {
     }
 
     if (existingUser) {
-      console.log('User exists, marking active')
+      const currentStatus = existingUser.status || 'pending'
+
+      if (currentStatus === 'pending' || currentStatus === 'suspended') {
+        return false
+      }
 
       const updateData = {
         status: 'active',
@@ -138,18 +162,15 @@ export async function addUserToProfiles(user, profileData = {}) {
         return false
       } else {
         const resolvedRole = existingUser.role || 'member'
-        console.log('Updated successfully with role:', resolvedRole)
         localStorage.setItem('userRole', resolvedRole)
         localStorage.setItem('userId', existingUser.id)
 
         const accessRole = getAccessRole(resolvedRole, existingUser.designation_label)
         localStorage.setItem('accessRole', accessRole)
-        console.log('Access role:', accessRole)
         return true
       }
     }
 
-    console.log('User not registered in system')
     return false
   } catch (err) {
     console.error('Catch error:', err)
@@ -169,8 +190,6 @@ export async function createUserProfile(user, profileData = {}) {
       profileData.designation_label || userMetadata.designation_label || null
     const requestedPosition = profileData.positions_label || userMetadata.positions_label || null
 
-    console.log('Creating new profile for:', user.email)
-
     const { data: existingUser, error: checkError } = await supabase
       .from('profiles')
       .select('*')
@@ -183,59 +202,39 @@ export async function createUserProfile(user, profileData = {}) {
     }
 
     if (existingUser) {
-      console.log('User already exists in profiles table')
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
-          status: 'active',
-          last_active: new Date().toISOString(),
+          role: 'member',
+          status: 'pending',
+          designation_label: requestedDesignation,
+          positions_label: requestedPosition,
         })
         .eq('email', user.email)
 
       if (updateError) {
-        throw updateError
+        console.warn('Could not reset existing profile to pending:', updateError.message)
       }
 
-      const resolvedRole = existingUser.role || 'member'
-      localStorage.setItem('userRole', resolvedRole)
-      localStorage.setItem('userId', existingUser.id)
-      const accessRole = getAccessRole(resolvedRole, existingUser.designation_label)
-      localStorage.setItem('accessRole', accessRole)
       return true
     }
-
-    console.log('Creating new user profile')
 
     const newUser = {
       email: user.email,
       role: 'member',
-      status: 'active',
-      last_active: new Date().toISOString(),
+      status: 'pending',
       designation_label: requestedDesignation,
       positions_label: requestedPosition,
     }
 
-    console.log('User to insert:', newUser)
-
     const { data, error } = await supabase.from('profiles').insert([newUser]).select()
-
-    console.log('Insert result:', { data, error })
 
     if (error) {
       console.error('Insert error:', error)
       throw error
     }
 
-    console.log('User profile created successfully with role:', newUser.role, data[0])
-    localStorage.setItem('userRole', newUser.role)
-    if (data && data[0]) {
-      if (data[0].id) {
-        localStorage.setItem('userId', data[0].id)
-      }
-      const accessRole = getAccessRole(newUser.role, data[0].designation_label)
-      localStorage.setItem('accessRole', accessRole)
-      console.log('Access role:', accessRole)
-    }
+    void data
     return true
   } catch (err) {
     console.error('Error in createUserProfile:', err)
