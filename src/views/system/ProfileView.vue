@@ -301,7 +301,7 @@ onMounted(() => {
   <div class="profile-page">
     <MainHeader />
 
-    <v-container class="py-8 flex-grow-1" fluid>
+    <v-container class="profile-shell flex-grow-1" fluid>
       <v-row justify="center">
         <v-col cols="12" sm="12" md="11" lg="10" xl="9">
           <!-- Loading State -->
@@ -322,16 +322,16 @@ onMounted(() => {
           <div v-else-if="profile">
             <!-- Profile Header Card -->
             <v-card class="mb-4 profile-header-card" elevation="2">
-              <v-card-text class="pa-md-8 pa-6">
+              <v-card-text class="profile-header-body">
                 <v-row align="start" class="profile-header-content">
                   <!-- Avatar Column -->
                   <v-col cols="12" sm="auto" class="text-center text-sm-start">
-                    <div class="avatar-container">
-                      <v-avatar
-                        :color="imagePreview || profile.avatar_url ? 'transparent' : '#2c3e50'"
-                        size="120"
-                        class="profile-avatar"
-                      >
+                      <div class="avatar-container">
+                        <v-avatar
+                          :color="imagePreview || profile.avatar_url ? 'transparent' : '#2c3e50'"
+                          size="112"
+                          class="profile-avatar"
+                        >
                         <v-img
                           v-if="imagePreview || profile.avatar_url"
                           :src="imagePreview || profile.avatar_url"
@@ -369,10 +369,11 @@ onMounted(() => {
                     <div class="profile-info-wrapper">
                       <div class="profile-header-top">
                         <div class="profile-text-content">
-                          <h1 class="text-h4 font-weight-bold profile-name mb-2">{{ fullName }}</h1>
-                          <p class="text-body-1 profile-email mb-4">{{ profile.email }}</p>
+                          <div class="profile-kicker">Profile</div>
+                          <h1 class="profile-name mb-2">{{ fullName }}</h1>
+                          <p class="profile-email mb-4">{{ profile.email }}</p>
 
-                          <div class="d-flex gap-2 flex-wrap mb-3">
+                          <div class="profile-chip-row">
                             <v-menu location="bottom" :close-on-content-click="true">
                               <template #activator="{ props }">
                                 <v-btn
@@ -408,31 +409,21 @@ onMounted(() => {
                               </v-list>
                             </v-menu>
 
-                            <v-chip
-                              size="small"
-                              variant="outlined"
-                              class="meta-chip designation-chip"
-                            >
+                            <v-chip size="small" variant="outlined" class="meta-chip designation-chip">
                               <v-icon start size="small">mdi-account-tie</v-icon>
-                              Designation: {{ designationLabel }}
+                              {{ designationLabel }}
                             </v-chip>
 
-                            <v-chip
-                              size="small"
-                              variant="outlined"
-                              class="meta-chip contributor-chip"
-                            >
+                            <v-chip size="small" variant="outlined" class="meta-chip contributor-chip">
                               <v-icon start size="small">mdi-pencil-ruler</v-icon>
-                              Contributor: {{ contributorTypeLabel }}
+                              {{ contributorTypeLabel }}
                             </v-chip>
                           </div>
 
-                          <p
-                            v-if="canViewAccountRole"
-                            class="text-caption text-medium-emphasis mb-0"
-                          >
+                          <div v-if="canViewAccountRole" class="access-note">
+                            <v-icon size="16">mdi-shield-account-outline</v-icon>
                             Account Access: {{ roleLabel }}
-                          </p>
+                          </div>
                         </div>
 
                         <v-btn
@@ -454,84 +445,116 @@ onMounted(() => {
 
             <!-- Profile Details Card -->
             <v-card elevation="2" class="profile-details-card">
-              <v-card-title class="d-flex align-center details-header">
-                <v-icon start>mdi-account-details</v-icon>
-                Profile Information
+              <v-card-title class="details-header">
+                <div>
+                  <div class="details-title">
+                    <v-icon start>mdi-account-details</v-icon>
+                    Profile Information
+                  </div>
+                  <div class="details-subtitle">Contact, role, and account details</div>
+                </div>
               </v-card-title>
 
-              <v-divider />
-
-              <v-card-text class="pa-6">
+              <v-card-text class="details-body">
                 <!-- View Mode -->
                 <div v-if="!editMode">
-                  <v-row>
+                  <v-row class="info-grid">
                     <v-col cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">First Name</p>
-                        <p class="text-body-1">{{ profile.first_name || 'Not provided' }}</p>
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">mdi-account-outline</v-icon></div>
+                        <div>
+                          <p class="info-label">First Name</p>
+                          <p class="info-value">{{ profile.first_name || 'Not provided' }}</p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Last Name</p>
-                        <p class="text-body-1">{{ profile.last_name || 'Not provided' }}</p>
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">mdi-account-outline</v-icon></div>
+                        <div>
+                          <p class="info-label">Last Name</p>
+                          <p class="info-value">{{ profile.last_name || 'Not provided' }}</p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Email</p>
-                        <p class="text-body-1">{{ profile.email }}</p>
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">mdi-email-outline</v-icon></div>
+                        <div>
+                          <p class="info-label">Email</p>
+                          <p class="info-value">{{ profile.email }}</p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Phone</p>
-                        <p class="text-body-1">{{ profile.phone || 'Not provided' }}</p>
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">mdi-phone-outline</v-icon></div>
+                        <div>
+                          <p class="info-label">Phone</p>
+                          <p class="info-value">{{ profile.phone || 'Not provided' }}</p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Workflow Designation</p>
-                        <p class="text-body-1">{{ designationLabel }}</p>
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">mdi-briefcase-outline</v-icon></div>
+                        <div>
+                          <p class="info-label">Workflow Designation</p>
+                          <p class="info-value">{{ designationLabel }}</p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Contributor Type</p>
-                        <p class="text-body-1">{{ contributorTypeLabel }}</p>
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">mdi-pencil-ruler</v-icon></div>
+                        <div>
+                          <p class="info-label">Contributor Type</p>
+                          <p class="info-value">{{ contributorTypeLabel }}</p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col cols="12">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Bio</p>
-                        <p class="text-body-1">{{ profile.bio || 'No bio added yet' }}</p>
+                      <div class="info-tile info-tile-bio">
+                        <div class="info-icon"><v-icon size="20">mdi-text-box-outline</v-icon></div>
+                        <div>
+                          <p class="info-label">Bio</p>
+                          <p class="info-value">{{ profile.bio || 'No bio added yet' }}</p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col v-if="canViewAccountRole" cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Account Access</p>
-                        <p class="text-body-1">{{ roleLabel }}</p>
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">mdi-shield-account-outline</v-icon></div>
+                        <div>
+                          <p class="info-label">Account Access</p>
+                          <p class="info-value">{{ roleLabel }}</p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Status</p>
-                        <p class="text-body-1">{{ statusLabel }}</p>
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">{{ statusIcon }}</v-icon></div>
+                        <div>
+                          <p class="info-label">Status</p>
+                          <p class="info-value">{{ statusLabel }}</p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Member Since</p>
-                        <p class="text-body-1">
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">mdi-calendar-start-outline</v-icon></div>
+                        <div>
+                          <p class="info-label">Member Since</p>
+                          <p class="info-value">
                           {{
                             new Date(profile.created_at).toLocaleDateString('en-US', {
                               year: 'numeric',
@@ -539,14 +562,17 @@ onMounted(() => {
                               day: 'numeric',
                             })
                           }}
-                        </p>
+                          </p>
+                        </div>
                       </div>
                     </v-col>
 
                     <v-col cols="12" md="6">
-                      <div class="mb-4">
-                        <p class="text-caption text-medium-emphasis mb-1">Last Updated</p>
-                        <p class="text-body-1">
+                      <div class="info-tile">
+                        <div class="info-icon"><v-icon size="20">mdi-update</v-icon></div>
+                        <div>
+                          <p class="info-label">Last Updated</p>
+                          <p class="info-value">
                           {{
                             profile.updated_at
                               ? new Date(profile.updated_at).toLocaleDateString('en-US', {
@@ -556,7 +582,8 @@ onMounted(() => {
                                 })
                               : 'Never'
                           }}
-                        </p>
+                          </p>
+                        </div>
                       </div>
                     </v-col>
                   </v-row>
@@ -685,9 +712,13 @@ onMounted(() => {
 <style scoped>
 .profile-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f9f9f9 0%, #ffffff 100%);
+  background: #f6f7f9;
   display: flex;
   flex-direction: column;
+}
+
+.profile-shell {
+  padding: 32px 24px;
 }
 
 /* Message Cards */
@@ -722,48 +753,53 @@ onMounted(() => {
 }
 
 .profile-header-card {
-  border-radius: 16px !important;
+  border-radius: 12px !important;
   overflow: visible;
   background: #ffffff;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06) !important;
-  border: 1px solid #f0f0f0;
-  transition: all 0.3s ease;
-}
-
-.profile-header-card:hover {
-  box-shadow: 0 4px 16px rgba(245, 197, 43, 0.08) !important;
-  transform: translateY(-1px);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08) !important;
+  border: 1px solid #e5e7eb;
 }
 
 .profile-details-card {
-  border-radius: 16px !important;
+  border-radius: 12px !important;
   overflow: hidden;
   background: #ffffff;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06) !important;
-  border: 1px solid #f0f0f0;
-  transition: all 0.3s ease;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08) !important;
+  border: 1px solid #e5e7eb;
 }
 
-.profile-details-card:hover {
-  box-shadow: 0 4px 16px rgba(245, 197, 43, 0.08) !important;
+.profile-header-body {
+  padding: 30px !important;
 }
 
 .details-header {
-  background: linear-gradient(135deg, #353535 0%, #2e2e2e 100%);
-  padding: 18px 24px !important;
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: #ffffff;
-  letter-spacing: 0.4px;
-  border-bottom: 3px solid #f5c52b;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  background: #fff;
+  padding: 22px 26px 16px !important;
+  color: #172033;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .details-header :deep(.v-icon) {
-  color: #f5c52b !important;
-  font-size: 1.3rem;
+  color: #2c3e50 !important;
+}
+
+.details-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.details-subtitle {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.details-body {
+  padding: 22px 26px 26px !important;
 }
 
 .profile-header-content {
@@ -802,22 +838,21 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 6px;
 }
 
 .profile-avatar {
-  border: 4px solid #f5c52b;
+  border: 4px solid #fff;
   box-shadow:
-    0 4px 16px rgba(245, 197, 43, 0.15),
-    0 0 0 8px rgba(245, 197, 43, 0.05);
+    0 10px 24px rgba(15, 23, 42, 0.14),
+    0 0 0 6px rgba(245, 197, 43, 0.2);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .profile-avatar:hover {
   box-shadow:
-    0 6px 24px rgba(245, 197, 43, 0.2),
-    0 0 0 8px rgba(245, 197, 43, 0.08);
-  transform: translateY(-2px) scale(1.01);
+    0 12px 28px rgba(15, 23, 42, 0.18),
+    0 0 0 6px rgba(245, 197, 43, 0.28);
 }
 
 .avatar-edit-btn {
@@ -846,9 +881,19 @@ onMounted(() => {
 .profile-name {
   color: #2c3e50;
   word-break: break-word;
-  line-height: 1.3;
+  line-height: 1.15;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
+  font-size: 2rem;
+}
+
+.profile-kicker {
+  color: #8a6d00;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
 
 .profile-email {
@@ -858,6 +903,22 @@ onMounted(() => {
   overflow-wrap: anywhere;
   line-height: 1.6;
   font-weight: 500;
+}
+
+.profile-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.access-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .edit-profile-btn {
@@ -905,6 +966,61 @@ onMounted(() => {
   padding: 0 12px !important;
   height: 30px !important;
   font-size: 0.85rem;
+}
+
+.info-grid {
+  margin: -6px;
+}
+
+.info-grid :deep(.v-col) {
+  padding: 6px !important;
+}
+
+.info-tile {
+  min-height: 92px;
+  height: 100%;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: #fbfcfe;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.info-tile-bio {
+  min-height: 112px;
+}
+
+.info-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #fff8df;
+  color: #2c3e50;
+  border: 1px solid #f3df91;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.info-label {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+}
+
+.info-value {
+  color: #1f2937;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .meta-chip {
@@ -980,40 +1096,6 @@ onMounted(() => {
   font-weight: 600;
 }
 
-/* Ensure proper spacing in cards */
-:deep(.v-card-text) {
-  padding: 28px !important;
-}
-
-/* Field info styling */
-.v-col .mb-4 {
-  background: linear-gradient(135deg, rgba(245, 197, 43, 0.03) 0%, transparent 100%);
-  padding: 14px;
-  border-radius: 10px;
-  border-left: 3px solid #f5c52b;
-  transition: all 0.3s ease;
-}
-
-.v-col .mb-4:hover {
-  background: linear-gradient(135deg, rgba(245, 197, 43, 0.06) 0%, rgba(245, 197, 43, 0.02) 100%);
-  transform: translateX(3px);
-}
-
-.v-col .mb-4 .text-caption {
-  color: #f5c52b;
-  font-weight: 700;
-  text-transform: uppercase;
-  font-size: 0.65rem;
-  letter-spacing: 0.8px;
-  margin-bottom: 6px !important;
-}
-
-.v-col .mb-4 .text-body-1 {
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
 /* Responsive adjustments */
 @media (max-width: 960px) {
   .profile-header-top {
@@ -1031,6 +1113,10 @@ onMounted(() => {
 }
 
 @media (max-width: 600px) {
+  .profile-shell {
+    padding: 18px 12px;
+  }
+
   .profile-avatar {
     width: 90px !important;
     height: 90px !important;
@@ -1050,16 +1136,13 @@ onMounted(() => {
     text-align: center;
   }
 
-  :deep(.v-card-text) {
-    padding: 16px !important;
+  .profile-header-body,
+  .details-body {
+    padding: 18px !important;
   }
 
   .details-header {
-    padding: 16px 20px !important;
-  }
-
-  .v-col .mb-4 {
-    padding: 10px;
+    padding: 18px !important;
   }
 
   .profile-header-card {
