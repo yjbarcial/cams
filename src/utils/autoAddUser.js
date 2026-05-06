@@ -1,24 +1,34 @@
 import { supabase } from './supabase.js'
 
-/**
- * Auto-add user to PROFILES table when they login
- * Uses database role/designation values as source of truth.
- *
- * Access is controlled by the database role field and admin-managed updates.
- */
+export async function isUserRegistered(email) {
+  try {
+    if (!email) return false
 
-/**
- * Map designation_label to accessRole for router guards.
- */
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error checking user registration:', error)
+      return false
+    }
+
+    return !!data
+  } catch (err) {
+    console.error('Error in isUserRegistered:', err)
+    return false
+  }
+}
+
 function getAccessRole(userRole, designationLabel) {
   const label = String(designationLabel || '').toLowerCase()
 
-  // Admins can access everything
   if (userRole === 'admin') {
     return 'admin'
   }
 
-  // Section heads
   if (userRole === 'section_head') {
     return 'section_head'
   }
@@ -42,15 +52,14 @@ function getAccessRole(userRole, designationLabel) {
     return 'online_accounts_manager'
   }
 
-  // Default accessRole based on userRole
   if (userRole === 'editor') {
-    return 'editor' // Generic editor access
+    return 'editor'
   }
   if (userRole === 'member') {
     return 'member'
   }
 
-  return 'member' // Default
+  return 'member'
 }
 
 export async function setProfileStatusByEmail(email, status = 'inactive') {
@@ -70,18 +79,18 @@ export async function setProfileStatusByEmail(email, status = 'inactive') {
     const { error } = await supabase.from('profiles').update(updateData).eq('email', email)
 
     if (error) {
-      console.warn('⚠️ Could not update profile status:', error.message)
+      console.warn('Could not update profile status:', error.message)
     }
   } catch (err) {
-    console.warn('⚠️ setProfileStatusByEmail failed:', err)
+    console.warn('setProfileStatusByEmail failed:', err)
   }
 }
 
 export async function addUserToProfiles(user, profileData = {}) {
   try {
     if (!user || !user.email) {
-      console.warn('❌ No user data provided')
-      return
+      console.warn('No user data provided')
+      return false
     }
 
     const userMetadata = user.user_metadata || {}
@@ -89,24 +98,23 @@ export async function addUserToProfiles(user, profileData = {}) {
       profileData.designation_label || userMetadata.designation_label || null
     const requestedPosition = profileData.positions_label || userMetadata.positions_label || null
 
-    console.log('🔄 Checking if user exists:', user.email)
+    console.log('Checking if user exists:', user.email)
 
-    // Check if user already exists in PROFILES table
     const { data: existingUser, error: checkError } = await supabase
       .from('profiles')
       .select('*')
       .eq('email', user.email)
       .maybeSingle()
 
-    console.log('🔍 Check result:', { existingUser, checkError })
+    console.log('Check result:', { existingUser, checkError })
 
     if (checkError && checkError.code !== 'PGRST116') {
-      console.error('❌ Error checking user:', checkError)
-      return
+      console.error('Error checking user:', checkError)
+      return false
     }
 
     if (existingUser) {
-      console.log('✅ User exists, marking active and updating last_active')
+      console.log('User exists, marking active')
 
       const updateData = {
         status: 'active',
@@ -126,23 +134,77 @@ export async function addUserToProfiles(user, profileData = {}) {
         .eq('email', user.email)
 
       if (updateError) {
-        console.error('❌ Error updating:', updateError)
+        console.error('Error updating:', updateError)
+        return false
       } else {
         const resolvedRole = existingUser.role || 'member'
-        console.log(`✅ Updated successfully with role: ${resolvedRole}`)
+        console.log('Updated successfully with role:', resolvedRole)
         localStorage.setItem('userRole', resolvedRole)
         localStorage.setItem('userId', existingUser.id)
 
         const accessRole = getAccessRole(resolvedRole, existingUser.designation_label)
         localStorage.setItem('accessRole', accessRole)
-        console.log(
-          `🔑 Access role: ${accessRole} (designation: ${existingUser.designation_label || 'none'})`,
-        )
+        console.log('Access role:', accessRole)
+        return true
       }
-      return
     }
 
-    console.log('🆕 Creating new user...')
+    console.log('User not registered in system')
+    return false
+  } catch (err) {
+    console.error('Catch error:', err)
+    return false
+  }
+}
+
+export async function createUserProfile(user, profileData = {}) {
+  try {
+    if (!user || !user.email) {
+      console.warn('No user data provided')
+      return false
+    }
+
+    const userMetadata = user.user_metadata || {}
+    const requestedDesignation =
+      profileData.designation_label || userMetadata.designation_label || null
+    const requestedPosition = profileData.positions_label || userMetadata.positions_label || null
+
+    console.log('Creating new profile for:', user.email)
+
+    const { data: existingUser, error: checkError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', user.email)
+      .maybeSingle()
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Error checking user:', checkError)
+      throw new Error('Failed to check existing user')
+    }
+
+    if (existingUser) {
+      console.log('User already exists in profiles table')
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          status: 'active',
+          last_active: new Date().toISOString(),
+        })
+        .eq('email', user.email)
+
+      if (updateError) {
+        throw updateError
+      }
+
+      const resolvedRole = existingUser.role || 'member'
+      localStorage.setItem('userRole', resolvedRole)
+      localStorage.setItem('userId', existingUser.id)
+      const accessRole = getAccessRole(resolvedRole, existingUser.designation_label)
+      localStorage.setItem('accessRole', accessRole)
+      return true
+    }
+
+    console.log('Creating new user profile')
 
     const newUser = {
       email: user.email,
@@ -153,20 +215,18 @@ export async function addUserToProfiles(user, profileData = {}) {
       positions_label: requestedPosition,
     }
 
-    console.log('📝 User to insert:', newUser)
+    console.log('User to insert:', newUser)
 
     const { data, error } = await supabase.from('profiles').insert([newUser]).select()
 
-    console.log('📤 Insert result:', { data, error })
+    console.log('Insert result:', { data, error })
 
     if (error) {
-      console.error('❌ Insert error:', error)
-      console.error('❌ Error details:', JSON.stringify(error, null, 2))
-      return
+      console.error('Insert error:', error)
+      throw error
     }
 
-    console.log(`✅ User added successfully with role: ${newUser.role}`, data[0])
-    // Store role, accessRole, and userId in localStorage
+    console.log('User profile created successfully with role:', newUser.role, data[0])
     localStorage.setItem('userRole', newUser.role)
     if (data && data[0]) {
       if (data[0].id) {
@@ -174,11 +234,11 @@ export async function addUserToProfiles(user, profileData = {}) {
       }
       const accessRole = getAccessRole(newUser.role, data[0].designation_label)
       localStorage.setItem('accessRole', accessRole)
-      console.log(
-        `🔑 Access role: ${accessRole} (designation: ${data[0].designation_label || 'none'})`,
-      )
+      console.log('Access role:', accessRole)
     }
+    return true
   } catch (err) {
-    console.error('❌ Catch error:', err)
+    console.error('Error in createUserProfile:', err)
+    throw err
   }
 }
