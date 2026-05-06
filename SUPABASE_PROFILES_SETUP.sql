@@ -94,7 +94,257 @@ GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
 GRANT USAGE, SELECT ON SEQUENCE profiles_id_seq TO authenticated;
 
 -- =====================================================
--- 9. Add columns that may be missing from the schema
+-- 9. Ensure referenced positions exist before seeding profiles
+-- =====================================================
+DO $$
+DECLARE
+    has_key_column BOOLEAN;
+    position_name_column TEXT;
+    has_description_column BOOLEAN;
+    has_department_id_column BOOLEAN;
+    has_is_leadership_column BOOLEAN;
+    seed_names TEXT[] := ARRAY[
+        'Layout Artist',
+        'News Writer',
+        'Feature Writer',
+        'Opinion Writer',
+        'Sports Writer',
+        'Literary Writer',
+        'Photojournalist',
+        'Videographer',
+        'Illustrator',
+        'Senior Graphic Designer',
+        'Newsletter EIC',
+        'Circulations Manager',
+        'Senior Illustrator',
+        'News Editor',
+        'HR Manager',
+        'Editor-in-Chief',
+        'Associate Managing Editor',
+        'Archival Manager',
+        'Senior Photojournalist',
+        'Literary Editor',
+        'Sr. Cinematographer',
+        'Online Accounts Manager'
+    ];
+    seed_keys TEXT[] := ARRAY[
+        'layout-artist',
+        'news-writer',
+        'feature-writer',
+        'opinion-writer',
+        'sports-writer',
+        'literary-writer',
+        'photojournalist',
+        'videographer',
+        'illustrator',
+        'senior-graphic-designer',
+        'newsletter-eic',
+        'circulations-manager',
+        'senior-illustrator',
+        'news-editor',
+        'hr-manager',
+        'editor-in-chief',
+        'associate-managing-editor',
+        'archival-manager',
+        'senior-photojournalist',
+        'literary-editor',
+        'sr-cinematographer',
+        'online-accounts-manager'
+    ];
+    seed_descriptions TEXT[] := ARRAY[
+        'Handles layout and pagination',
+        'Writes news content',
+        'Writes feature stories',
+        'Writes opinion pieces',
+        'Writes sports-related content',
+        'Writes literary content',
+        'Captures and documents events through photos',
+        'Records and edits video content',
+        'Creates illustrations and artwork',
+        'Leads visual design work',
+        'Leads newsletter editorial direction',
+        'Manages circulation and distribution',
+        'Leads illustration work',
+        'Edits and reviews news content',
+        'Handles human resources tasks',
+        'Leads the editorial team',
+        'Assists with editorial management',
+        'Manages archives and records',
+        'Leads photojournalism work',
+        'Edits literary content',
+        'Leads video production',
+        'Manages online accounts and posting workflows'
+    ];
+    seed_departments TEXT[] := ARRAY[
+        'Design',
+        'Editorial',
+        'Editorial',
+        'Editorial',
+        'Editorial',
+        'Editorial',
+        'Design',
+        'Design',
+        'Design',
+        'Design',
+        'Editorial',
+        'Administration',
+        'Design',
+        'Editorial',
+        'Administration',
+        'Editorial',
+        'Editorial',
+        'Administration',
+        'Design',
+        'Editorial',
+        'Design',
+        'Administration'
+    ];
+    seed_is_leadership BOOLEAN[] := ARRAY[
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
+        FALSE,
+        TRUE,
+        TRUE,
+        TRUE,
+        TRUE,
+        TRUE,
+        TRUE,
+        TRUE,
+        TRUE,
+        TRUE,
+        TRUE
+    ];
+    insert_sql TEXT;
+    i INTEGER;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'positions'
+          AND column_name = 'key'
+    ) INTO has_key_column;
+
+    SELECT CASE
+        WHEN EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'positions'
+              AND column_name = 'title'
+        ) THEN 'title'
+        WHEN EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'positions'
+              AND column_name = 'name'
+        ) THEN 'name'
+        WHEN EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'positions'
+              AND column_name = 'label'
+        ) THEN 'label'
+        ELSE NULL
+    END
+    INTO position_name_column;
+
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'positions'
+          AND column_name = 'description'
+    ) INTO has_description_column;
+
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'positions'
+          AND column_name = 'department_id'
+    ) INTO has_department_id_column;
+
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'positions'
+          AND column_name = 'is_leadership'
+    ) INTO has_is_leadership_column;
+
+    IF position_name_column IS NULL THEN
+        RAISE EXCEPTION 'Could not find a usable name column in public.positions';
+    END IF;
+
+    insert_sql := 'INSERT INTO public.positions (';
+
+    IF has_key_column THEN
+        insert_sql := insert_sql || 'key, ';
+    END IF;
+
+    insert_sql := insert_sql || format('%I', position_name_column);
+
+    IF has_description_column THEN
+        insert_sql := insert_sql || ', description';
+    END IF;
+
+    IF has_department_id_column THEN
+        insert_sql := insert_sql || ', department_id';
+    END IF;
+
+    IF has_is_leadership_column THEN
+        insert_sql := insert_sql || ', is_leadership';
+    END IF;
+
+    insert_sql := insert_sql || ') VALUES ';
+
+    FOR i IN 1..array_length(seed_names, 1) LOOP
+        IF i > 1 THEN
+            insert_sql := insert_sql || ', ';
+        END IF;
+
+        insert_sql := insert_sql || '(';
+
+        IF has_key_column THEN
+            insert_sql := insert_sql || quote_literal(seed_keys[i]) || ', ';
+        END IF;
+
+        insert_sql := insert_sql || quote_literal(seed_names[i]);
+
+        IF has_description_column THEN
+            insert_sql := insert_sql || ', ' || quote_literal(seed_descriptions[i]);
+        END IF;
+
+        IF has_department_id_column THEN
+            insert_sql := insert_sql || ', (SELECT id FROM public.departments WHERE name = ' || quote_literal(seed_departments[i]) || ' LIMIT 1)';
+        END IF;
+
+        IF has_is_leadership_column THEN
+            insert_sql := insert_sql || ', ' || CASE WHEN seed_is_leadership[i] THEN 'TRUE' ELSE 'FALSE' END;
+        END IF;
+
+        insert_sql := insert_sql || ')';
+    END LOOP;
+
+    insert_sql := insert_sql || ' ON CONFLICT DO NOTHING';
+
+    EXECUTE insert_sql;
+END $$;
+
+-- =====================================================
+-- 10. Add columns that may be missing from the schema
 -- =====================================================
 -- Add designation_id and designation_label if they don't exist
 DO $$ BEGIN
@@ -116,7 +366,59 @@ EXCEPTION
 END $$;
 
 -- =====================================================
--- 10. Populate with actual team members
+-- 11. Auto-create a profile when a Supabase Auth user is created
+-- =====================================================
+-- This keeps auth.users and public.profiles in sync even when email
+-- confirmation is enabled and the client has no authenticated session yet.
+
+CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    INSERT INTO public.profiles (
+        email,
+        first_name,
+        last_name,
+        avatar_url,
+        role,
+        status,
+        designation_label,
+        positions_label
+    )
+    VALUES (
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'first_name', NEW.raw_user_meta_data->>'given_name'),
+        COALESCE(NEW.raw_user_meta_data->>'last_name', NEW.raw_user_meta_data->>'family_name'),
+        COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture'),
+        'member',
+        'active',
+        NEW.raw_user_meta_data->>'designation_label',
+        NEW.raw_user_meta_data->>'positions_label'
+    )
+    ON CONFLICT (email) DO UPDATE
+    SET
+        first_name = COALESCE(EXCLUDED.first_name, public.profiles.first_name),
+        last_name = COALESCE(EXCLUDED.last_name, public.profiles.last_name),
+        avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url),
+        status = 'active',
+        last_active = NOW(),
+        updated_at = NOW();
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_new_auth_user();
+
+-- =====================================================
+-- 12. Populate with actual team members
 -- =====================================================
 -- Insert actual CAMS team members
 -- Note: IDs are auto-generated, using ON CONFLICT on email to avoid duplicates
@@ -191,7 +493,7 @@ DO UPDATE SET
 -- Note: Fernando Gabriel P. Bunio has no email and is skipped (email is required)
 
 -- =====================================================
--- 11. Setup Projects Table Schema
+-- 13. Setup Projects Table Schema
 -- =====================================================
 -- Create project_status enum if it doesn't exist
 DO $$ BEGIN
@@ -410,7 +712,7 @@ CREATE INDEX IF NOT EXISTS idx_projects_created_at ON public.projects(created_at
 CREATE INDEX IF NOT EXISTS idx_projects_section_head ON public.projects(section_head_id);
 
 -- =====================================================
--- 12. Setup Project Members Table Schema
+-- 14. Setup Project Members Table Schema
 -- =====================================================
 -- Create project_member_role enum if it doesn't exist
 DO $$ BEGIN
@@ -444,7 +746,7 @@ CREATE INDEX IF NOT EXISTS idx_project_members_project_id ON public.project_memb
 CREATE INDEX IF NOT EXISTS idx_project_members_user_id ON public.project_members(user_id);
 
 -- =====================================================
--- 13. Setup Projects Table RLS Policies
+-- 15. Setup Projects Table RLS Policies
 -- =====================================================
 -- Enable RLS on projects table if not already enabled
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
@@ -480,7 +782,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.projects TO authenticated;
 GRANT USAGE, SELECT ON SEQUENCE projects_id_seq TO authenticated;
 
 -- =====================================================
--- 14. Setup Project Members Table RLS Policies
+-- 16. Setup Project Members Table RLS Policies
 -- =====================================================
 -- Enable RLS on project_members table
 ALTER TABLE public.project_members ENABLE ROW LEVEL SECURITY;
@@ -516,7 +818,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_members TO authenticated;
 GRANT USAGE, SELECT ON SEQUENCE project_members_id_seq TO authenticated;
 
 -- =====================================================
--- 15. Setup Project Comments Table Schema
+-- 17. Setup Project Comments Table Schema
 -- =====================================================
 -- Create project_comments table if it doesn't exist
 CREATE TABLE IF NOT EXISTS public.project_comments (
@@ -536,7 +838,7 @@ CREATE INDEX IF NOT EXISTS idx_project_comments_created_at ON public.project_com
 CREATE INDEX IF NOT EXISTS idx_project_comments_is_approved ON public.project_comments(is_approved);
 
 -- =====================================================
--- 16. Setup Project Comments Table RLS Policies
+-- 18. Setup Project Comments Table RLS Policies
 -- =====================================================
 -- Enable RLS on project_comments table
 ALTER TABLE public.project_comments ENABLE ROW LEVEL SECURITY;

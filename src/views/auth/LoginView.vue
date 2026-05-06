@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { requiredValidator, emailValidator } from '@/utils/validators'
 import { supabase } from '@/utils/supabase'
-import { addUserToProfiles } from '@/utils/autoAddUser'
+import { addUserToProfiles, createUserProfile, isUserRegistered } from '@/utils/autoAddUser'
 import libBg from '/images/lib-hd.jpg'
 
 const router = useRouter()
@@ -111,9 +111,30 @@ async function signInWithPassword() {
 
     if (error) throw error
 
+    // Check if user is registered in the system
+    const isRegistered = await isUserRegistered(data.user.email)
+
+    if (!isRegistered) {
+      // User exists in Supabase auth but not in profiles table
+      await supabase.auth.signOut()
+      errorMessage.value =
+        'Your account is not yet registered in our system. Please create a new account using the "Create Account" button below. Contact an admin if you need to be added manually.'
+      loading.value = false
+      return
+    }
+
+    // User is registered, update their profile status
+    const success = await addUserToProfiles(data.user)
+
+    if (!success) {
+      await supabase.auth.signOut()
+      errorMessage.value = 'Unable to load your profile. Please try again or contact support.'
+      loading.value = false
+      return
+    }
+
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem('userEmail', data.user.email)
-    await addUserToProfiles(data.user)
     router.replace('/dashboard')
   } catch (error) {
     if (error.message?.includes('Invalid login credentials')) {
@@ -177,15 +198,27 @@ async function signUpWithPassword() {
 
     // Auto-login after successful signup (if session exists - instant verification)
     if (data.user && data.session) {
-      localStorage.setItem('isLoggedIn', 'true')
-      localStorage.setItem('userEmail', data.user.email)
-      await addUserToProfiles(data.user)
-      successMessage.value = 'Account created successfully! Redirecting...'
+      try {
+        // Create user profile in the system
+        await createUserProfile(data.user)
 
-      // Short delay to show success message
-      setTimeout(() => {
-        router.replace('/dashboard')
-      }, 1000)
+        localStorage.setItem('isLoggedIn', 'true')
+        localStorage.setItem('userEmail', data.user.email)
+        successMessage.value = 'Account created successfully! Redirecting...'
+
+        // Short delay to show success message
+        setTimeout(() => {
+          router.replace('/dashboard')
+        }, 1000)
+      } catch (profileError) {
+        console.error('❌ Error creating profile:', profileError)
+        errorMessage.value =
+          'Account created but failed to set up your profile. Please try logging in.'
+        isSignupMode.value = false
+        password.value = ''
+        confirmPassword.value = ''
+        loading.value = false
+      }
     } else if (data.user) {
       // Fallback - user created but needs email confirmation
       successMessage.value = `Account created! Check ${email.value} for verification link, then sign in.`
@@ -195,6 +228,8 @@ async function signUpWithPassword() {
     }
   } catch (error) {
     if (error.message?.includes('already registered')) {
+      errorMessage.value = 'This email is already registered. Try signing in instead.'
+    } else if (error.message?.includes('User already exists')) {
       errorMessage.value = 'This email is already registered. Try signing in instead.'
     } else {
       errorMessage.value = error.message || 'Failed to create account.'
