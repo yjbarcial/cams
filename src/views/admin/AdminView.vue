@@ -619,7 +619,10 @@ const openEditUserDialog = (user) => {
   editFormData.value = {
     role: isLegacySectionHead ? 'member' : user.role || 'member',
     status: user.status || 'pending',
-    designation_label: isLegacySectionHead && !user.designation_label ? 'Section Head' : user.designation_label || '',
+    designation_label:
+      isLegacySectionHead && !user.designation_label
+        ? 'Section Head'
+        : user.designation_label || '',
     positions_label: user.positions_label || '',
   }
   showEditUserDialog.value = true
@@ -664,11 +667,15 @@ const saveUserChanges = async () => {
       updated_at: new Date().toISOString(),
     }
 
-    if (hasNormalizedChange(editFormData.value.designation_label, editingUser.value.designation_label)) {
+    if (
+      hasNormalizedChange(editFormData.value.designation_label, editingUser.value.designation_label)
+    ) {
       updateData.designation_label = emptyToNull(editFormData.value.designation_label)
     }
 
-    if (hasNormalizedChange(editFormData.value.positions_label, editingUser.value.positions_label)) {
+    if (
+      hasNormalizedChange(editFormData.value.positions_label, editingUser.value.positions_label)
+    ) {
       updateData.positions_label = emptyToNull(editFormData.value.positions_label)
     }
 
@@ -1310,22 +1317,24 @@ const performClearClientData = async () => {
                               >
                                 {{ formatText(user.role) }}
                               </v-chip>
-                              <td class="td-designation">
-                                <span v-if="user.designation_label" class="designation-badge">
-                                  {{ user.designation_label }}
-                                </span>
-                                <span v-else class="text-grey">—</span>
-                              </td>
-                              <td class="td-status">
-                                <v-chip
-                                  size="small"
-                                  :color="getUserStatusColor(user.status)"
-                                  class="status-chip"
-                                  :class="getUserStatusClass(user.status)"
-                                >
-                                  {{ getUserStatusText(user.status) }}
-                                </v-chip>
-                              </td>
+                            </td>
+
+                            <td class="td-designation">
+                              <span v-if="user.designation_label" class="designation-badge">
+                                {{ user.designation_label }}
+                              </span>
+                              <span v-else class="text-grey">—</span>
+                            </td>
+                            <td class="td-status">
+                              <v-chip
+                                size="small"
+                                :color="getUserStatusColor(user.status)"
+                                class="status-chip"
+                                :class="getUserStatusClass(user.status)"
+                              >
+                                {{ getUserStatusText(user.status) }}
+                              </v-chip>
+                            </td>
                             <td class="td-actions">
                               <div style="display: flex; gap: 4px; justify-content: center">
                                 <v-btn
@@ -1508,9 +1517,7 @@ const performClearClientData = async () => {
                   {{ action.title }}
                 </v-btn>
               </div>
-              <div class="status-helper">
-                Approval buttons save immediately.
-              </div>
+              <div class="status-helper">Approval buttons save immediately.</div>
             </div>
 
             <div class="dialog-section">
@@ -1570,7 +1577,12 @@ const performClearClientData = async () => {
 
         <v-card-actions class="edit-user-actions">
           <v-spacer></v-spacer>
-          <v-btn variant="text" class="cancel-edit-btn" @click="closeEditUserDialog" :disabled="editLoading">
+          <v-btn
+            variant="text"
+            class="cancel-edit-btn"
+            @click="closeEditUserDialog"
+            :disabled="editLoading"
+          >
             Cancel
           </v-btn>
           <v-btn color="white" class="save-btn" @click="saveUserChanges" :loading="editLoading">
