@@ -21,9 +21,10 @@ const ADMIN_EMAILS = [
 // Check if current user can add projects (section head or admin)
 const canAddProject = computed(() => {
   const userRole = localStorage.getItem('userRole')
+  const accessRole = localStorage.getItem('accessRole')
   const userEmail = localStorage.getItem('userEmail')
   const isAdmin = ADMIN_EMAILS.some((email) => email.toLowerCase() === userEmail?.toLowerCase())
-  return userRole === 'section_head' || isAdmin
+  return accessRole === 'section_head' || userRole === 'section_head' || isAdmin
 })
 
 // Initialize projects - NO DEFAULT PROJECTS
@@ -47,6 +48,7 @@ watch(
 const loadProjects = async () => {
   try {
     const userRole = localStorage.getItem('userRole')
+    const accessRole = localStorage.getItem('accessRole')
     const userId = localStorage.getItem('userId')
 
     // Build base query
@@ -63,7 +65,7 @@ const loadProjects = async () => {
       .order('created_at', { ascending: false })
 
     // If user is a member (writer/artist), only show their projects
-    if (userRole === 'member' && userId) {
+    if (userRole === 'member' && accessRole !== 'section_head' && userId) {
       query = query.filter('project_members.user_id', 'eq', userId)
     }
     // section_head, editor, and admin see all projects
@@ -329,7 +331,7 @@ const canEditProject = (project) => {
   }
 
   // Assigned section heads can edit their own projects
-  if (userRole === 'section_head') {
+  if (localStorage.getItem('accessRole') === 'section_head' || userRole === 'section_head') {
     if (project.sectionHeadId && userId) {
       return parseInt(project.sectionHeadId) === parseInt(userId)
     }

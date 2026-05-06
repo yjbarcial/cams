@@ -63,9 +63,10 @@ const requireSectionHead = (to, from, next) => {
   }
 
   const userRole = getEffectiveUserRole()
+  const accessRole = localStorage.getItem('accessRole')
 
   // Allow if admin or section head
-  if (userRole === 'section_head' || userRole === 'admin') {
+  if (accessRole === 'section_head' || userRole === 'section_head' || userRole === 'admin') {
     next()
   } else {
     showAccessDenied('section_head')
