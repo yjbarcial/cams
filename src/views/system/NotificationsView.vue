@@ -119,6 +119,11 @@ const handleNotificationClick = async (notification) => {
     notification.isRead = true
   }
 
+  if (notification.route) {
+    router.push(notification.route)
+    return
+  }
+
   // Check if project exists via Supabase
   if (notification.projectId && notification.projectType) {
     try {

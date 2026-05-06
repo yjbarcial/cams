@@ -65,9 +65,28 @@ const normalizeText = (value) =>
     .trim()
     .toLowerCase()
 
+const emailNameCorrections = {
+  altheaguila: 'Althea Guila',
+  yssahjulianah: 'Yssah Julianah',
+  lovellhudson: 'Lovell Hudson',
+}
+
+const formatEmailNamePart = (part) => {
+  const normalized = normalizeText(part).replace(/[^a-z]/g, '')
+  if (emailNameCorrections[normalized]) return emailNameCorrections[normalized]
+
+  return String(part || '')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
 const getProfileName = (user) => {
-  const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim()
-  if (fullName) return fullName
+  const firstName = String(user.first_name || '').trim()
+  const lastName = String(user.last_name || '').trim()
+  const fullProfileName = `${firstName} ${lastName}`.trim()
+  if (fullProfileName) return fullProfileName
 
   const existingName = String(user.full_name || '').trim()
   if (existingName && existingName !== user.email) return existingName
@@ -76,18 +95,51 @@ const getProfileName = (user) => {
   return emailName
     .split(/[._-]+/)
     .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .map(formatEmailNamePart)
     .join(' ')
 }
 
-const getProfileRoleLabel = (user) =>
-  user.designation_label || user.positions_label || (user.role === 'section_head' ? 'Section Head' : user.role)
+const formatRoleText = (value) =>
+  String(value || 'Member')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 
-const withDisplayFields = (user) => ({
-  ...user,
-  display_name: getProfileName(user),
-  display_role_label: getProfileRoleLabel(user),
-})
+const getProfileRoleLabel = (user) =>
+  user.designation_label ||
+  user.positions_label ||
+  (user.role === 'section_head' ? 'Section Head' : formatRoleText(user.role))
+
+const getProfileMetaLabel = (user) => {
+  const values = [user.designation_label, user.positions_label]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+
+  if (values.length > 0) return [...new Set(values)].join(' • ')
+  return formatRoleText(user.role)
+}
+
+const getProfileInitials = (name) => {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (parts.length === 0) return 'U'
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase()
+}
+
+const withDisplayFields = (user) => {
+  const displayName = getProfileName(user)
+
+  return {
+    ...user,
+    display_name: displayName,
+    display_initials: getProfileInitials(displayName),
+    display_role_label: getProfileRoleLabel(user),
+    display_meta_label: getProfileMetaLabel(user),
+  }
+}
 
 const getMemberType = (user) => {
   const positionsLabel = normalizeText(user.positions_label)
@@ -468,17 +520,27 @@ const saveAsDraft = () => {
                         placeholder="Select section head"
                         clearable
                       >
+                        <template v-slot:selection="{ item }">
+                          <span class="selected-user-name">{{ item.raw.display_name }}</span>
+                        </template>
                         <template v-slot:item="{ item, props: itemProps }">
-                          <v-list-item v-bind="itemProps">
+                          <v-list-item v-bind="itemProps" class="user-option">
+                            <template v-slot:prepend>
+                              <v-avatar size="34" class="user-option-avatar">
+                                {{ item.raw.display_initials }}
+                              </v-avatar>
+                            </template>
                             <template v-slot:title>
-                              <div class="d-flex align-center">
-                                <span class="text-body-1">{{ item.raw.display_name }}</span>
-                                <v-chip size="small" class="ml-2" color="primary" variant="tonal">
-                                  {{ item.raw.display_role_label }}
-                                </v-chip>
-                              </div>
-                              <div class="text-caption text-medium-emphasis">
-                                {{ item.raw.positions_label || item.raw.designation_label || 'Member' }}
+                              <div class="user-option-content">
+                                <div class="user-option-main">
+                                  <span class="user-option-name">{{ item.raw.display_name }}</span>
+                                  <v-chip size="x-small" class="user-role-badge" variant="flat">
+                                    {{ item.raw.display_role_label }}
+                                  </v-chip>
+                                </div>
+                                <div class="user-option-meta">
+                                  {{ item.raw.display_meta_label }}
+                                </div>
                               </div>
                             </template>
                           </v-list-item>
@@ -549,6 +611,9 @@ const saveAsDraft = () => {
                                     )
                                   "
                                 >
+                                  <v-avatar start size="18" class="selected-chip-avatar">
+                                    {{ item.raw.display_initials }}
+                                  </v-avatar>
                                   {{ item.raw.display_name }}
                                 </v-chip>
                                 <span
@@ -559,21 +624,23 @@ const saveAsDraft = () => {
                                 </span>
                               </template>
                               <template v-slot:item="{ item, props: itemProps }">
-                                <v-list-item v-bind="itemProps">
+                                <v-list-item v-bind="itemProps" class="user-option">
+                                  <template v-slot:prepend>
+                                    <v-avatar size="34" class="user-option-avatar">
+                                      {{ item.raw.display_initials }}
+                                    </v-avatar>
+                                  </template>
                                   <template v-slot:title>
-                                    <div class="d-flex align-center">
-                                      <span class="text-body-1">{{ item.raw.display_name }}</span>
-                                      <v-chip
-                                        size="small"
-                                        class="ml-2"
-                                        color="primary"
-                                        variant="tonal"
-                                      >
-                                        {{ item.raw.display_role_label }}
-                                      </v-chip>
-                                    </div>
-                                    <div class="text-caption text-medium-emphasis">
-                                      {{ item.raw.positions_label || item.raw.designation_label || 'Member' }}
+                                    <div class="user-option-content">
+                                      <div class="user-option-main">
+                                        <span class="user-option-name">{{ item.raw.display_name }}</span>
+                                        <v-chip size="x-small" class="user-role-badge" variant="flat">
+                                          {{ item.raw.display_role_label }}
+                                        </v-chip>
+                                      </div>
+                                      <div class="user-option-meta">
+                                        {{ item.raw.display_meta_label }}
+                                      </div>
                                     </div>
                                   </template>
                                 </v-list-item>
@@ -590,6 +657,9 @@ const saveAsDraft = () => {
                                   selectedWriters = selectedWriters.filter((id) => id !== writerId)
                                 "
                               >
+                                <v-avatar start size="18" class="selected-chip-avatar">
+                                  {{ users.writers.find((w) => w.id === writerId)?.display_initials || 'U' }}
+                                </v-avatar>
                                 {{
                                   users.writers.find((w) => w.id === writerId)?.display_name ||
                                   'Unknown'
@@ -631,6 +701,9 @@ const saveAsDraft = () => {
                                     )
                                   "
                                 >
+                                  <v-avatar start size="18" class="selected-chip-avatar">
+                                    {{ item.raw.display_initials }}
+                                  </v-avatar>
                                   {{ item.raw.display_name }}
                                 </v-chip>
                                 <span
@@ -642,21 +715,23 @@ const saveAsDraft = () => {
                               </template>
 
                               <template v-slot:item="{ item, props: itemProps }">
-                                <v-list-item v-bind="itemProps">
+                                <v-list-item v-bind="itemProps" class="user-option">
+                                  <template v-slot:prepend>
+                                    <v-avatar size="34" class="user-option-avatar">
+                                      {{ item.raw.display_initials }}
+                                    </v-avatar>
+                                  </template>
                                   <template v-slot:title>
-                                    <div class="d-flex align-center">
-                                      <span class="text-body-1">{{ item.raw.display_name }}</span>
-                                      <v-chip
-                                        size="small"
-                                        class="ml-2"
-                                        color="primary"
-                                        variant="tonal"
-                                      >
-                                        {{ item.raw.display_role_label }}
-                                      </v-chip>
-                                    </div>
-                                    <div class="text-caption text-medium-emphasis">
-                                      {{ item.raw.positions_label || item.raw.designation_label || 'Member' }}
+                                    <div class="user-option-content">
+                                      <div class="user-option-main">
+                                        <span class="user-option-name">{{ item.raw.display_name }}</span>
+                                        <v-chip size="x-small" class="user-role-badge" variant="flat">
+                                          {{ item.raw.display_role_label }}
+                                        </v-chip>
+                                      </div>
+                                      <div class="user-option-meta">
+                                        {{ item.raw.display_meta_label }}
+                                      </div>
                                     </div>
                                   </template>
                                 </v-list-item>
@@ -674,6 +749,9 @@ const saveAsDraft = () => {
                                   selectedArtists = selectedArtists.filter((id) => id !== artistId)
                                 "
                               >
+                                <v-avatar start size="18" class="selected-chip-avatar">
+                                  {{ users.artists.find((a) => a.id === artistId)?.display_initials || 'U' }}
+                                </v-avatar>
                                 {{
                                   users.artists.find((a) => a.id === artistId)?.display_name ||
                                   'Unknown'
@@ -883,6 +961,80 @@ const saveAsDraft = () => {
 
 :deep(.v-select__selection-text) {
   color: #353535 !important;
+}
+
+.selected-user-name {
+  color: #353535;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.selected-chip-avatar {
+  background: #353535 !important;
+  color: #fff !important;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.user-option {
+  min-height: 58px !important;
+  padding: 8px 12px !important;
+}
+
+.user-option :deep(.v-list-item__prepend) {
+  margin-right: 10px !important;
+}
+
+.user-option-avatar {
+  background: #fff8df !important;
+  border: 1px solid #f3df91;
+  color: #353535 !important;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.user-option-content {
+  min-width: 0;
+  width: 100%;
+}
+
+.user-option-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.user-option-name {
+  color: #222;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-role-badge {
+  background: #353535 !important;
+  color: #fff !important;
+  flex-shrink: 0;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  height: 20px !important;
+  padding: 0 8px !important;
+}
+
+.user-option-meta {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Project Type Display with improved styling */

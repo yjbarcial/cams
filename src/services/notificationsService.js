@@ -8,6 +8,7 @@ import { ADMIN_EMAILS } from '@/utils/userDisplay.js'
 // See userDisplay.js for centralized admin email checking if needed
 
 let hasLoggedProfileFetchNetworkIssue = false
+let hasLoggedAdminNotificationTableIssue = false
 
 const isTransientNetworkFetchError = (error) => {
   const message = String(error?.message || '').toLowerCase()
@@ -19,6 +20,63 @@ const isTransientNetworkFetchError = (error) => {
     details.includes('failed to fetch') ||
     details.includes('err_connection_closed')
   )
+}
+
+const isCurrentUserAdmin = () => {
+  const currentAccessRole = localStorage.getItem('accessRole')
+  const currentUserRole = localStorage.getItem('userRole') || currentAccessRole
+  return currentUserRole === 'admin' || currentAccessRole === 'admin'
+}
+
+const isAdminNotificationId = (notificationId) => String(notificationId || '').startsWith('admin:')
+
+const getAdminNotificationDbId = (notificationId) => String(notificationId || '').replace(/^admin:/, '')
+
+const getAdminAccountNotifications = async () => {
+  if (!isCurrentUserAdmin()) return []
+
+  try {
+    const { supabase } = await import('@/utils/supabase.js')
+    const { data, error } = await supabase
+      .from('admin_notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+
+    hasLoggedAdminNotificationTableIssue = false
+
+    return (data || []).map((notification) => ({
+      id: `admin:${notification.id}`,
+      type: notification.type || 'Account',
+      typeColor: getTypeColor(notification.type || 'Account'),
+      title: notification.title || 'New Account Pending Approval',
+      description: notification.message || '',
+      timestamp: notification.created_at,
+      isRead: !!notification.is_read,
+      projectId: null,
+      projectType: null,
+      actions: [{ label: 'Review User', type: 'view', color: '#f5c52b' }],
+      recipient: 'Admin',
+      recipientEmail: null,
+      recipientUserId: null,
+      createdBy: notification.profile_email || 'System',
+      workflowLabel: 'User Approval',
+      route: '/admin',
+      source: 'admin_notifications',
+      profileId: notification.profile_id,
+      profileEmail: notification.profile_email,
+    }))
+  } catch (error) {
+    if (!hasLoggedAdminNotificationTableIssue) {
+      console.warn(
+        'Admin registration notifications are not available yet. Run ADD_ADMIN_REGISTRATION_NOTIFICATIONS.sql in Supabase.',
+        error?.message || error,
+      )
+      hasLoggedAdminNotificationTableIssue = true
+    }
+    return []
+  }
 }
 
 /**
@@ -195,8 +253,12 @@ export const getNotifications = async () => {
       return false
     })
 
+    const adminNotifications = await getAdminAccountNotifications()
+
     // Sort by timestamp (newest first)
-    return userNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    return [...adminNotifications, ...userNotifications].sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
+    )
   } catch (error) {
     console.error('Error getting notifications:', error)
     return []
@@ -364,6 +426,18 @@ export const createNotification = async (notificationData) => {
  */
 export const markAsRead = async (notificationId) => {
   try {
+    if (isAdminNotificationId(notificationId)) {
+      const { supabase } = await import('@/utils/supabase.js')
+      const { error } = await supabase
+        .from('admin_notifications')
+        .update({ is_read: true })
+        .eq('id', getAdminNotificationDbId(notificationId))
+
+      if (error) throw error
+      window.dispatchEvent(new CustomEvent('notificationUpdated'))
+      return true
+    }
+
     // Get ALL notifications from localStorage (not filtered)
     const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
     const notification = allNotifications.find((n) => n.id === notificationId)
@@ -400,6 +474,18 @@ export const markAllAsRead = async () => {
     const isAdmin = currentUserRole === 'admin' || currentAccessRole === 'admin'
 
     if (isAdmin) {
+      try {
+        const { supabase } = await import('@/utils/supabase.js')
+        const { error } = await supabase
+          .from('admin_notifications')
+          .update({ is_read: true })
+          .eq('is_read', false)
+
+        if (error) throw error
+      } catch (error) {
+        console.warn('Could not mark admin registration notifications as read:', error?.message || error)
+      }
+
       // Admins: Mark only Published notifications as read
       console.log('👑 Admin: Marking published notifications as read')
       allNotifications.forEach((n) => {
@@ -456,6 +542,18 @@ export const markAllAsRead = async () => {
  */
 export const deleteNotification = async (notificationId) => {
   try {
+    if (isAdminNotificationId(notificationId)) {
+      const { supabase } = await import('@/utils/supabase.js')
+      const { error } = await supabase
+        .from('admin_notifications')
+        .delete()
+        .eq('id', getAdminNotificationDbId(notificationId))
+
+      if (error) throw error
+      window.dispatchEvent(new CustomEvent('notificationUpdated'))
+      return true
+    }
+
     // Get ALL notifications from localStorage (not filtered)
     const allNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
     const filtered = allNotifications.filter((n) => n.id !== notificationId)
@@ -501,6 +599,7 @@ const getTypeColor = (type) => {
     Returned: '#f59e0b', // amber
     Published: '#10b981', // green
     Forwarded: '#8b5cf6', // purple
+    Account: '#f5c52b', // gold
     Info: '#6b7280', // gray
   }
   return colorMap[type] || '#6b7280'
