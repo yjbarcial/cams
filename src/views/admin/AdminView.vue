@@ -49,6 +49,36 @@ const editFormData = ref({
 })
 const editLoading = ref(false)
 
+const roleOptions = [
+  { title: 'Admin', value: 'admin' },
+  { title: 'Editor', value: 'editor' },
+  { title: 'Section Head', value: 'section_head' },
+  { title: 'Member', value: 'member' },
+  { title: 'Viewer', value: 'viewer' },
+]
+
+const designationOptions = [
+  { title: 'Technical Editor', value: 'Technical Editor' },
+  { title: 'Creative Director', value: 'Creative Director' },
+  { title: 'Editor-in-Chief', value: 'Editor-in-Chief' },
+  { title: 'Chief Adviser', value: 'Chief Adviser' },
+  { title: 'Archival Manager', value: 'Archival Manager' },
+  { title: 'Online Accounts Manager', value: 'Online Accounts Manager' },
+  { title: 'Section Head', value: 'Section Head' },
+]
+
+const positionOptions = [
+  { title: 'Layout Artist', value: 'Layout Artist' },
+  { title: 'News Writer', value: 'News Writer' },
+  { title: 'Feature Writer', value: 'Feature Writer' },
+  { title: 'Opinion Writer', value: 'Opinion Writer' },
+  { title: 'Sports Writer', value: 'Sports Writer' },
+  { title: 'Literary Writer', value: 'Literary Writer' },
+  { title: 'Photojournalist', value: 'Photojournalist' },
+  { title: 'Videographer', value: 'Videographer' },
+  { title: 'Illustrator', value: 'Illustrator' },
+]
+
 // Notification state
 const showNotification = ref(false)
 const notificationMessage = ref('')
@@ -587,6 +617,17 @@ const closeEditUserDialog = () => {
   editFormData.value = { role: '', designation_label: '', positions_label: '' }
 }
 
+const emptyToNull = (value) => {
+  if (value === undefined || value === null) return null
+
+  const normalized = String(value).trim()
+  return normalized ? normalized : null
+}
+
+const hasNormalizedChange = (nextValue, previousValue) => {
+  return emptyToNull(nextValue) !== emptyToNull(previousValue)
+}
+
 const logRoleChangeAudit = async ({ targetUserId, targetEmail, oldRole, newRole }) => {
   if (!targetUserId || !newRole || oldRole === newRole) return
 
@@ -614,14 +655,22 @@ const saveUserChanges = async () => {
   editLoading.value = true
   try {
     const oldRole = editingUser.value.role || null
+    const updateData = {
+      role: editFormData.value.role,
+      updated_at: new Date().toISOString(),
+    }
+
+    if (hasNormalizedChange(editFormData.value.designation_label, editingUser.value.designation_label)) {
+      updateData.designation_label = emptyToNull(editFormData.value.designation_label)
+    }
+
+    if (hasNormalizedChange(editFormData.value.positions_label, editingUser.value.positions_label)) {
+      updateData.positions_label = emptyToNull(editFormData.value.positions_label)
+    }
 
     const { error } = await supabase
       .from('profiles')
-      .update({
-        role: editFormData.value.role,
-        designation_label: editFormData.value.designation_label,
-        positions_label: editFormData.value.positions_label,
-      })
+      .update(updateData)
       .eq('id', editingUser.value.id)
 
     if (error) throw error
@@ -629,9 +678,13 @@ const saveUserChanges = async () => {
     // Update the user in the local array
     const userIndex = users.value.findIndex((u) => u.id === editingUser.value.id)
     if (userIndex !== -1) {
-      users.value[userIndex].role = editFormData.value.role
-      users.value[userIndex].designation_label = editFormData.value.designation_label
-      users.value[userIndex].positions_label = editFormData.value.positions_label
+      users.value[userIndex].role = updateData.role
+      if ('designation_label' in updateData) {
+        users.value[userIndex].designation_label = updateData.designation_label || ''
+      }
+      if ('positions_label' in updateData) {
+        users.value[userIndex].positions_label = updateData.positions_label || ''
+      }
     }
 
     await logRoleChangeAudit({
@@ -1420,13 +1473,7 @@ const performClearClientData = async () => {
               <label class="section-label">System Role</label>
               <v-select
                 v-model="editFormData.role"
-                :items="[
-                  { title: 'Admin', value: 'admin' },
-                  { title: 'Editor', value: 'editor' },
-                  { title: 'Section Head', value: 'section_head' },
-                  { title: 'Member', value: 'member' },
-                  { title: 'Viewer', value: 'viewer' },
-                ]"
+                :items="roleOptions"
                 variant="outlined"
                 density="comfortable"
                 :disabled="editLoading"
@@ -1437,15 +1484,7 @@ const performClearClientData = async () => {
               <label class="section-label">Workflow Designation</label>
               <v-select
                 v-model="editFormData.designation_label"
-                :items="[
-                  { title: 'Technical Editor', value: 'Technical Editor' },
-                  { title: 'Creative Director', value: 'Creative Director' },
-                  { title: 'Editor-in-Chief', value: 'Editor-in-Chief' },
-                  { title: 'Chief Adviser', value: 'Chief Adviser' },
-                  { title: 'Archival Manager', value: 'Archival Manager' },
-                  { title: 'Online Accounts Manager', value: 'Online Accounts Manager' },
-                  { title: 'Section Head', value: 'Section Head' },
-                ]"
+                :items="designationOptions"
                 variant="outlined"
                 density="comfortable"
                 clearable
@@ -1454,13 +1493,10 @@ const performClearClientData = async () => {
             </div>
 
             <div class="form-section">
-              <label class="section-label">Contributor Type</label>
+              <label class="section-label">Staff Position</label>
               <v-select
                 v-model="editFormData.positions_label"
-                :items="[
-                  { title: 'Writer', value: 'Writer' },
-                  { title: 'Artist', value: 'Artist' },
-                ]"
+                :items="positionOptions"
                 variant="outlined"
                 density="comfortable"
                 clearable
@@ -1471,8 +1507,7 @@ const performClearClientData = async () => {
             <v-card class="info-message" elevation="0">
               <v-card-text class="pa-3">
                 <div class="text-caption">
-                  <strong>Note:</strong> Leave designation and contributor type blank for basic
-                  members.
+                  <strong>Note:</strong> Leave designation and staff position blank for basic members.
                 </div>
               </v-card-text>
             </v-card>
