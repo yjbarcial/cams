@@ -1,4 +1,5 @@
 import apiClient from './api';
+import { clearStoredAuth, markAuthSessionActive } from '@/utils/authSession';
 
 /**
  * Authentication API Service
@@ -13,6 +14,7 @@ export const authAPI = {
   async login(credentials) {
     const response = await apiClient.post('/auth/login', credentials);
     if (response.success && response.data.token) {
+      markAuthSessionActive();
       localStorage.setItem('authToken', response.data.token);
       localStorage.setItem('isLoggedIn', 'true');
       localStorage.setItem('userEmail', response.data.user.email);
@@ -34,11 +36,7 @@ export const authAPI = {
 
   // Logout
   logout() {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userRole');
+    clearStoredAuth();
   }
 };
 

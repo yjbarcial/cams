@@ -10,6 +10,9 @@ import * as directives from 'vuetify/directives'
 
 import App from './App.vue'
 import router from './router'
+import { clearPersistedAuthIfNeeded } from './utils/authSession'
+
+clearPersistedAuthIfNeeded()
 
 // Create Vuetify instance
 const vuetify = createVuetify({

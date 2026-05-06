@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/utils/supabase'
+import { clearStoredAuth } from '@/utils/authSession'
 import libBg from '/images/lib-hd.jpg'
 
 const router = useRouter()
@@ -130,8 +131,7 @@ async function resetPassword() {
 
     // Sign out the user so they have to login with new password
     await supabase.auth.signOut()
-    localStorage.removeItem('isLoggedIn')
-    localStorage.removeItem('userEmail')
+    clearStoredAuth()
 
     // Redirect to login after 2 seconds
     setTimeout(() => {

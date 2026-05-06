@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { getUnreadCount } from '@/services/notificationsService.js'
 import { supabase } from '@/utils/supabase'
 import { setProfileStatusByEmail } from '@/utils/autoAddUser'
+import { clearStoredAuth } from '@/utils/authSession'
 
 const router = useRouter()
 const showAccountMenu = ref(false)
@@ -85,15 +86,8 @@ const handleLogout = async () => {
     await supabase.auth.signOut()
 
     // Clear any stored authentication data
-    localStorage.removeItem('userEmail')
-    localStorage.removeItem('isLoggedIn')
-    localStorage.removeItem('user')
-    localStorage.removeItem('token')
-    localStorage.removeItem('userRole')
-    localStorage.removeItem('userId')
-    localStorage.removeItem('accessRole')
+    clearStoredAuth()
     localStorage.removeItem('user_settings')
-    sessionStorage.clear()
 
     // Navigate to login page with logout flag
     router.push('/login?logout=true')

@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { requiredValidator, emailValidator } from '@/utils/validators'
 import { supabase } from '@/utils/supabase'
+import { clearStoredAuth, markAuthSessionActive } from '@/utils/authSession'
 import {
   addUserToProfiles,
   createUserProfile,
@@ -79,11 +80,8 @@ onMounted(async () => {
 
     if (!success) {
       await supabase.auth.signOut()
+      clearStoredAuth()
       localStorage.setItem('isLoggedIn', 'false')
-      localStorage.removeItem('userRole')
-      localStorage.removeItem('accessRole')
-      localStorage.removeItem('userId')
-      localStorage.removeItem('userEmail')
       errorMessage.value =
         'Your account is waiting for administrator approval. Please check back after an admin approves your access.'
       loading.value = false
@@ -91,6 +89,7 @@ onMounted(async () => {
     }
 
     // Already logged in and approved - redirect immediately
+    markAuthSessionActive()
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem('userEmail', session.user.email)
     router.replace('/dashboard')
@@ -101,8 +100,9 @@ onMounted(async () => {
   const fromLogout = urlParams.get('logout')
   if (fromLogout === 'true') {
     window.history.replaceState(history.state, '', window.location.pathname)
-    localStorage.setItem('isLoggedIn', 'false')
     await supabase.auth.signOut()
+    clearStoredAuth()
+    localStorage.setItem('isLoggedIn', 'false')
   }
 
   // No session - enable the form
@@ -170,6 +170,7 @@ async function signInWithPassword() {
       return
     }
 
+    markAuthSessionActive()
     localStorage.setItem('isLoggedIn', 'true')
     localStorage.setItem('userEmail', data.user.email)
     router.replace('/dashboard')
@@ -240,11 +241,8 @@ async function signUpWithPassword() {
         await createUserProfile(data.user)
 
         await supabase.auth.signOut()
+        clearStoredAuth()
         localStorage.setItem('isLoggedIn', 'false')
-        localStorage.removeItem('userRole')
-        localStorage.removeItem('accessRole')
-        localStorage.removeItem('userId')
-        localStorage.removeItem('userEmail')
         successMessage.value =
           'Account created successfully. Please wait for a system administrator to approve your access.'
         isSignupMode.value = false
