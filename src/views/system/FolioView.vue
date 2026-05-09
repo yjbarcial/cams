@@ -7,6 +7,7 @@ import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
 import { supabase } from '@/utils/supabase'
 import { projectsService } from '@/services/supabaseService'
 import { deleteProjectNotifications } from '@/services/notificationsService'
+import { getDisplayName } from '@/utils/userDisplay'
 
 const router = useRouter()
 const route = useRoute()
@@ -79,11 +80,11 @@ const loadProjects = async () => {
       let sectionHeadName = ''
       if (project.section_head_profile) {
         const profile = project.section_head_profile
-        if (profile.first_name || profile.last_name) {
-          sectionHeadName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-        } else if (profile.email) {
-          sectionHeadName = profile.email
-        }
+        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        sectionHeadName = getDisplayName(profile.email || fullName, {
+          ...profile,
+          full_name: fullName,
+        })
       }
 
       // Extract member user IDs
@@ -760,9 +761,15 @@ const cancelBulkDelete = () => {
             </p>
           </div>
 
-          <v-alert type="error" variant="tonal" density="comfortable" class="warning-alert">
+          <v-alert
+            class="warning-alert"
+            color="#6b7280"
+            icon="mdi-information-outline"
+            variant="tonal"
+            density="comfortable"
+          >
             <template v-slot:prepend>
-              <v-icon size="20">mdi-alert</v-icon>
+              <v-icon size="20">mdi-information-outline</v-icon>
             </template>
             <div class="alert-text"><strong>Warning:</strong> This action cannot be undone.</div>
           </v-alert>
@@ -809,7 +816,7 @@ const cancelBulkDelete = () => {
           <v-spacer />
           <v-btn
             @click="confirmBulkDelete"
-            color="error"
+            color="#6b7280"
             variant="elevated"
             prepend-icon="mdi-delete"
             class="confirm-delete-btn"
@@ -1369,7 +1376,7 @@ const cancelBulkDelete = () => {
    Delete Dialog Styles - COPIED FROM MAGAZINEVIEW
    ======================================== */
 .delete-dialog-card {
-  border: 2px solid #353535 !important;
+  border: 2px solid #d1d5db !important;
   border-radius: 8px !important;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
@@ -1379,7 +1386,7 @@ const cancelBulkDelete = () => {
   display: flex;
   align-items: center;
   padding: 20px 24px !important;
-  background: #353535 !important;
+  background: #4b5563 !important;
   color: white !important;
   font-size: 18px !important;
   font-weight: 600 !important;
@@ -1393,7 +1400,7 @@ const cancelBulkDelete = () => {
 .delete-info-box {
   background: #f5f5f5;
   border: 1px solid #e0e0e0;
-  border-left: 4px solid #353535;
+  border-left: 4px solid #6b7280;
   border-radius: 6px;
   padding: 16px;
   margin-bottom: 16px;
@@ -1407,20 +1414,21 @@ const cancelBulkDelete = () => {
 }
 
 .delete-message strong {
-  color: #353535;
+  color: #4b5563;
   font-weight: 600;
 }
 
 .warning-alert {
-  border-left: 4px solid #353535 !important;
-  background: #f8f8f8 !important;
+  border-left: 4px solid #6b7280 !important;
+  background: #f3f4f6 !important;
   border-radius: 6px !important;
   padding: 12px 16px !important;
+  color: #374151 !important;
 }
 
 :deep(.warning-alert .v-alert__prepend) {
   margin-right: 12px !important;
-  color: #353535 !important;
+  color: #6b7280 !important;
 }
 
 .alert-text {
@@ -1432,7 +1440,7 @@ const cancelBulkDelete = () => {
 .alert-text strong {
   display: inline;
   font-weight: 600;
-  color: #353535;
+  color: #4b5563;
 }
 
 .delete-dialog-actions {
@@ -1442,7 +1450,7 @@ const cancelBulkDelete = () => {
 }
 
 .confirm-delete-btn {
-  background: #353535 !important;
+  background: #6b7280 !important;
   color: white !important;
   font-weight: 600 !important;
   text-transform: none !important;
@@ -1453,7 +1461,7 @@ const cancelBulkDelete = () => {
 }
 
 .confirm-delete-btn:hover {
-  background: #1f1f1f !important;
+  background: #4b5563 !important;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
 }
 

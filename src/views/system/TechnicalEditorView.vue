@@ -714,9 +714,12 @@ const loadProjectData = async () => {
       try {
         const sectionHeadProfileData = await profilesService.getById(foundProject.section_head_id)
         if (sectionHeadProfileData && sectionHeadProfileData.id) {
-          sectionHeadName =
-            `${sectionHeadProfileData.first_name || ''} ${sectionHeadProfileData.last_name || ''}`.trim() ||
-            sectionHeadProfileData.email
+          const fullName =
+            `${sectionHeadProfileData.first_name || ''} ${sectionHeadProfileData.last_name || ''}`.trim()
+          sectionHeadName = getDisplayName(sectionHeadProfileData.email, {
+            ...sectionHeadProfileData,
+            full_name: fullName,
+          })
           sectionHeadProfile.value = {
             id: sectionHeadProfileData.id,
             displayName: sectionHeadName,
@@ -732,8 +735,8 @@ const loadProjectData = async () => {
       .filter((m) => m.role === 'writer')
       .map((m) => {
         const profile = m.profiles
-        const displayName =
-          `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        const displayName = getDisplayName(profile.email, { ...profile, full_name: fullName })
         return { id: profile?.id || null, displayName }
       })
       .filter((w) => w.id)
@@ -745,8 +748,8 @@ const loadProjectData = async () => {
       .filter((m) => m.role === 'artist')
       .map((m) => {
         const profile = m.profiles
-        const displayName =
-          `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        const displayName = getDisplayName(profile.email, { ...profile, full_name: fullName })
         return { id: profile?.id || null, displayName }
       })
       .filter((a) => a.id)

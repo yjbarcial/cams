@@ -162,13 +162,7 @@ const isSectionHeadCandidate = (user) => {
   const role = normalizeText(user.role)
   const designation = normalizeText(user.designation_label)
 
-  return (
-    role === 'section_head' ||
-    designation.includes('section head') ||
-    designation.includes('editor-in-chief') ||
-    designation.includes('editor in chief') ||
-    designation.includes('managing editor')
-  )
+  return role === 'section_head' || designation.includes('section head')
 }
 
 // Load users from Supabase

@@ -133,10 +133,12 @@ async function signInWithPassword() {
     const isRegistered = await isUserRegistered(data.user.email)
 
     if (!isRegistered) {
-      // User exists in Supabase auth but not in profiles table
+      // User exists in Supabase Auth but has no profile yet. This can happen
+      // when email confirmation is required during signup.
+      await createUserProfile(data.user)
       await supabase.auth.signOut()
       errorMessage.value =
-        'Your account is not yet registered in our system. Please create a new account using the "Create Account" button below. Contact an admin if you need to be added manually.'
+        'Your account was registered and is now waiting for administrator approval. Please try again after an admin approves your access.'
       loading.value = false
       return
     }

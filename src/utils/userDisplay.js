@@ -56,6 +56,34 @@ export function getRoleSuffix(profile) {
   return ''
 }
 
+const namePartCorrections = {
+  jessahmae: 'Jessah Mae',
+  jessahmei: 'Jessah Mei',
+}
+
+const formatNamePart = (part) => {
+  const normalized = String(part || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')
+
+  if (namePartCorrections[normalized]) {
+    return namePartCorrections[normalized]
+  }
+
+  return String(part || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+}
+
+const formatDisplayNameText = (value) =>
+  String(value || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(formatNamePart)
+    .join(' ')
+
 /**
  * Get display name for user - shows "Admin" for admin emails or name with role
  * @param {string} emailOrName - Email address or name
@@ -75,17 +103,18 @@ export function getDisplayName(emailOrName, profile = null, showRole = false) {
 
   // If we have a profile with a name, use that
   if (profile?.full_name) {
-    displayName = profile.full_name
+    displayName = formatDisplayNameText(profile.full_name)
   } else if (emailOrName.includes('@')) {
     // If it looks like an email, extract the name part
     const namePart = emailOrName.split('@')[0]
-    // Convert dot notation to readable name (e.g., "john.doe" -> "John Doe")
+    // Convert email name parts to readable names (e.g., "john.doe" -> "John Doe")
     displayName = namePart
-      .split('.')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map(formatNamePart)
       .join(' ')
   } else {
-    displayName = emailOrName
+    displayName = formatDisplayNameText(emailOrName)
   }
 
   // Append role suffix if requested
@@ -111,8 +140,8 @@ export function getShortDisplayName(emailOrName) {
   if (emailOrName.includes('@')) {
     const namePart = emailOrName.split('@')[0]
     const firstName = namePart.split('.')[0]
-    return firstName.charAt(0).toUpperCase() + firstName.slice(1)
+    return formatNamePart(firstName)
   }
 
-  return emailOrName.split(' ')[0]
+  return formatNamePart(emailOrName.split(' ')[0])
 }

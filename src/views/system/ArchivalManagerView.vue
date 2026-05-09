@@ -143,6 +143,22 @@ const handleContentChange = () => {
   // Keeping method for template compatibility
 }
 
+const normalizedProjectStatus = computed(() =>
+  String(project.value.status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_'),
+)
+
+const normalizedProjectType = computed(() =>
+  String(project.value.project_type || project.value.type || projectType.value || '')
+    .trim()
+    .toLowerCase(),
+)
+
+const isForPublish = computed(() => normalizedProjectStatus.value === 'for_publish')
+const isOtherProject = computed(() => normalizedProjectType.value === 'other')
+
 // ARCHIVAL MANAGER / ONLINE ACCOUNTS MANAGER - Dynamic button logic
 const approvalActions = computed(() => {
   const actions = []
@@ -150,7 +166,7 @@ const approvalActions = computed(() => {
   // Online Accounts Manager workflow
   if (isOnlineAccountsManager) {
     // Approval step - when project comes from both editors
-    if (project.value.status === 'to_online_accounts_manager') {
+    if (normalizedProjectStatus.value === 'to_online_accounts_manager') {
       actions.push({
         value: 'approve',
         text: 'Approve & Send to Editor-in-Chief',
@@ -159,12 +175,12 @@ const approvalActions = computed(() => {
         disabled: false,
       })
     }
-    // Publishing step - when EIC has approved Other projects
-    else if (project.value.status === 'For Publish' && project.value.type === 'other') {
+    // Publishing step - when EIC/Chief Adviser has approved projects for this role
+    else if (isForPublish.value) {
       actions.push({
         value: 'publish',
         text: 'Publish',
-        color: 'primary',
+        color: 'warning',
         icon: 'mdi-publish',
         disabled: false,
       })
@@ -172,12 +188,11 @@ const approvalActions = computed(() => {
   }
   // Archival Manager workflow - only for non-Other projects
   else {
-    const isReadyToPublish =
-      project.value.status === 'For Publish' && project.value.type !== 'other'
+    const isReadyToPublish = isForPublish.value && !isOtherProject.value
     actions.push({
       value: 'publish',
       text: 'Publish',
-      color: 'primary',
+      color: 'warning',
       icon: 'mdi-publish',
       disabled: !isReadyToPublish,
     })
@@ -217,11 +232,11 @@ const getBackButtonText = computed(() => {
 
 const startApproval = (action) => {
   // Validation for different actions
-  if (action === 'approve' && project.value.status !== 'to_online_accounts_manager') {
+  if (action === 'approve' && normalizedProjectStatus.value !== 'to_online_accounts_manager') {
     showNotification('Project is not ready for approval', 'warning')
     return
   }
-  if (action === 'publish' && project.value.status !== 'For Publish') {
+  if (action === 'publish' && !isForPublish.value) {
     showNotification('Project must be approved before publishing', 'warning')
     return
   }
@@ -390,9 +405,12 @@ const loadProjectData = async () => {
       try {
         const sectionHeadProfileData = await profilesService.getById(foundProject.section_head_id)
         if (sectionHeadProfileData && sectionHeadProfileData.id) {
-          sectionHeadName =
-            `${sectionHeadProfileData.first_name || ''} ${sectionHeadProfileData.last_name || ''}`.trim() ||
-            sectionHeadProfileData.email
+          const fullName =
+            `${sectionHeadProfileData.first_name || ''} ${sectionHeadProfileData.last_name || ''}`.trim()
+          sectionHeadName = getDisplayName(sectionHeadProfileData.email, {
+            ...sectionHeadProfileData,
+            full_name: fullName,
+          })
           sectionHeadProfile.value = {
             id: sectionHeadProfileData.id,
             displayName: sectionHeadName,
@@ -408,8 +426,8 @@ const loadProjectData = async () => {
       .filter((m) => m.role === 'writer')
       .map((m) => {
         const profile = m.profiles
-        const displayName =
-          `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        const displayName = getDisplayName(profile.email, { ...profile, full_name: fullName })
         return { id: profile?.id || null, displayName }
       })
       .filter((w) => w.id)
@@ -421,8 +439,8 @@ const loadProjectData = async () => {
       .filter((m) => m.role === 'artist')
       .map((m) => {
         const profile = m.profiles
-        const displayName =
-          `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        const displayName = getDisplayName(profile.email, { ...profile, full_name: fullName })
         return { id: profile?.id || null, displayName }
       })
       .filter((a) => a.id)
@@ -435,6 +453,7 @@ const loadProjectData = async () => {
       id: String(projectId),
       title: foundProject.title || 'Untitled Project',
       status: foundProject.status || 'archived',
+      type: foundProject.project_type || route.query.type || 'other',
       lastModified: foundProject.updated_at
         ? new Date(foundProject.updated_at).toLocaleString()
         : new Date().toLocaleString(),
@@ -1144,7 +1163,7 @@ onMounted(async () => {
 }
 
 .publish-btn {
-  background: #fbbf24 !important;
+  background: #f5c52b !important;
   color: #353535 !important;
   text-transform: uppercase !important;
   font-weight: bold !important;
@@ -1154,7 +1173,7 @@ onMounted(async () => {
 }
 
 .publish-btn:hover {
-  background: #f59e0b !important;
+  background: #e3b521 !important;
 }
 
 .publish-btn-locked {

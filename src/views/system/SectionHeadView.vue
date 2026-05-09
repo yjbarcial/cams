@@ -451,9 +451,12 @@ const loadProjectData = async () => {
       try {
         const sectionHeadProfile = await profilesService.getById(foundProject.section_head_id)
         if (sectionHeadProfile) {
-          sectionHeadName =
-            `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim() ||
-            sectionHeadProfile.email
+          const fullName =
+            `${sectionHeadProfile.first_name || ''} ${sectionHeadProfile.last_name || ''}`.trim()
+          sectionHeadName = getDisplayName(sectionHeadProfile.email, {
+            ...sectionHeadProfile,
+            full_name: fullName,
+          })
         }
       } catch (error) {
         console.error('Error loading section head profile:', error)
@@ -465,7 +468,8 @@ const loadProjectData = async () => {
       .filter((m) => m.role === 'writer')
       .map((m) => {
         const profile = m.profiles
-        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        return getDisplayName(profile.email, { ...profile, full_name: fullName })
       })
     const writersText = writers.length > 0 ? writers.join(', ') : 'Not assigned'
 
@@ -473,7 +477,8 @@ const loadProjectData = async () => {
       .filter((m) => m.role === 'artist')
       .map((m) => {
         const profile = m.profiles
-        return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
+        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+        return getDisplayName(profile.email, { ...profile, full_name: fullName })
       })
     const artistsText = artists.length > 0 ? artists.join(', ') : 'Not assigned'
 

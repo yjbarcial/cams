@@ -1,16 +1,20 @@
 <script setup>
 import { RouterView, useRouter } from 'vue-router'
 import { supabase } from '@/utils/supabase'
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { accessDeniedState, hideAccessDenied } from '@/stores/accessDenied'
+import { startPresenceTracking } from '@/utils/presence'
 
 const router = useRouter()
+let stopPresenceTracking = null
 
 const dismissAccessDenied = () => {
   hideAccessDenied()
 }
 
-onMounted(() => {
+onMounted(async () => {
+  stopPresenceTracking = await startPresenceTracking()
+
   // Listen for auth state changes - Supabase will automatically process hash params
   supabase.auth.onAuthStateChange(async (event) => {
     // If user clicked password recovery link, redirect to reset password page
@@ -20,6 +24,12 @@ onMounted(() => {
       router.push('/auth/reset-password')
     }
   })
+})
+
+onUnmounted(() => {
+  if (stopPresenceTracking) {
+    stopPresenceTracking()
+  }
 })
 </script>
 <template>

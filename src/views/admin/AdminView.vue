@@ -25,6 +25,7 @@ const loading = ref(true)
 const refreshing = ref(false)
 const error = ref(null)
 let projectsSubscription = null
+let profilesSubscription = null
 const search = ref('')
 const showAllDialog = ref(false)
 const showAllType = ref('')
@@ -36,12 +37,18 @@ const clearInProgress = ref(false)
 const clearMessage = ref('')
 const showDeleteDialog = ref(false)
 const publicationToDelete = ref(null)
+const publicationDeleteLoading = ref(false)
 const showDeleteProjectDialog = ref(false)
 const projectToDelete = ref(null)
+const projectDeleteLoading = ref(false)
 
 // User edit dialog state
 const showEditUserDialog = ref(false)
 const editingUser = ref(null)
+const showDeleteUserDialog = ref(false)
+const userToDelete = ref(null)
+const deleteUserLoading = ref(false)
+const userDeleteError = ref('')
 const editFormData = ref({
   role: '',
   status: '',
@@ -268,6 +275,9 @@ const loadAllProjects = async () => {
 const refreshData = async () => {
   try {
     refreshing.value = true
+    const realUsers = await fetchRealUsers()
+    users.value = realUsers
+
     const allProjects = await loadAllProjects()
     projects.value = allProjects
 
@@ -276,6 +286,8 @@ const refreshData = async () => {
     publications.value = allPublications
 
     // Update statistics - show ALL items
+    statistics.value.totalUsers = users.value.length
+    statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
     statistics.value.totalProjects = allProjects.length
     statistics.value.activeProjects = allProjects.filter(
       (p) => p.status === 'in_progress' || p.status === 'under_review',
@@ -314,6 +326,7 @@ const confirmDeletePublication = (publication) => {
 const deletePublication = async () => {
   if (!publicationToDelete.value) return
 
+  publicationDeleteLoading.value = true
   try {
     await archivesService.delete(publicationToDelete.value.id)
 
@@ -330,6 +343,7 @@ const deletePublication = async () => {
     console.error('❌ Error deleting publication:', error)
     displayNotification('Failed to delete publication', 'error')
   } finally {
+    publicationDeleteLoading.value = false
     showDeleteDialog.value = false
     publicationToDelete.value = null
   }
@@ -344,6 +358,7 @@ const confirmDeleteProject = (project) => {
 const deleteProject = async () => {
   if (!projectToDelete.value) return
 
+  projectDeleteLoading.value = true
   try {
     // Delete from database with cascading deletes
     await projectsService.delete(projectToDelete.value.id)
@@ -365,6 +380,7 @@ const deleteProject = async () => {
     console.error('❌ Error deleting project:', error)
     displayNotification('Failed to delete project', 'error')
   } finally {
+    projectDeleteLoading.value = false
     showDeleteProjectDialog.value = false
     projectToDelete.value = null
   }
@@ -403,7 +419,7 @@ const fetchRealUsers = async () => {
         role: user.role || 'member',
         designation_label: user.designation_label || '',
         positions_label: user.positions_label || '',
-        status: user.status || 'active',
+        status: user.status || 'inactive',
         created_at: user.created_at,
         updated_at: user.updated_at,
         last_sign_in: user.last_login,
@@ -483,6 +499,36 @@ onMounted(async () => {
         subscriptionError,
       )
     }
+
+    try {
+      profilesSubscription = supabase
+        .channel('profiles-presence-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles' },
+          async (payload) => {
+            console.log('📡 Profile status update received:', payload)
+            const realUsers = await fetchRealUsers()
+            users.value = realUsers
+            statistics.value.totalUsers = users.value.length
+            statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
+          },
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Real-time subscription active for profiles')
+          } else if (status === 'CHANNEL_ERROR') {
+            console.warn('⚠️ Profile real-time subscription error (non-critical)')
+          } else if (status === 'TIMED_OUT') {
+            console.warn('⚠️ Profile real-time subscription timed out (non-critical)')
+          }
+        })
+    } catch (subscriptionError) {
+      console.warn(
+        '⚠️ Could not establish profile real-time subscription (non-critical):',
+        subscriptionError,
+      )
+    }
   } catch (err) {
     console.error('❌ Error in onMounted:', err)
     error.value = `Failed to load dashboard data: ${err.message}`
@@ -496,6 +542,10 @@ onUnmounted(() => {
   if (projectsSubscription) {
     supabase.removeChannel(projectsSubscription)
     console.log('🔌 Real-time subscription cleaned up')
+  }
+  if (profilesSubscription) {
+    supabase.removeChannel(profilesSubscription)
+    console.log('🔌 Profile real-time subscription cleaned up')
   }
 })
 
@@ -566,14 +616,26 @@ const formatText = (text) => {
     .join(' ')
 }
 
+const confirmRemoveUser = (user) => {
+  userToDelete.value = user
+  userDeleteError.value = ''
+  showDeleteUserDialog.value = true
+}
+
+const closeDeleteUserDialog = () => {
+  if (deleteUserLoading.value) return
+  showDeleteUserDialog.value = false
+  userToDelete.value = null
+  userDeleteError.value = ''
+}
+
 // Remove user from Supabase
-const removeUser = async (userId) => {
-  const user = users.value.find((u) => u.id === userId)
-  if (!user) return
+const removeUser = async () => {
+  if (!userToDelete.value) return
 
-  const confirmMsg = `Are you sure you want to remove ${user.email || 'this user'}?\n\nNote: This only removes from profiles. To fully delete, go to Supabase Dashboard → Authentication → Users.`
-
-  if (!confirm(confirmMsg)) return
+  const userId = userToDelete.value.id
+  userDeleteError.value = ''
+  deleteUserLoading.value = true
 
   try {
     // Only delete from profiles table (frontend can't delete from auth.users)
@@ -588,22 +650,20 @@ const removeUser = async (userId) => {
       statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
     }
 
-    alert(
-      'User removed from profiles successfully!\n\nTo fully delete from authentication, go to Supabase Dashboard → Authentication → Users → Delete user.',
-    )
+    displayNotification('User removed from User Management', 'success')
+    showDeleteUserDialog.value = false
+    userToDelete.value = null
   } catch (err) {
     console.error('Error removing user:', err)
 
-    // Provide helpful error message
     if (err.message?.includes('foreign key') || err.message?.includes('violates')) {
-      alert(
-        'Cannot delete user: This user has associated data (projects, comments, etc.).\n\nTo delete:\n1. First delete/reassign their projects\n2. Then try again\n\nOr manually delete from Supabase Dashboard.',
-      )
+      userDeleteError.value =
+        'Cannot delete this user because they still have associated data such as projects or comments. Reassign or remove that data first, then try again.'
     } else {
-      alert(
-        `Failed to delete user: ${err.message}\n\nTry using Supabase Dashboard → Authentication → Users → Delete user instead.`,
-      )
+      userDeleteError.value = `Failed to delete user: ${err.message}`
     }
+  } finally {
+    deleteUserLoading.value = false
   }
 }
 
@@ -699,6 +759,7 @@ const saveUserChanges = async () => {
         users.value[userIndex].positions_label = updateData.positions_label || ''
       }
     }
+    statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
 
     displayNotification(`User ${editingUser.value.email} updated successfully!`, 'success')
     closeEditUserDialog()
@@ -1073,67 +1134,138 @@ const performClearClientData = async () => {
                 </v-dialog>
 
                 <!-- Delete Publication Confirmation Dialog -->
-                <v-dialog v-model="showDeleteDialog" max-width="500">
-                  <v-card>
-                    <v-card-title class="text-h6 d-flex justify-space-between align-center">
-                      <div>
-                        <v-icon class="mr-2" color="error">mdi-delete-alert</v-icon>
-                        Delete Publication
+                <v-dialog v-model="showDeleteDialog" max-width="560px" persistent>
+                  <v-card class="edit-user-card delete-dialog-card">
+                    <v-card-title class="edit-user-header delete-dialog-header">
+                      <div class="header-content">
+                        <v-avatar size="44" color="#6b7280" class="edit-user-avatar">
+                          <v-icon color="white">mdi-delete-alert</v-icon>
+                        </v-avatar>
+                        <div class="edit-user-identity">
+                          <div class="edit-user-title">Delete Publication</div>
+                          <div class="edit-user-email">
+                            {{ publicationToDelete?.title || 'Untitled' }}
+                          </div>
+                        </div>
+                        <v-spacer />
+                        <v-btn
+                          icon
+                          variant="text"
+                          color="white"
+                          :disabled="publicationDeleteLoading"
+                          @click="showDeleteDialog = false"
+                        >
+                          <v-icon>mdi-close</v-icon>
+                        </v-btn>
                       </div>
-                      <v-btn icon @click="showDeleteDialog = false">
-                        <v-icon>mdi-close</v-icon>
-                      </v-btn>
                     </v-card-title>
-                    <v-card-text>
-                      <p class="mb-3">Are you sure you want to delete this publication?</p>
-                      <v-alert type="warning" density="compact" class="mb-3">
-                        <strong>{{ publicationToDelete?.title || 'Untitled' }}</strong>
-                      </v-alert>
-                      <p class="text-caption text-grey">
-                        This action cannot be undone. The publication will be permanently removed
-                        from the system.
-                      </p>
+                    <v-card-text class="edit-user-body">
+                      <div class="dialog-section">
+                        <div class="section-heading">
+                          <v-icon size="18">mdi-archive-remove-outline</v-icon>
+                          <span>System Admin Dashboard</span>
+                        </div>
+                        <p class="delete-dialog-copy">
+                          Are you sure you want to delete this publication?
+                        </p>
+                        <v-alert
+                          class="delete-warning-alert"
+                          color="#6b7280"
+                          icon="mdi-information-outline"
+                          density="compact"
+                          variant="tonal"
+                        >
+                          This action cannot be undone. The publication will be permanently removed
+                          from the system.
+                        </v-alert>
+                      </div>
                     </v-card-text>
-                    <v-card-actions>
+                    <v-card-actions class="edit-user-actions">
                       <v-spacer />
-                      <v-btn variant="text" @click="showDeleteDialog = false">Cancel</v-btn>
-                      <v-btn color="error" @click="deletePublication">
-                        <v-icon left>mdi-delete</v-icon>
-                        Delete
+                      <v-btn
+                        variant="text"
+                        class="cancel-edit-btn"
+                        :disabled="publicationDeleteLoading"
+                        @click="showDeleteDialog = false"
+                      >
+                        Cancel
+                      </v-btn>
+                      <v-btn
+                        class="delete-confirm-btn"
+                        :loading="publicationDeleteLoading"
+                        @click="deletePublication"
+                      >
+                        <v-icon start>mdi-delete</v-icon>
+                        Delete Publication
                       </v-btn>
                     </v-card-actions>
                   </v-card>
                 </v-dialog>
 
                 <!-- Delete Project Confirmation Dialog -->
-                <v-dialog v-model="showDeleteProjectDialog" max-width="500">
-                  <v-card>
-                    <v-card-title class="text-h6 d-flex justify-space-between align-center">
-                      <div>
-                        <v-icon class="mr-2" color="error">mdi-delete-alert</v-icon>
-                        Delete Project
+                <v-dialog v-model="showDeleteProjectDialog" max-width="560px" persistent>
+                  <v-card class="edit-user-card delete-dialog-card">
+                    <v-card-title class="edit-user-header delete-dialog-header">
+                      <div class="header-content">
+                        <v-avatar size="44" color="#6b7280" class="edit-user-avatar">
+                          <v-icon color="white">mdi-delete-alert</v-icon>
+                        </v-avatar>
+                        <div class="edit-user-identity">
+                          <div class="edit-user-title">Delete Project</div>
+                          <div class="edit-user-email">
+                            {{ projectToDelete?.title || 'Untitled' }}
+                          </div>
+                        </div>
+                        <v-spacer />
+                        <v-btn
+                          icon
+                          variant="text"
+                          color="white"
+                          :disabled="projectDeleteLoading"
+                          @click="showDeleteProjectDialog = false"
+                        >
+                          <v-icon>mdi-close</v-icon>
+                        </v-btn>
                       </div>
-                      <v-btn icon @click="showDeleteProjectDialog = false">
-                        <v-icon>mdi-close</v-icon>
-                      </v-btn>
                     </v-card-title>
-                    <v-card-text>
-                      <p class="mb-3">Are you sure you want to delete this project?</p>
-                      <v-alert type="warning" density="compact" class="mb-3">
-                        <strong>{{ projectToDelete?.title || 'Untitled' }}</strong>
-                      </v-alert>
-                      <p class="text-caption text-grey">
-                        This action cannot be undone. The project and all related data (media files,
-                        comments, history, notifications) will be permanently removed from the
-                        system.
-                      </p>
+                    <v-card-text class="edit-user-body">
+                      <div class="dialog-section">
+                        <div class="section-heading">
+                          <v-icon size="18">mdi-folder-remove-outline</v-icon>
+                          <span>System Admin Dashboard</span>
+                        </div>
+                        <p class="delete-dialog-copy">
+                          Are you sure you want to delete this project?
+                        </p>
+                        <v-alert
+                          class="delete-warning-alert"
+                          color="#6b7280"
+                          icon="mdi-information-outline"
+                          density="compact"
+                          variant="tonal"
+                        >
+                          This action cannot be undone. The project and all related data will be
+                          permanently removed from the system.
+                        </v-alert>
+                      </div>
                     </v-card-text>
-                    <v-card-actions>
+                    <v-card-actions class="edit-user-actions">
                       <v-spacer />
-                      <v-btn variant="text" @click="showDeleteProjectDialog = false">Cancel</v-btn>
-                      <v-btn color="error" @click="deleteProject">
-                        <v-icon left>mdi-delete</v-icon>
-                        Delete
+                      <v-btn
+                        variant="text"
+                        class="cancel-edit-btn"
+                        :disabled="projectDeleteLoading"
+                        @click="showDeleteProjectDialog = false"
+                      >
+                        Cancel
+                      </v-btn>
+                      <v-btn
+                        class="delete-confirm-btn"
+                        :loading="projectDeleteLoading"
+                        @click="deleteProject"
+                      >
+                        <v-icon start>mdi-delete</v-icon>
+                        Delete Project
                       </v-btn>
                     </v-card-actions>
                   </v-card>
@@ -1352,7 +1484,7 @@ const performClearClientData = async () => {
                                   variant="text"
                                   color="error"
                                   size="small"
-                                  @click="removeUser(user.id)"
+                                  @click="confirmRemoveUser(user)"
                                   title="Remove User"
                                 >
                                   <v-icon>mdi-delete</v-icon>
@@ -1463,6 +1595,76 @@ const performClearClientData = async () => {
         </v-card>
       </transition>
     </Teleport>
+
+    <!-- Delete User Dialog -->
+    <v-dialog v-model="showDeleteUserDialog" max-width="560px" persistent>
+      <v-card class="edit-user-card delete-dialog-card">
+        <v-card-title class="edit-user-header delete-dialog-header">
+          <div class="header-content">
+            <v-avatar size="44" color="#6b7280" class="edit-user-avatar">
+              <v-icon color="white">mdi-account-remove</v-icon>
+            </v-avatar>
+            <div class="edit-user-identity">
+              <div class="edit-user-title">Remove User</div>
+              <div class="edit-user-email">
+                {{ userToDelete?.full_name || userToDelete?.email || 'Selected user' }}
+              </div>
+            </div>
+            <v-spacer></v-spacer>
+            <v-btn
+              icon
+              variant="text"
+              color="white"
+              :disabled="deleteUserLoading"
+              @click="closeDeleteUserDialog"
+            >
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </div>
+        </v-card-title>
+
+        <v-card-text class="edit-user-body">
+          <div class="dialog-section">
+            <div class="section-heading">
+              <v-icon size="18">mdi-account-remove-outline</v-icon>
+              <span>User Management Delete</span>
+            </div>
+            <p class="delete-dialog-copy">
+              Are you sure you want to remove this user from User Management?
+            </p>
+            <v-alert
+              class="delete-warning-alert mb-3"
+              color="#6b7280"
+              icon="mdi-information-outline"
+              density="compact"
+              variant="tonal"
+            >
+              This removes the profile record from the system. If the account still exists in
+              authentication, it must be fully deleted from Supabase Authentication separately.
+            </v-alert>
+            <v-alert v-if="userDeleteError" type="error" density="compact" variant="tonal">
+              {{ userDeleteError }}
+            </v-alert>
+          </div>
+        </v-card-text>
+
+        <v-card-actions class="edit-user-actions">
+          <v-spacer></v-spacer>
+          <v-btn
+            variant="text"
+            class="cancel-edit-btn"
+            :disabled="deleteUserLoading"
+            @click="closeDeleteUserDialog"
+          >
+            Cancel
+          </v-btn>
+          <v-btn class="delete-confirm-btn" :loading="deleteUserLoading" @click="removeUser">
+            <v-icon start>mdi-delete</v-icon>
+            Remove User
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- Edit User Dialog -->
     <v-dialog v-model="showEditUserDialog" max-width="560px">
@@ -1656,12 +1858,28 @@ const performClearClientData = async () => {
   overflow: hidden;
 }
 
+.delete-dialog-card {
+  border: 1px solid #d1d5db !important;
+}
+
 .edit-user-header {
   background: #f5c52b !important;
   padding: 18px 22px !important;
   display: flex;
   align-items: center;
   border: none !important;
+}
+
+.delete-dialog-header {
+  background: #4b5563 !important;
+}
+
+.delete-dialog-card .edit-user-title {
+  color: #f9fafb;
+}
+
+.delete-dialog-card .edit-user-email {
+  color: rgba(249, 250, 251, 0.78);
 }
 
 .edit-user-header .header-content {
@@ -1674,6 +1892,10 @@ const performClearClientData = async () => {
   color: #fff !important;
   margin-right: 12px;
   flex-shrink: 0;
+}
+
+.delete-dialog-card .edit-user-avatar {
+  background: #6b7280 !important;
 }
 
 .edit-user-identity {
@@ -1799,6 +2021,24 @@ const performClearClientData = async () => {
   padding: 10px 12px;
 }
 
+.delete-dialog-copy {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.55;
+  margin: 0 0 12px;
+}
+
+.delete-warning-alert {
+  border-left: 4px solid #6b7280 !important;
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+:deep(.delete-warning-alert .v-alert__prepend) {
+  color: #6b7280 !important;
+}
+
 .edit-user-actions {
   background: #fff;
   border-top: 1px solid #e5e7eb;
@@ -1820,6 +2060,20 @@ const performClearClientData = async () => {
   text-transform: none !important;
   border-radius: 8px !important;
   padding: 0 22px !important;
+}
+
+.delete-confirm-btn {
+  background: #6b7280 !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  border-radius: 8px !important;
+  padding: 0 22px !important;
+}
+
+.delete-confirm-btn:hover {
+  background: #4b5563 !important;
 }
 
 @media (max-width: 600px) {

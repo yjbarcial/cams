@@ -691,7 +691,7 @@ const loadProjectData = async () => {
           const fullName =
             `${sectionHeadProfileData.first_name || ''} ${sectionHeadProfileData.last_name || ''}`.trim()
           const profile = { ...sectionHeadProfileData, full_name: fullName }
-          sectionHeadName = getDisplayName(sectionHeadProfileData.email, profile, true)
+          sectionHeadName = getDisplayName(sectionHeadProfileData.email, profile, false)
           sectionHeadProfile.value = {
             id: sectionHeadProfileData.id,
             displayName: sectionHeadName,

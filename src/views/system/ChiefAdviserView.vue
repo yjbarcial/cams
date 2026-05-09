@@ -481,10 +481,12 @@ const loadProjectData = async () => {
     if (foundProject.section_head_id) {
       const sectionHeadProfileData = await profilesService.getById(foundProject.section_head_id)
       if (sectionHeadProfileData && sectionHeadProfileData.id) {
-        sectionHeadName =
-          `${sectionHeadProfileData.first_name || ''} ${sectionHeadProfileData.last_name || ''}`.trim() ||
-          sectionHeadProfileData.email ||
-          'Not assigned'
+        const fullName =
+          `${sectionHeadProfileData.first_name || ''} ${sectionHeadProfileData.last_name || ''}`.trim()
+        sectionHeadName = getDisplayName(sectionHeadProfileData.email, {
+          ...sectionHeadProfileData,
+          full_name: fullName,
+        })
         sectionHeadProfile.value = {
           id: sectionHeadProfileData.id,
           displayName: sectionHeadName,
@@ -498,8 +500,8 @@ const loadProjectData = async () => {
       .map((m) => {
         const profile = m.profiles
         if (profile) {
-          const displayName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-          const name = displayName || profile.email || 'Unknown'
+          const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+          const name = getDisplayName(profile.email, { ...profile, full_name: fullName })
           return { id: profile?.id || null, displayName: name }
         }
         return { id: null, displayName: 'Unknown' }
@@ -513,8 +515,8 @@ const loadProjectData = async () => {
       .map((m) => {
         const profile = m.profiles
         if (profile) {
-          const displayName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-          const name = displayName || profile.email || 'Unknown'
+          const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+          const name = getDisplayName(profile.email, { ...profile, full_name: fullName })
           return { id: profile?.id || null, displayName: name }
         }
         return { id: null, displayName: 'Unknown' }
