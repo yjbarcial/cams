@@ -156,17 +156,17 @@ onMounted(async () => {
       content: `
         <h2>Welcome to Our Test Publication</h2>
         <p>This is a comprehensive test article designed to showcase the capabilities of our digital publishing platform. The content you're reading demonstrates how text, formatting, and various elements come together to create an engaging reading experience.</p>
-        
+
         <h3>Why Digital Publishing Matters</h3>
         <p>In today's fast-paced world, digital publishing has revolutionized the way we consume and share information. It offers unprecedented accessibility, allowing readers to access content from anywhere in the world at any time. This democratization of knowledge has transformed education, journalism, and creative writing.</p>
-        
+
         <h3>The Power of Typography</h3>
         <p>Typography is more than just choosing fonts—it's about creating a visual hierarchy that guides readers through your content. Good typography enhances readability, establishes mood, and reinforces your brand identity. Every font choice, line height, and spacing decision contributes to the overall reading experience.</p>
-        
+
         <blockquote>
           "Design is not just what it looks like and feels like. Design is how it works." - Steve Jobs
         </blockquote>
-        
+
         <h3>Key Features of Modern Publishing</h3>
         <ul>
           <li><strong>Responsive Design:</strong> Content adapts seamlessly across all devices</li>
@@ -175,12 +175,12 @@ onMounted(async () => {
           <li><strong>Analytics:</strong> Data-driven insights help improve future publications</li>
           <li><strong>Search Optimization:</strong> Smart indexing makes content discoverable</li>
         </ul>
-        
+
         <h3>Looking Ahead</h3>
         <p>As we continue to evolve in this digital age, the future of publishing looks bright. Emerging technologies like artificial intelligence, augmented reality, and voice interfaces are opening new possibilities for storytelling and content delivery. The key is to embrace these innovations while maintaining the core values of quality, accuracy, and reader engagement.</p>
-        
+
         <p>This test publication serves as a foundation for exploring these possibilities. Whether you're a writer, editor, designer, or reader, understanding the mechanics of digital publishing empowers you to create and consume content more effectively.</p>
-        
+
         <h3>Final Thoughts</h3>
         <p>Thank you for taking the time to explore this test publication. We hope it demonstrates the potential of our platform and inspires you to create your own compelling content. The journey of digital publishing is just beginning, and we're excited to be part of it with you.</p>
       `,
@@ -577,7 +577,7 @@ function handleKeyPress(event) {
 
             <div class="controls-right">
               <!-- Download Button -->
-              <v-btn
+              <!-- <v-btn
                 v-if="
                   publication.mediaUploaded &&
                   publication.mediaUploaded.toLowerCase().endsWith('.pdf')
@@ -589,7 +589,7 @@ function handleKeyPress(event) {
                 prepend-icon="mdi-download"
               >
                 Download
-              </v-btn>
+              </v-btn> -->
             </div>
           </div>
         </div>
