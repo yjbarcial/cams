@@ -84,6 +84,86 @@ function getAccessRole(userRole, designationLabel) {
   return 'member'
 }
 
+const normalizeText = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+
+export function getProfileAccessState(profile) {
+  const status = normalizeText(profile?.status || 'pending')
+  const role = normalizeText(profile?.role)
+  const designation = normalizeText(profile?.designation_label)
+  const position = normalizeText(profile?.positions_label)
+
+  if (!profile) {
+    return {
+      allowed: false,
+      reason: 'missing_profile',
+      message:
+        'Your account is waiting for administrator approval and role assignment. Please check back after an admin approves your access.',
+    }
+  }
+
+  if (status === 'pending') {
+    return {
+      allowed: false,
+      reason: 'pending',
+      message:
+        'Your account is pending approval. Please check back after a system administrator approves your access.',
+    }
+  }
+
+  if (status === 'suspended') {
+    return {
+      allowed: false,
+      reason: 'suspended',
+      message: 'Your account has been suspended. Please contact the organization administrator.',
+    }
+  }
+
+  if (status !== 'active') {
+    return {
+      allowed: false,
+      reason: 'not_active',
+      message:
+        'Your account is not active yet. Please wait for administrator approval and role assignment.',
+    }
+  }
+
+  if (!role) {
+    return {
+      allowed: false,
+      reason: 'missing_role',
+      message:
+        'Your account has been approved, but no role has been assigned yet. Please contact a system administrator.',
+    }
+  }
+
+  if (role === 'admin') {
+    return { allowed: true, reason: 'approved' }
+  }
+
+  if (role === 'member' && !designation && !position) {
+    return {
+      allowed: false,
+      reason: 'missing_assignment',
+      message:
+        'Your account has been approved, but your role assignment is incomplete. Please contact a system administrator.',
+    }
+  }
+
+  if ((role === 'editor' || role === 'section_head') && !designation) {
+    return {
+      allowed: false,
+      reason: 'missing_designation',
+      message:
+        'Your account has been approved, but your designation has not been assigned yet. Please contact a system administrator.',
+    }
+  }
+
+  return { allowed: true, reason: 'approved' }
+}
+
 export async function setProfileStatusByEmail(email, status = 'inactive') {
   try {
     if (!email) return
@@ -134,14 +214,13 @@ export async function addUserToProfiles(user, profileData = {}) {
     }
 
     if (existingUser) {
-      const currentStatus = existingUser.status || 'pending'
+      const accessState = getProfileAccessState(existingUser)
 
-      if (currentStatus === 'pending' || currentStatus === 'suspended') {
+      if (!accessState.allowed) {
         return false
       }
 
       const updateData = {
-        status: 'active',
         last_active: new Date().toISOString(),
       }
 
@@ -161,7 +240,7 @@ export async function addUserToProfiles(user, profileData = {}) {
         console.error('Error updating:', updateError)
         return false
       } else {
-        const resolvedRole = existingUser.role || 'member'
+        const resolvedRole = existingUser.role
         localStorage.setItem('userRole', resolvedRole)
         localStorage.setItem('userId', existingUser.id)
 

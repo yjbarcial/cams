@@ -7,6 +7,7 @@ import { clearStoredAuth, markAuthSessionActive } from '@/utils/authSession'
 import {
   addUserToProfiles,
   createUserProfile,
+  getProfileAccessState,
   getUserProfileByEmail,
   isUserRegistered,
 } from '@/utils/autoAddUser'
@@ -119,19 +120,13 @@ async function signInWithPassword() {
     }
 
     const profile = await getUserProfileByEmail(data.user.email)
+    const accessState = getProfileAccessState(profile)
 
-    if (profile?.status === 'pending') {
+    if (!accessState.allowed) {
       await supabase.auth.signOut()
-      errorMessage.value =
-        'Your account is pending approval. Please check back after a system administrator approves your access.'
-      loading.value = false
-      return
-    }
-
-    if (profile?.status === 'suspended') {
-      await supabase.auth.signOut()
-      errorMessage.value =
-        'Your account has been suspended. Please contact the organization administrator.'
+      clearStoredAuth()
+      localStorage.setItem('isLoggedIn', 'false')
+      errorMessage.value = accessState.message
       loading.value = false
       return
     }
@@ -141,6 +136,8 @@ async function signInWithPassword() {
 
     if (!success) {
       await supabase.auth.signOut()
+      clearStoredAuth()
+      localStorage.setItem('isLoggedIn', 'false')
       errorMessage.value =
         'Unable to load an approved profile. Please wait for administrator approval or contact support.'
       loading.value = false

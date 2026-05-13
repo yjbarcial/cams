@@ -5,26 +5,27 @@ import { onMounted, onUnmounted } from 'vue'
 import { accessDeniedState, hideAccessDenied } from '@/stores/accessDenied'
 import { startPresenceTracking } from '@/utils/presence'
 import { addUserToProfiles } from '@/utils/autoAddUser'
+import { clearStoredAuth } from '@/utils/authSession'
 
 const router = useRouter()
 let stopPresenceTracking = null
 let authSubscription = null
 
 const syncAuthContext = async (user) => {
-  if (!user) return
+  if (!user) return false
 
   if (user.email) {
     localStorage.setItem('userEmail', user.email)
   }
 
-  const hasProfileContext =
-    !!localStorage.getItem('userRole') &&
-    !!localStorage.getItem('accessRole') &&
-    !!localStorage.getItem('userId')
-
-  if (!hasProfileContext) {
-    await addUserToProfiles(user)
+  const canUseAccount = await addUserToProfiles(user)
+  if (!canUseAccount) {
+    await supabase.auth.signOut()
+    clearStoredAuth()
+    return false
   }
+
+  return true
 }
 
 const dismissAccessDenied = () => {
