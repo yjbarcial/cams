@@ -27,9 +27,6 @@ const error = ref(null)
 let projectsSubscription = null
 let profilesSubscription = null
 const search = ref('')
-const showAllDialog = ref(false)
-const showAllType = ref('')
-const allRecords = ref([])
 const showUploadView = ref(false)
 const showClearDialog = ref(false)
 const clearTypedConfirm = ref('')
@@ -118,6 +115,15 @@ const handleUploadError = (message) => {
 }
 
 const activeTab = ref('users')
+const projectSearch = ref('')
+const projectTypeFilter = ref(null)
+const projectStatusFilter = ref(null)
+const projectSortBy = ref('created_at')
+const projectSortOrder = ref('desc')
+const publicationSearch = ref('')
+const publicationCategoryFilter = ref(null)
+const publicationSortBy = ref('created_at')
+const publicationSortOrder = ref('desc')
 
 // Format status function to remove underscores and capitalize
 const formatStatus = (status) => {
@@ -368,11 +374,10 @@ const deleteProject = async () => {
 
     // Remove from local arrays
     projects.value = projects.value.filter((p) => p.id !== projectToDelete.value.id)
-    allRecords.value = allRecords.value.filter((r) => r.id !== projectToDelete.value.id)
 
     // Update statistics
     statistics.value.totalProjects = projects.value.length
-    statistics.value.recentProjects = projects.value.slice(0, 5)
+    statistics.value.recentProjects = projects.value
 
     displayNotification('Project deleted successfully', 'success')
     console.log('✅ Project deleted:', projectToDelete.value.title)
@@ -594,6 +599,138 @@ const filteredUsers = computed(() => {
   })
 })
 
+const projectTypeFilterOptions = computed(() => {
+  const preferred = ['Magazine', 'Newsletter', 'Folio', 'Other']
+  const all = new Set((projects.value || []).map((p) => p?.type).filter(Boolean))
+  preferred.forEach((type) => all.add(type))
+
+  const remaining = Array.from(all).filter((t) => !preferred.includes(t))
+  remaining.sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }))
+
+  return [...preferred.filter((t) => all.has(t)), ...remaining]
+})
+
+const projectStatusFilterOptions = computed(() => {
+  const statuses = Array.from(new Set((projects.value || []).map((p) => p?.status).filter(Boolean)))
+  return statuses
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }))
+    .map((status) => ({ title: formatStatus(status), value: status }))
+})
+
+const projectSortOptions = [
+  { title: 'Date Created', value: 'created_at' },
+  { title: 'Title', value: 'title' },
+  { title: 'Type', value: 'type' },
+  { title: 'Status', value: 'status' },
+  { title: 'Created By', value: 'created_by' },
+]
+
+const publicationCategoryFilterOptions = computed(() => {
+  const preferred = ['magazine', 'newsletter', 'folio', 'other']
+  const all = new Set((publications.value || []).map((p) => p?.category).filter(Boolean))
+  preferred.forEach((category) => all.add(category))
+
+  const remaining = Array.from(all).filter((c) => !preferred.includes(c))
+  remaining.sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }))
+
+  return [...preferred.filter((c) => all.has(c)), ...remaining].map((category) => ({
+    title: String(category).charAt(0).toUpperCase() + String(category).slice(1),
+    value: category,
+  }))
+})
+
+const publicationSortOptions = [
+  { title: 'Date Published', value: 'created_at' },
+  { title: 'Title', value: 'title' },
+  { title: 'Category', value: 'category' },
+]
+
+const toggleProjectSortOrder = () => {
+  projectSortOrder.value = projectSortOrder.value === 'asc' ? 'desc' : 'asc'
+}
+
+const togglePublicationSortOrder = () => {
+  publicationSortOrder.value = publicationSortOrder.value === 'asc' ? 'desc' : 'asc'
+}
+
+const sortItems = (items, key, order, getValue) => {
+  const factor = order === 'asc' ? 1 : -1
+
+  return [...items].sort((a, b) => {
+    const av = getValue(a, key)
+    const bv = getValue(b, key)
+
+    if (av == null && bv == null) return 0
+    if (av == null) return 1
+    if (bv == null) return -1
+
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * factor
+
+    return (
+      String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' }) * factor
+    )
+  })
+}
+
+const getProjectSortValue = (project, key) => {
+  if (!project) return null
+  if (key === 'created_at') return project.created_at ? new Date(project.created_at).getTime() : null
+  if (key === 'title') return project.title || ''
+  if (key === 'type') return project.type || ''
+  if (key === 'status') return formatStatus(project.status || '')
+  if (key === 'created_by') return project.user?.full_name || project.user?.email || project.sectionHead || ''
+  return project[key] ?? ''
+}
+
+const getPublicationSortValue = (publication, key) => {
+  if (!publication) return null
+  if (key === 'created_at')
+    return publication.created_at ? new Date(publication.created_at).getTime() : null
+  if (key === 'title') return publication.title || ''
+  if (key === 'category') return publication.category || ''
+  return publication[key] ?? ''
+}
+
+const visibleProjects = computed(() => {
+  const key = (projectSearch.value || '').toLowerCase().trim()
+
+  let items = projects.value || []
+
+  if (projectTypeFilter.value) {
+    items = items.filter((p) => p?.type === projectTypeFilter.value)
+  }
+
+  if (projectStatusFilter.value) {
+    items = items.filter((p) => p?.status === projectStatusFilter.value)
+  }
+
+  if (key) {
+    items = items.filter((p) => {
+      return (p?.title || '').toLowerCase().includes(key)
+    })
+  }
+
+  return sortItems(items, projectSortBy.value, projectSortOrder.value, getProjectSortValue)
+})
+
+const visiblePublications = computed(() => {
+  const key = (publicationSearch.value || '').toLowerCase().trim()
+
+  let items = publications.value || []
+
+  if (publicationCategoryFilter.value) {
+    items = items.filter((p) => p?.category === publicationCategoryFilter.value)
+  }
+
+  if (key) {
+    items = items.filter((p) => {
+      return (p?.title || '').toLowerCase().includes(key)
+    })
+  }
+
+  return sortItems(items, publicationSortBy.value, publicationSortOrder.value, getPublicationSortValue)
+})
+
 // Format date helper
 const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-US', {
@@ -771,21 +908,6 @@ const saveUserChanges = async () => {
   }
 }
 
-// Fetch all records function
-const fetchAllRecords = async (type) => {
-  try {
-    showAllType.value = type
-    if (type === 'projects') {
-      allRecords.value = projects.value
-    } else if (type === 'publications') {
-      allRecords.value = publications.value
-    }
-    showAllDialog.value = true
-  } catch (err) {
-    console.error('Error fetching all records:', err)
-  }
-}
-
 // Clear client-side project data
 const performClearClientData = async () => {
   try {
@@ -818,7 +940,7 @@ const performClearClientData = async () => {
     <MainHeader />
 
     <v-main class="main-content">
-      <v-container class="py-8">
+      <v-container fluid class="py-6 px-4 px-lg-10 admin-container">
         <!-- Loading State -->
         <v-overlay v-if="loading" class="align-center justify-center">
           <v-progress-circular indeterminate size="64"></v-progress-circular>
@@ -923,153 +1045,6 @@ const performClearClientData = async () => {
                           <div class="stat-label">Total Publications</div>
                         </div>
                       </div>
-                    </v-card>
-                  </v-col>
-                </v-row>
-
-                <!-- Recent Activity - Fixed Tables -->
-                <v-row class="mt-6">
-                  <v-col cols="12">
-                    <v-card class="data-table-card" elevation="2">
-                      <v-card-title class="table-header px-6 py-4">
-                        <div class="d-flex justify-space-between align-center w-100">
-                          <div class="d-flex align-center">
-                            <div class="icon-wrapper-small primary">
-                              <v-icon size="20" color="white">mdi-folder-multiple</v-icon>
-                            </div>
-                            <span class="text-h6 font-weight-bold ml-3">All Projects</span>
-                          </div>
-                          <v-btn
-                            variant="text"
-                            color="#757575"
-                            @click="fetchAllRecords('projects')"
-                            class="view-details-btn"
-                          >
-                            View Details
-                            <v-icon end size="18">mdi-chevron-right</v-icon>
-                          </v-btn>
-                        </div>
-                      </v-card-title>
-                      <v-divider></v-divider>
-                      <v-card-text class="pa-0 table-scroll-container">
-                        <v-table>
-                          <thead>
-                            <tr>
-                              <th class="text-center" style="width: 60px">#</th>
-                              <th>Title</th>
-                              <th>Type</th>
-                              <th>Status</th>
-                              <th>Created By</th>
-                              <th>Date</th>
-                              <th class="text-center" style="width: 120px">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr
-                              v-for="(project, index) in statistics.recentProjects"
-                              :key="project.id"
-                            >
-                              <td class="text-center">{{ index + 1 }}</td>
-                              <td>{{ project.title }}</td>
-                              <td>{{ project.type }}</td>
-                              <td>
-                                <v-chip :color="getStatusColor(project.status)" size="small">
-                                  {{ formatStatus(project.status) }}
-                                </v-chip>
-                              </td>
-                              <td>
-                                {{ project.user?.full_name || project.sectionHead }}
-                              </td>
-                              <td>{{ formatDate(project.created_at) }}</td>
-                              <td class="text-center">
-                                <v-btn
-                                  icon
-                                  size="small"
-                                  color="error"
-                                  variant="text"
-                                  @click="confirmDeleteProject(project)"
-                                  title="Delete Project"
-                                >
-                                  <v-icon>mdi-delete</v-icon>
-                                </v-btn>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </v-table>
-                      </v-card-text>
-                    </v-card>
-                  </v-col>
-                </v-row>
-
-                <!-- All Publications Section -->
-                <v-row class="mt-6">
-                  <v-col cols="12">
-                    <v-card class="data-table-card" elevation="2">
-                      <v-card-title class="table-header px-6 py-4">
-                        <div class="d-flex justify-space-between align-center w-100">
-                          <div class="d-flex align-center">
-                            <div class="icon-wrapper-small success">
-                              <v-icon size="20" color="white">mdi-book-open-page-variant</v-icon>
-                            </div>
-                            <span class="text-h6 font-weight-bold ml-3">All Publications</span>
-                          </div>
-                          <v-btn
-                            variant="text"
-                            color="#757575"
-                            @click="fetchAllRecords('publications')"
-                            class="view-details-btn"
-                          >
-                            View Details
-                            <v-icon end size="18">mdi-chevron-right</v-icon>
-                          </v-btn>
-                        </div>
-                      </v-card-title>
-                      <v-divider></v-divider>
-                      <v-card-text class="pa-0 table-scroll-container">
-                        <v-table>
-                          <thead>
-                            <tr>
-                              <th class="text-center" style="width: 60px">#</th>
-                              <th>Title</th>
-                              <th>Category</th>
-                              <th>Date Published</th>
-                              <th class="text-center" style="width: 120px">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr
-                              v-for="(publication, index) in statistics.recentPublications"
-                              :key="publication.id"
-                            >
-                              <td class="text-center">{{ index + 1 }}</td>
-                              <td>{{ publication.title || 'Untitled' }}</td>
-                              <td>
-                                <v-chip color="success" size="small">
-                                  {{ publication.category || 'General' }}
-                                </v-chip>
-                              </td>
-                              <td>{{ formatDate(publication.created_at) }}</td>
-                              <td class="text-center">
-                                <v-btn
-                                  icon
-                                  size="small"
-                                  color="error"
-                                  variant="text"
-                                  @click="confirmDeletePublication(publication)"
-                                  title="Delete Publication"
-                                >
-                                  <v-icon>mdi-delete</v-icon>
-                                </v-btn>
-                              </td>
-                            </tr>
-                            <tr v-if="statistics.recentPublications.length === 0">
-                              <td colspan="5" class="text-center text-grey py-4">
-                                No publications yet. Upload content to get started.
-                              </td>
-                            </tr>
-                          </tbody>
-                        </v-table>
-                      </v-card-text>
                     </v-card>
                   </v-col>
                 </v-row>
@@ -1271,120 +1246,88 @@ const performClearClientData = async () => {
                   </v-card>
                 </v-dialog>
 
-                <!-- View All Dialog -->
-                <v-dialog v-model="showAllDialog" max-width="1200">
-                  <v-card>
-                    <v-card-title class="text-h5 d-flex justify-space-between align-center pa-4">
-                      <div>
-                        <v-icon class="mr-2" color="primary">
-                          {{
-                            showAllType === 'projects'
-                              ? 'mdi-folder-multiple'
-                              : 'mdi-book-open-page-variant'
-                          }}
-                        </v-icon>
-                        All {{ showAllType === 'projects' ? 'Projects' : 'Publications' }} Details
-                      </div>
-                      <v-btn icon @click="showAllDialog = false">
-                        <v-icon>mdi-close</v-icon>
-                      </v-btn>
-                    </v-card-title>
-                    <v-card-text class="pa-4">
-                      <v-table>
-                        <thead>
-                          <tr>
-                            <th class="text-center" style="width: 60px">#</th>
-                            <th>Title</th>
-                            <th>{{ showAllType === 'projects' ? 'Type' : 'Category' }}</th>
-                            <th v-if="showAllType === 'projects'">Status</th>
-                            <th v-if="showAllType === 'projects'">Created By</th>
-                            <th>Date</th>
-                            <th class="text-center">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr v-for="(record, index) in allRecords" :key="record.id">
-                            <td class="text-center">{{ index + 1 }}</td>
-                            <td>{{ record.title || 'Untitled' }}</td>
-                            <td>
-                              <v-chip
-                                :color="showAllType === 'projects' ? 'primary' : 'success'"
-                                size="small"
-                              >
-                                {{
-                                  showAllType === 'projects'
-                                    ? record.type
-                                    : record.category || 'General'
-                                }}
-                              </v-chip>
-                            </td>
-                            <td v-if="showAllType === 'projects'">
-                              <v-chip :color="getStatusColor(record.status)" size="small">
-                                {{ formatStatus(record.status) }}
-                              </v-chip>
-                            </td>
-                            <td v-if="showAllType === 'projects'">
-                              {{ record.user?.full_name || record.sectionHead }}
-                            </td>
-                            <td>{{ formatDate(record.created_at) }}</td>
-                            <td class="text-center">
-                              <v-btn
-                                icon
-                                size="small"
-                                color="error"
-                                variant="text"
-                                @click="
-                                  showAllType === 'projects'
-                                    ? confirmDeleteProject(record)
-                                    : confirmDeletePublication(record)
-                                "
-                                :title="
-                                  showAllType === 'projects'
-                                    ? 'Delete Project'
-                                    : 'Delete Publication'
-                                "
-                              >
-                                <v-icon>mdi-delete</v-icon>
-                              </v-btn>
-                            </td>
-                          </tr>
-                          <tr v-if="allRecords.length === 0">
-                            <td
-                              :colspan="showAllType === 'publications' ? 5 : 7"
-                              class="text-center text-grey py-4"
-                            >
-                              No
-                              {{ showAllType === 'projects' ? 'projects' : 'publications' }} found.
-                            </td>
-                          </tr>
-                        </tbody>
-                      </v-table>
-                    </v-card-text>
-                  </v-card>
-                </v-dialog>
               </v-card-text>
             </v-card>
           </v-col>
         </v-row>
 
-        <!-- Content Tabs -->
-        <v-row>
-          <v-col cols="12">
-            <v-card>
-              <v-tabs v-model="activeTab" bg-color="#fafafa" color="#f5c52b">
-                <v-tab value="users">
-                  <v-icon start size="20" color="#424242">mdi-account-group</v-icon>
-                  User Management
-                </v-tab>
-                <v-tab value="content">
-                  <v-icon start size="20" color="#424242">mdi-folder-multiple</v-icon>
-                  Content Management
-                </v-tab>
-              </v-tabs>
+        <v-row class="admin-section-layout">
+          <v-col cols="12" md="3" class="d-none d-md-block">
+            <v-card class="admin-sidebar-card" elevation="2">
+              <div class="admin-sidebar-header">
+                <div class="text-subtitle-1 font-weight-bold">Admin</div>
+              </div>
+              <v-divider />
+              <v-list nav density="comfortable" class="admin-sidebar-list">
+                <v-list-item
+                  :active="activeTab === 'users'"
+                  @click="activeTab = 'users'"
+                  rounded="lg"
+                >
+                  <template #prepend>
+                    <v-icon size="20">mdi-account-group</v-icon>
+                  </template>
+                  <v-list-item-title>User Management</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  :active="activeTab === 'projects'"
+                  @click="activeTab = 'projects'"
+                  rounded="lg"
+                >
+                  <template #prepend>
+                    <v-icon size="20">mdi-folder-multiple</v-icon>
+                  </template>
+                  <v-list-item-title>Projects</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  :active="activeTab === 'publications'"
+                  @click="activeTab = 'publications'"
+                  rounded="lg"
+                >
+                  <template #prepend>
+                    <v-icon size="20">mdi-book-open-page-variant</v-icon>
+                  </template>
+                  <v-list-item-title>Publications</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  :active="activeTab === 'uploads'"
+                  @click="activeTab = 'uploads'"
+                  rounded="lg"
+                >
+                  <template #prepend>
+                    <v-icon size="20">mdi-cloud-upload</v-icon>
+                  </template>
+                  <v-list-item-title>Uploads</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-card>
+          </v-col>
 
-              <v-divider></v-divider>
+          <v-col cols="12" md="9">
+            <v-card elevation="2" class="admin-section-card">
+              <div class="d-flex d-md-none">
+                <v-tabs v-model="activeTab" bg-color="#fafafa" color="#f5c52b" class="w-100">
+                  <v-tab value="users">
+                    <v-icon start size="20" color="#424242">mdi-account-group</v-icon>
+                    Users
+                  </v-tab>
+                  <v-tab value="projects">
+                    <v-icon start size="20" color="#424242">mdi-folder-multiple</v-icon>
+                    Projects
+                  </v-tab>
+                  <v-tab value="publications">
+                    <v-icon start size="20" color="#424242">mdi-book-open-page-variant</v-icon>
+                    Publications
+                  </v-tab>
+                  <v-tab value="uploads">
+                    <v-icon start size="20" color="#424242">mdi-cloud-upload</v-icon>
+                    Uploads
+                  </v-tab>
+                </v-tabs>
+              </div>
+              <v-divider class="d-md-none" />
 
-              <v-window v-model="activeTab">
+              <v-window v-model="activeTab" class="admin-section-window">
                 <!-- User Management Tab -->
                 <v-window-item value="users">
                   <v-card-text>
@@ -1392,9 +1335,6 @@ const performClearClientData = async () => {
                       <div class="user-management-header">
                         <div>
                           <div class="text-subtitle-1 font-weight-bold">User Management</div>
-                          <div class="text-caption text-grey-darken-1">
-                            Manage account access, workflow designation, and status
-                          </div>
                         </div>
                         <div class="user-management-search">
                           <v-text-field
@@ -1428,7 +1368,7 @@ const performClearClientData = async () => {
                                   v-if="isNewUser(user.created_at)"
                                   size="x-small"
                                   color="#f5c52b"
-                                  text-color="#2c3e50"
+                                  text-color="#374151"
                                   class="new-user-badge"
                                 >
                                   New
@@ -1504,13 +1444,242 @@ const performClearClientData = async () => {
                   </v-card-text>
                 </v-window-item>
 
-                <!-- Content Management Tab -->
-                <v-window-item value="content">
+                <v-window-item value="projects">
+                  <v-card-text>
+                    <div class="records-panel">
+                      <div class="d-flex justify-space-between align-center flex-wrap mb-4">
+                        <div>
+                          <div class="text-subtitle-1 font-weight-bold">Projects</div>
+                        </div>
+                        <div class="text-caption text-grey-darken-1">
+                          {{ visibleProjects.length }} of {{ projects.length }}
+                        </div>
+                      </div>
+
+                      <v-row dense class="mb-2">
+                        <v-col cols="12" md="4">
+                          <v-text-field
+                            v-model="projectSearch"
+                            label="Search projects"
+                            prepend-inner-icon="mdi-magnify"
+                            variant="outlined"
+                            density="comfortable"
+                            hide-details
+                          />
+                        </v-col>
+                        <v-col cols="12" md="3">
+                          <v-select
+                            v-model="projectTypeFilter"
+                            :items="projectTypeFilterOptions"
+                            label="Type"
+                            variant="outlined"
+                            density="comfortable"
+                            hide-details
+                            clearable
+                          />
+                        </v-col>
+                        <v-col cols="12" md="3">
+                          <v-select
+                            v-model="projectStatusFilter"
+                            :items="projectStatusFilterOptions"
+                            label="Status"
+                            variant="outlined"
+                            density="comfortable"
+                            hide-details
+                            clearable
+                          />
+                        </v-col>
+                        <v-col cols="12" md="2">
+                          <div class="d-flex align-center" style="gap: 6px">
+                            <v-select
+                              v-model="projectSortBy"
+                              :items="projectSortOptions"
+                              label="Sort by"
+                              variant="outlined"
+                              density="comfortable"
+                              hide-details
+                              class="flex-grow-1"
+                            />
+                            <v-btn
+                              icon
+                              variant="text"
+                              @click="toggleProjectSortOrder"
+                              :title="projectSortOrder === 'asc' ? 'Ascending' : 'Descending'"
+                            >
+                              <v-icon>
+                                {{
+                                  projectSortOrder === 'asc'
+                                    ? 'mdi-sort-ascending'
+                                    : 'mdi-sort-descending'
+                                }}
+                              </v-icon>
+                            </v-btn>
+                          </div>
+                        </v-col>
+                      </v-row>
+
+                      <v-table>
+                        <thead>
+                          <tr>
+                            <th class="text-center" style="width: 60px">#</th>
+                            <th>Title</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                            <th>Date</th>
+                            <th class="text-center" style="width: 120px">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(project, index) in visibleProjects" :key="project.id">
+                            <td class="text-center">{{ index + 1 }}</td>
+                            <td>{{ project.title }}</td>
+                            <td>{{ project.type }}</td>
+                            <td>
+                              <v-chip :color="getStatusColor(project.status)" size="small">
+                                {{ formatStatus(project.status) }}
+                              </v-chip>
+                            </td>
+                            <td>{{ project.user?.full_name || project.sectionHead }}</td>
+                            <td>{{ formatDate(project.created_at) }}</td>
+                            <td class="text-center">
+                              <v-btn
+                                icon
+                                size="small"
+                                color="error"
+                                variant="text"
+                                @click="confirmDeleteProject(project)"
+                                title="Delete Project"
+                              >
+                                <v-icon>mdi-delete</v-icon>
+                              </v-btn>
+                            </td>
+                          </tr>
+                          <tr v-if="visibleProjects.length === 0">
+                            <td colspan="7" class="text-center text-grey py-6">No projects found.</td>
+                          </tr>
+                        </tbody>
+                      </v-table>
+                    </div>
+                  </v-card-text>
+                </v-window-item>
+
+                <v-window-item value="publications">
+                  <v-card-text>
+                    <div class="records-panel">
+                      <div class="d-flex justify-space-between align-center flex-wrap mb-4">
+                        <div>
+                          <div class="text-subtitle-1 font-weight-bold">Publications</div>
+                        </div>
+                        <div class="text-caption text-grey-darken-1">
+                          {{ visiblePublications.length }} of {{ publications.length }}
+                        </div>
+                      </div>
+
+                      <v-row dense class="mb-2">
+                        <v-col cols="12" md="5">
+                          <v-text-field
+                            v-model="publicationSearch"
+                            label="Search publications"
+                            prepend-inner-icon="mdi-magnify"
+                            variant="outlined"
+                            density="comfortable"
+                            hide-details
+                          />
+                        </v-col>
+                        <v-col cols="12" md="3">
+                          <v-select
+                            v-model="publicationCategoryFilter"
+                            :items="publicationCategoryFilterOptions"
+                            label="Category"
+                            variant="outlined"
+                            density="comfortable"
+                            hide-details
+                            clearable
+                          />
+                        </v-col>
+                        <v-col cols="12" md="4">
+                          <div class="d-flex align-center" style="gap: 6px">
+                            <v-select
+                              v-model="publicationSortBy"
+                              :items="publicationSortOptions"
+                              label="Sort by"
+                              variant="outlined"
+                              density="comfortable"
+                              hide-details
+                              class="flex-grow-1"
+                            />
+                            <v-btn
+                              icon
+                              variant="text"
+                              @click="togglePublicationSortOrder"
+                              :title="publicationSortOrder === 'asc' ? 'Ascending' : 'Descending'"
+                            >
+                              <v-icon>
+                                {{
+                                  publicationSortOrder === 'asc'
+                                    ? 'mdi-sort-ascending'
+                                    : 'mdi-sort-descending'
+                                }}
+                              </v-icon>
+                            </v-btn>
+                          </div>
+                        </v-col>
+                      </v-row>
+
+                      <v-table>
+                        <thead>
+                          <tr>
+                            <th class="text-center" style="width: 60px">#</th>
+                            <th>Title</th>
+                            <th>Category</th>
+                            <th>Date Published</th>
+                            <th class="text-center" style="width: 120px">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr
+                            v-for="(publication, index) in visiblePublications"
+                            :key="publication.id"
+                          >
+                            <td class="text-center">{{ index + 1 }}</td>
+                            <td>{{ publication.title || 'Untitled' }}</td>
+                            <td>
+                              <v-chip color="success" size="small">
+                                {{ publication.category || 'General' }}
+                              </v-chip>
+                            </td>
+                            <td>{{ formatDate(publication.created_at) }}</td>
+                            <td class="text-center">
+                              <v-btn
+                                icon
+                                size="small"
+                                color="error"
+                                variant="text"
+                                @click="confirmDeletePublication(publication)"
+                                title="Delete Publication"
+                              >
+                                <v-icon>mdi-delete</v-icon>
+                              </v-btn>
+                            </td>
+                          </tr>
+                          <tr v-if="visiblePublications.length === 0">
+                            <td colspan="5" class="text-center text-grey py-6">
+                              No publications found. Upload content to get started.
+                            </td>
+                          </tr>
+                        </tbody>
+                      </v-table>
+                    </div>
+                  </v-card-text>
+                </v-window-item>
+
+                <v-window-item value="uploads">
                   <v-card-text>
                     <div class="content-management-panel">
                       <div class="content-management-header">
                         <div>
-                          <div class="text-subtitle-1 font-weight-bold">Content Management</div>
+                          <div class="text-subtitle-1 font-weight-bold">Uploads</div>
                           <div class="text-caption text-grey-darken-1">
                             Manage uploads, publications, and archive-ready content
                           </div>
@@ -1529,8 +1698,8 @@ const performClearClientData = async () => {
                             class="mt-4 upload-content-btn"
                             @click="showUploadView = true"
                           >
-                            <v-icon start color="#2c3e50">mdi-cloud-upload</v-icon>
-                            <span style="color: #2c3e50; font-weight: 600">Upload Content</span>
+                            <v-icon start color="#374151">mdi-cloud-upload</v-icon>
+                            <span style="color: #374151; font-weight: 600">Upload Content</span>
                           </v-btn>
                         </div>
                       </div>
@@ -1672,7 +1841,7 @@ const performClearClientData = async () => {
         <!-- Header -->
         <v-card-title class="edit-user-header">
           <div class="header-content">
-            <v-avatar size="44" color="#2c3e50" class="edit-user-avatar">
+            <v-avatar size="44" color="#374151" class="edit-user-avatar">
               <span class="font-weight-bold">
                 {{ editingUser?.email?.charAt(0).toUpperCase() }}
               </span>
@@ -1798,16 +1967,36 @@ const performClearClientData = async () => {
 
 <style scoped>
 .admin-page {
+  --admin-primary: #374151;
+  --admin-accent: #f5c52b;
+  --admin-bg: #f7f7f8;
+  --admin-surface: #ffffff;
+  --admin-border: #e5e7eb;
+  --admin-border-soft: #eef0f4;
+  --admin-text: #111827;
+  --admin-muted: #6b7280;
+
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   padding: 0 !important;
 }
 
+.main-content {
+  background: linear-gradient(180deg, var(--admin-bg) 0%, #f3f4f6 100%);
+}
+
+.admin-container {
+  max-width: 1640px;
+  margin: 0 auto;
+}
+
 /* Dashboard Header */
 .dashboard-header {
-  background: white;
-  border-left: 4px solid #f5c52b;
+  background: var(--admin-surface);
+  border-left: 4px solid var(--admin-accent);
+  border: 1px solid var(--admin-border-soft);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
 }
 
 .icon-wrapper {
@@ -1817,12 +2006,12 @@ const performClearClientData = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #2c3e50;
-  box-shadow: 0 4px 12px rgba(44, 62, 80, 0.2);
+  background: var(--admin-primary);
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.14);
 }
 
 .icon-wrapper.primary {
-  background: #2c3e50;
+  background: var(--admin-primary);
 }
 
 .icon-wrapper-small {
@@ -1832,11 +2021,11 @@ const performClearClientData = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #2c3e50;
+  background: var(--admin-primary);
 }
 
 .icon-wrapper-small.success {
-  background: #f5c52b;
+  background: var(--admin-accent);
 }
 
 .refresh-btn,
@@ -1974,7 +2163,7 @@ const performClearClientData = async () => {
   display: block;
   font-size: 11px;
   font-weight: 800;
-  color: #2c3e50;
+  color: var(--admin-primary);
   margin-bottom: 7px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1998,8 +2187,8 @@ const performClearClientData = async () => {
 }
 
 .approval-action-active {
-  background: #2c3e50 !important;
-  border-color: #2c3e50 !important;
+  background: var(--admin-primary) !important;
+  border-color: var(--admin-primary) !important;
   color: #fff !important;
 }
 
@@ -2053,7 +2242,7 @@ const performClearClientData = async () => {
 }
 
 .save-btn {
-  background: #2c3e50 !important;
+  background: var(--admin-primary) !important;
   color: white !important;
   font-weight: 700 !important;
   letter-spacing: 0 !important;
@@ -2092,24 +2281,35 @@ const performClearClientData = async () => {
 
 /* User Table Styling */
 .user-management-panel {
-  background: #ffffff;
-  border: 1px solid #ececec;
-  border-left: 4px solid #f5c52b;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-left: 4px solid var(--admin-accent);
   border-radius: 12px;
   padding: 16px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
 }
 
 .content-management-panel {
-  background: #ffffff;
-  border: 1px solid #ececec;
-  border-left: 4px solid #f5c52b;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-left: 4px solid var(--admin-accent);
   border-radius: 12px;
   padding: 16px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.records-panel {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-left: 4px solid var(--admin-accent);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
 }
 
 .user-management-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
@@ -2198,7 +2398,7 @@ const performClearClientData = async () => {
 }
 
 .role-chip-admin {
-  color: #2c3e50 !important;
+  color: var(--admin-primary) !important;
 }
 
 .role-chip-default {
@@ -2276,34 +2476,34 @@ const performClearClientData = async () => {
 }
 
 .stat-card-primary {
-  background: #f5c52b;
-  color: #2c3e50;
+  background: var(--admin-accent);
+  color: var(--admin-primary);
   box-shadow: 0 2px 8px rgba(245, 197, 43, 0.2);
 }
 
 .stat-card-success {
-  background: white;
-  color: #2c3e50;
-  border: 2px solid #e0e0e0;
+  background: var(--admin-surface);
+  color: var(--admin-primary);
+  border: 1px solid var(--admin-border);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .stat-card-info {
-  background: #424242;
+  background: #1f2937;
   color: white;
-  box-shadow: 0 2px 8px rgba(66, 66, 66, 0.2);
+  box-shadow: 0 2px 10px rgba(31, 41, 55, 0.2);
 }
 
 .stat-card-warning {
-  background: #757575;
+  background: #334155;
   color: white;
-  box-shadow: 0 2px 8px rgba(117, 117, 117, 0.2);
+  box-shadow: 0 2px 10px rgba(51, 65, 85, 0.18);
 }
 
 .stat-card-light {
-  background: #747474;
+  background: #475569;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 10px rgba(71, 85, 105, 0.16);
 }
 
 .stat-card-content {
@@ -2388,8 +2588,8 @@ const performClearClientData = async () => {
 }
 
 .table-header {
-  background: #fafafa;
-  border-bottom: 2px solid #e0e0e0;
+  background: rgba(15, 23, 42, 0.02);
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .view-details-btn {
@@ -2405,11 +2605,11 @@ const performClearClientData = async () => {
 }
 
 .v-table thead th {
-  background: #fafafa !important;
-  border-bottom: 2px solid #e0e0e0 !important;
+  background: rgba(15, 23, 42, 0.02) !important;
+  border-bottom: 1px solid var(--admin-border) !important;
   font-weight: 600 !important;
   padding: 18px 16px !important;
-  color: #424242 !important;
+  color: var(--admin-muted) !important;
   font-size: 0.875rem !important;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2420,14 +2620,14 @@ const performClearClientData = async () => {
 }
 
 .v-table tbody tr:hover {
-  background-color: #fffbea !important;
-  border-left: 3px solid #f5c52b;
+  background-color: rgba(245, 197, 43, 0.12) !important;
+  border-left: 3px solid var(--admin-accent);
 }
 
 .v-table tbody td {
   padding: 16px !important;
-  border-bottom: 1px solid #f0f0f0 !important;
-  color: #2c3e50;
+  border-bottom: 1px solid var(--admin-border-soft) !important;
+  color: var(--admin-text);
   font-size: 0.9rem;
 }
 
@@ -2452,10 +2652,49 @@ const performClearClientData = async () => {
   border-radius: 12px !important;
 }
 
+.admin-section-layout {
+  align-items: flex-start;
+}
+
+.admin-sidebar-card {
+  position: sticky;
+  top: 88px;
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.admin-sidebar-header {
+  padding: 18px 18px 14px;
+}
+
+.admin-sidebar-list :deep(.v-list-item) {
+  margin: 6px 12px;
+}
+
+.admin-sidebar-list :deep(.v-list-item--active) {
+  background: rgba(245, 197, 43, 0.18);
+}
+
+.admin-sidebar-list :deep(.v-list-item--active .v-icon),
+.admin-sidebar-list :deep(.v-list-item--active .v-list-item-title) {
+  color: var(--admin-primary) !important;
+}
+
+.admin-section-card {
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.admin-section-window {
+  min-height: 420px;
+}
+
 /* Tabs */
 :deep(.v-tabs) {
-  background: #fafafa;
-  border-bottom: 2px solid #e0e0e0;
+  background: rgba(15, 23, 42, 0.02);
+  border-bottom: 1px solid var(--admin-border);
 }
 
 :deep(.v-tab) {
@@ -2463,15 +2702,15 @@ const performClearClientData = async () => {
   letter-spacing: normal !important;
   font-weight: 500;
   font-size: 0.95rem;
-  color: #757575 !important;
+  color: var(--admin-muted) !important;
 }
 
 :deep(.v-tab--selected) {
-  color: #2c3e50 !important;
+  color: var(--admin-primary) !important;
 }
 
 :deep(.v-tab__slider) {
-  background-color: #f5c52b !important;
+  background-color: var(--admin-accent) !important;
   height: 3px !important;
 }
 
@@ -2502,8 +2741,8 @@ const performClearClientData = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #2c3e50;
-  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);
+  background: var(--admin-primary);
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.14);
 }
 
 /* Dialogs */
@@ -2612,7 +2851,7 @@ const performClearClientData = async () => {
   flex: 1;
   font-size: 0.95rem;
   line-height: 1.5;
-  color: #2c3e50;
+  color: var(--admin-primary);
   font-weight: 500;
 }
 

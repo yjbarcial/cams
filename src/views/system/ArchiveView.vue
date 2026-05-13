@@ -9,7 +9,7 @@ const router = useRouter()
 const searchQuery = ref('')
 const activeCategory = ref('All')
 
-const categories = ['All', 'Folio', 'Magazine', 'Newsletter']
+const categories = ['All', 'Folio', 'Magazine', 'Newsletter', 'Other']
 
 const articles = ref([])
 

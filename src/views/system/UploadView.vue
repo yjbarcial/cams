@@ -189,7 +189,7 @@ const cancelUpload = () => {
           <v-col cols="12" md="3">
             <v-select
               v-model="category"
-              :items="['Folio', 'Magazine', 'Newsletter']"
+              :items="['Folio', 'Magazine', 'Newsletter', 'Other']"
               label="Category"
             ></v-select>
           </v-col>
