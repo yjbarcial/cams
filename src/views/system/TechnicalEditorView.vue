@@ -9,6 +9,7 @@ import HighlightComments from '@/components/HighlightComments.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
 import { projectsService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
+import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import {
   getProjectComments,
   addProjectComment,
@@ -295,6 +296,31 @@ const getBackButtonText = computed(() => {
   return `Back to ${typeNames[projectType.value] || 'Projects'}`
 })
 
+const getHistoryDisplayName = () => {
+  const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+  const fullName = currentUserProfile.value
+    ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+    : ''
+  const profile = currentUserProfile.value
+    ? { ...currentUserProfile.value, full_name: fullName }
+    : { full_name: fullName }
+
+  return getDisplayName(userEmail, profile, true)
+}
+
+const buildHistoryProjectData = () => ({
+  title: project.value.title || '',
+  description: project.value.description || '',
+  content: project.value.content || '',
+  status: project.value.status || '',
+  sectionHead: project.value.sectionHead || '',
+  writers: project.value.writers || '',
+  artists: project.value.artists || '',
+  dueDate: project.value.dueDate || '',
+  dueDateISO: project.value.dueDate || '',
+  mediaUploaded: project.value.mediaUploaded || '',
+})
+
 const saveContentChanges = async () => {
   try {
     // Save to Supabase
@@ -309,6 +335,20 @@ const saveContentChanges = async () => {
     project.value.lastModified = new Date().toLocaleString()
     updateLastSaveTime()
     hasUnsavedChanges.value = false
+
+    try {
+      await createProjectVersionSupabase(
+        projectType.value,
+        projectId,
+        buildHistoryProjectData(),
+        'Content updated',
+        getHistoryDisplayName(),
+        'draft',
+      )
+      console.log('✅ Version history created for technical editor content save')
+    } catch (versionError) {
+      console.error('Error creating technical editor history version:', versionError)
+    }
 
     // Schedule notification after 10 seconds of no further edits
     if (notificationTimeout.value) {
@@ -343,6 +383,20 @@ const saveContentChanges = async () => {
   } catch (error) {
     console.error('❌ Error saving content:', error)
     showNotification('Error saving content', 'error')
+  }
+}
+
+const handleVersionRestored = async () => {
+  try {
+    await loadProjectData()
+    await nextTick()
+    if (quillEditorRef.value && editorContent.value) {
+      quillEditorRef.value.setContent(editorContent.value)
+    }
+    showNotification('Project restored from version')
+  } catch (error) {
+    console.error('Error reloading technical editor after restore:', error)
+    showNotification('Project restored, but the page needs a refresh', 'warning')
   }
 }
 
@@ -510,6 +564,26 @@ const submitApproval = async () => {
       !updatedProject.creative_director_approved_by
     ) {
       console.error('⚠️ Approval columns returned null! Run ADD_APPROVAL_COLUMNS.sql in Supabase')
+    }
+
+    try {
+      const approverRole = isTechnicalEditor.value ? 'Technical Editor' : 'Creative Director'
+      const changeDescription =
+        approvalAction.value === 'approve'
+          ? `Approved by ${approverRole}`
+          : `Returned by ${approverRole}`
+
+      await createProjectVersionSupabase(
+        projectType.value,
+        projectId,
+        buildHistoryProjectData(),
+        changeDescription,
+        getHistoryDisplayName(),
+        updatedProject.status,
+      )
+      console.log('✅ Version history created for editor approval update')
+    } catch (versionError) {
+      console.error('Error creating editor approval history version:', versionError)
     }
 
     // Create notification based on action
@@ -1238,7 +1312,11 @@ onMounted(async () => {
 
           <v-col cols="12" lg="4" class="right-panel">
             <div class="history-section mb-4">
-              <ProjectHistory :project-id="projectId" :project-type="projectType" />
+              <ProjectHistory
+                :project-id="projectId"
+                :project-type="projectType"
+                @version-restored="handleVersionRestored"
+              />
             </div>
 
             <HighlightComments

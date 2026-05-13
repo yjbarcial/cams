@@ -14,35 +14,32 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  refreshTrigger: {
+    type: Number,
+    default: 0,
+  },
 })
 
 const emit = defineEmits(['version-restored'])
 
-// State
 const history = ref([])
 const loading = ref(false)
 const error = ref('')
 const selectedVersion = ref(null)
 const showVersionDialog = ref(false)
-const expandedChanges = ref(new Set()) // Track which change groups are expanded
-
-// Notification system
+const expandedChanges = ref(new Set())
 const showNotificationCard = ref(false)
 const notificationMessage = ref('')
 const notificationType = ref('success')
-
-// Confirmation dialog
 const showConfirmDialog = ref(false)
 const confirmMessage = ref('')
 const confirmAction = ref(null)
 
-// Computed
 const activeHistory = computed(() =>
   history.value.filter((v) => !v.isDeleted && v.author !== 'Current User'),
 )
 const currentVersion = computed(() => activeHistory.value.find((v) => v.isActive))
 
-// Methods
 const loadHistory = async () => {
   try {
     loading.value = true
@@ -55,12 +52,18 @@ const loadHistory = async () => {
   }
 }
 
+const handleRefreshClick = () => {
+  history.value = []
+  selectedVersion.value = null
+  expandedChanges.value.clear()
+  loadHistory()
+}
+
 const showNotification = (message, type = 'success') => {
   notificationMessage.value = message
   notificationType.value = type
   showNotificationCard.value = true
 
-  // Auto-hide after 3 seconds
   setTimeout(() => {
     showNotificationCard.value = false
   }, 3000)
@@ -99,7 +102,7 @@ const restoreVersion = (versionId) => {
         emit('version-restored', restoredProject)
         await loadHistory()
         showNotification('Version restored successfully', 'success')
-        closeVersionDialog() // Close dialog after successful restore
+        closeVersionDialog()
       } catch (err) {
         showNotification('Failed to restore version', 'error')
         console.error('Error restoring version:', err)
@@ -111,7 +114,6 @@ const restoreVersion = (versionId) => {
 }
 
 const restoreToPreviousVersion = (currentVersion) => {
-  // Find the previous version
   const currentIndex = activeHistory.value.findIndex((v) => v.id === currentVersion.id)
   if (currentIndex === -1 || currentIndex === activeHistory.value.length - 1) {
     showNotification('No previous version available', 'error')
@@ -132,7 +134,7 @@ const restoreToPreviousVersion = (currentVersion) => {
         emit('version-restored', restoredProject)
         await loadHistory()
         showNotification('Restored to previous version successfully', 'success')
-        closeVersionDialog() // Close dialog after successful restore
+        closeVersionDialog()
       } catch (err) {
         showNotification('Failed to restore to previous version', 'error')
         console.error('Error restoring to previous version:', err)
@@ -151,7 +153,7 @@ const viewVersion = (version) => {
 const closeVersionDialog = () => {
   showVersionDialog.value = false
   selectedVersion.value = null
-  expandedChanges.value.clear() // Clear expanded state when closing
+  expandedChanges.value.clear()
 }
 
 const toggleChangeGroup = (groupKey) => {
@@ -166,7 +168,6 @@ const isChangeExpanded = (groupKey) => {
   return expandedChanges.value.has(groupKey)
 }
 
-// Get changes made in this version compared to previous
 const getVersionChanges = (version) => {
   const currentIndex = activeHistory.value.findIndex((v) => v.id === version.id)
   if (currentIndex === -1 || currentIndex === activeHistory.value.length - 1) {
@@ -184,24 +185,23 @@ const getVersionChanges = (version) => {
     isFirstVersion: false,
   }
 
-  // Check all fields in current version
   Object.keys(currentData).forEach((key) => {
-    if (key === 'metadata') return // Skip metadata for now
+    if (key === 'metadata') return
 
     if (!(key in previousData) || previousData[key] === null || previousData[key] === undefined) {
-      // Field was added
       changes.added.push({ field: key, value: stripHtml(currentData[key]) })
     } else if (JSON.stringify(currentData[key]) !== JSON.stringify(previousData[key])) {
-      // Field was modified
+      const oldValue = stripHtml(previousData[key])
+      const newValue = stripHtml(currentData[key])
       changes.modified.push({
         field: key,
-        oldValue: stripHtml(previousData[key]),
-        newValue: stripHtml(currentData[key]),
+        oldValue,
+        newValue,
+        diff: getInlineTextDiff(String(oldValue ?? ''), String(newValue ?? '')),
       })
     }
   })
 
-  // Check for removed fields
   Object.keys(previousData).forEach((key) => {
     if (key === 'metadata') return
     if (!(key in currentData) || currentData[key] === null || currentData[key] === undefined) {
@@ -215,22 +215,71 @@ const getVersionChanges = (version) => {
 const stripHtml = (value) => {
   if (typeof value !== 'string') return value
 
-  // Remove HTML tags and decode entities
   const text = value
-    .replace(/<br\s*\/?>/gi, '\n') // Convert <br> to newlines
-    .replace(/<\/p>/gi, '\n') // Convert closing </p> to newlines
-    .replace(/<p>/gi, '') // Remove opening <p> tags
-    .replace(/<[^>]*>/g, '') // Remove all other HTML tags
-    .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<p>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/\n\s*\n/g, '\n') // Remove extra blank lines
+    .replace(/\n\s*\n/g, '\n')
     .trim()
 
   return text || value
+}
+
+const getInlineTextDiff = (oldText, newText) => {
+  if (oldText === newText) {
+    return {
+      oldParts: [{ text: oldText, changed: false }],
+      newParts: [{ text: newText, changed: false }],
+    }
+  }
+
+  let prefixLength = 0
+  const maxPrefix = Math.min(oldText.length, newText.length)
+  while (prefixLength < maxPrefix && oldText[prefixLength] === newText[prefixLength]) {
+    prefixLength++
+  }
+
+  let suffixLength = 0
+  const oldRemaining = oldText.length - prefixLength
+  const newRemaining = newText.length - prefixLength
+  const maxSuffix = Math.min(oldRemaining, newRemaining)
+  while (
+    suffixLength < maxSuffix &&
+    oldText[oldText.length - 1 - suffixLength] === newText[newText.length - 1 - suffixLength]
+  ) {
+    suffixLength++
+  }
+
+  const oldStart = oldText.slice(0, prefixLength)
+  const oldChanged = oldText.slice(prefixLength, oldText.length - suffixLength)
+  const oldEnd = oldText.slice(oldText.length - suffixLength)
+
+  const newStart = newText.slice(0, prefixLength)
+  const newChanged = newText.slice(prefixLength, newText.length - suffixLength)
+  const newEnd = newText.slice(newText.length - suffixLength)
+
+  const oldParts = []
+  const newParts = []
+
+  if (oldStart) oldParts.push({ text: oldStart, changed: false })
+  if (oldChanged) oldParts.push({ text: oldChanged, changed: true })
+  if (oldEnd) oldParts.push({ text: oldEnd, changed: false })
+
+  if (newStart) newParts.push({ text: newStart, changed: false })
+  if (newChanged) newParts.push({ text: newChanged, changed: true })
+  if (newEnd) newParts.push({ text: newEnd, changed: false })
+
+  if (oldParts.length === 0) oldParts.push({ text: oldText, changed: false })
+  if (newParts.length === 0) newParts.push({ text: newText, changed: false })
+
+  return { oldParts, newParts }
 }
 
 const formatFieldName = (field) => {
@@ -288,31 +337,15 @@ const getInitials = (name) => {
 }
 
 const getAvatarColor = (name) => {
-  if (!name) return '#6b7280'
-  const colors = [
-    '#3b82f6',
-    '#10b981',
-    '#f59e0b',
-    '#ef4444',
-    '#8b5cf6',
-    '#ec4899',
-    '#06b6d4',
-    '#84cc16',
-    '#f97316',
-    '#6366f1',
-  ]
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return colors[Math.abs(hash) % colors.length]
+  if (!name) return '#353535'
+  return name.length % 2 === 0 ? '#353535' : '#f5c52b'
 }
 
 const getStatusColor = (status) => {
   const colors = {
-    'in-progress': 'primary',
-    planning: 'info',
-    completed: 'success',
+    'in-progress': 'grey-darken-2',
+    planning: 'grey',
+    completed: 'grey-darken-3',
     'on-hold': 'warning',
     draft: 'grey',
   }
@@ -321,22 +354,30 @@ const getStatusColor = (status) => {
 
 const getPriorityColor = (priority) => {
   const colors = {
-    high: 'error',
+    high: 'grey-darken-3',
     medium: 'warning',
-    low: 'success',
+    low: 'grey',
   }
   return colors[priority?.toLowerCase()] || 'grey'
 }
 
-// Lifecycle
 onMounted(() => {
   loadHistory()
 })
 
-// Watch for prop changes
 watch([() => props.projectId, () => props.projectType], () => {
   loadHistory()
 })
+
+watch(
+  () => props.refreshTrigger,
+  () => {
+    history.value = []
+    selectedVersion.value = null
+    expandedChanges.value.clear()
+    loadHistory()
+  },
+)
 </script>
 
 <template>
@@ -347,7 +388,7 @@ watch([() => props.projectId, () => props.projectType], () => {
         <v-icon class="mr-2">mdi-history</v-icon>
         <h3>Project History</h3>
       </div>
-      <v-btn @click="loadHistory" size="small" variant="text" icon :loading="loading">
+      <v-btn @click="handleRefreshClick" size="small" variant="text" icon :loading="loading">
         <v-icon>mdi-refresh</v-icon>
       </v-btn>
     </div>
@@ -374,7 +415,11 @@ watch([() => props.projectId, () => props.projectType], () => {
         @click="viewVersion(version)"
       >
         <!-- Version Avatar -->
-        <div class="version-avatar" :style="{ backgroundColor: getAvatarColor(version.author) }">
+        <div
+          class="version-avatar"
+          :class="{ gold: getAvatarColor(version.author) === '#f5c52b' }"
+          :style="{ backgroundColor: getAvatarColor(version.author) }"
+        >
           {{ getInitials(version.author) }}
         </div>
 
@@ -383,13 +428,7 @@ watch([() => props.projectId, () => props.projectType], () => {
           <div class="version-info">
             <div class="version-author">
               {{ version.author }}
-              <v-chip
-                v-if="version.isActive"
-                size="x-small"
-                color="success"
-                variant="flat"
-                class="ml-2"
-              >
+              <v-chip v-if="version.isActive" size="x-small" variant="flat" class="current-chip">
                 Current
               </v-chip>
             </div>
@@ -415,19 +454,32 @@ watch([() => props.projectId, () => props.projectType], () => {
     </div>
 
     <!-- Version Details Dialog -->
-    <v-dialog v-model="showVersionDialog" max-width="900px" scrollable>
+    <v-dialog v-model="showVersionDialog" max-width="1180px" scrollable>
       <v-card v-if="selectedVersion" class="version-details-dialog">
         <v-card-title class="dialog-header">
           <div class="dialog-title-content">
             <div
               class="dialog-avatar"
+              :class="{ gold: getAvatarColor(selectedVersion.author) === '#f5c52b' }"
               :style="{ backgroundColor: getAvatarColor(selectedVersion.author) }"
             >
               {{ getInitials(selectedVersion.author) }}
             </div>
             <div class="dialog-info">
-              <div class="dialog-author">{{ selectedVersion.author }}</div>
+              <div class="dialog-author-row">
+                <div class="dialog-author">{{ selectedVersion.author }}</div>
+                <v-chip
+                  v-if="selectedVersion.isActive"
+                  size="small"
+                  variant="flat"
+                  class="current-chip"
+                >
+                  Current Version
+                </v-chip>
+                <v-chip v-else size="small" variant="flat" class="past-chip"> Past Version </v-chip>
+              </div>
               <div class="dialog-time">{{ formatDate(selectedVersion.timestamp) }}</div>
+              <div class="dialog-summary">{{ selectedVersion.changeDescription }}</div>
             </div>
           </div>
           <v-btn icon variant="text" @click="closeVersionDialog" size="small">
@@ -435,227 +487,227 @@ watch([() => props.projectId, () => props.projectType], () => {
           </v-btn>
         </v-card-title>
 
-        <v-divider></v-divider>
+        <v-divider />
 
         <v-card-text class="dialog-content">
-          <!-- Editor Information -->
-          <div class="editor-info">
-            <v-icon size="small" color="primary" class="mr-2">mdi-account-edit</v-icon>
-            <span class="editor-label">Edited by:</span>
-            <span class="editor-name">{{ selectedVersion.author }}</span>
-            <span class="editor-time">• {{ formatDate(selectedVersion.timestamp) }}</span>
-          </div>
-
-          <v-divider class="my-4"></v-divider>
-
-          <!-- Changes Made -->
-          <div class="changes-section">
-            <h4 class="section-title">
-              <v-icon size="small" class="mr-2">mdi-file-document-edit</v-icon>
-              What Changed
-            </h4>
-
-            <template v-if="!getVersionChanges(selectedVersion).isFirstVersion">
-              <!-- Added Fields -->
-              <div v-if="getVersionChanges(selectedVersion).added.length > 0" class="change-group">
-                <div
-                  class="change-group-header added clickable"
-                  @click="toggleChangeGroup(`added-${selectedVersion.id}`)"
-                >
-                  <v-icon size="small" class="mr-1">mdi-plus-circle</v-icon>
-                  Added ({{ getVersionChanges(selectedVersion).added.length }})
-                  <v-icon size="small" class="ml-auto">
-                    {{
-                      isChangeExpanded(`added-${selectedVersion.id}`)
-                        ? 'mdi-chevron-up'
-                        : 'mdi-chevron-down'
-                    }}
-                  </v-icon>
-                </div>
-                <div v-show="isChangeExpanded(`added-${selectedVersion.id}`)">
-                  <div
-                    v-for="change in getVersionChanges(selectedVersion).added"
-                    :key="change.field"
-                    class="change-item added-item"
-                  >
-                    <div class="change-field">{{ formatFieldName(change.field) }}</div>
-                    <div class="change-value new-value scrollable-content">
-                      <v-icon size="small" class="mr-1">mdi-plus</v-icon>
-                      <span>{{ stripHtml(String(change.value)) }}</span>
-                    </div>
-                  </div>
-                </div>
+          <div class="preview-grid">
+            <div class="preview-panel changes-panel">
+              <div class="panel-heading">
+                <v-icon size="small" class="mr-2">mdi-file-document-edit</v-icon>
+                What Changed
               </div>
 
-              <!-- Modified Fields -->
-              <div
-                v-if="getVersionChanges(selectedVersion).modified.length > 0"
-                class="change-group"
-              >
+              <template v-if="!getVersionChanges(selectedVersion).isFirstVersion">
                 <div
-                  class="change-group-header modified clickable"
-                  @click="toggleChangeGroup(`modified-${selectedVersion.id}`)"
+                  v-if="getVersionChanges(selectedVersion).added.length > 0"
+                  class="change-group"
                 >
-                  <v-icon size="small" class="mr-1">mdi-pencil-circle</v-icon>
-                  Modified ({{ getVersionChanges(selectedVersion).modified.length }})
-                  <v-icon size="small" class="ml-auto">
-                    {{
-                      isChangeExpanded(`modified-${selectedVersion.id}`)
-                        ? 'mdi-chevron-up'
-                        : 'mdi-chevron-down'
-                    }}
-                  </v-icon>
-                </div>
-                <div v-show="isChangeExpanded(`modified-${selectedVersion.id}`)">
                   <div
-                    v-for="change in getVersionChanges(selectedVersion).modified"
-                    :key="change.field"
-                    class="change-item modified-item"
+                    class="change-group-header added clickable"
+                    @click="toggleChangeGroup(`added-${selectedVersion.id}`)"
                   >
-                    <div class="change-field">{{ formatFieldName(change.field) }}</div>
-                    <div class="change-comparison">
-                      <div class="change-value old-value scrollable-content">
-                        <v-icon size="small" class="mr-1">mdi-minus</v-icon>
-                        <span>{{ stripHtml(String(change.oldValue)) }}</span>
-                      </div>
-                      <div class="change-arrow">
-                        <v-icon size="small" color="grey">mdi-arrow-down</v-icon>
-                      </div>
+                    <v-icon size="small" class="mr-1">mdi-plus-circle</v-icon>
+                    Added ({{ getVersionChanges(selectedVersion).added.length }})
+                    <v-icon size="small" class="ml-auto">
+                      {{
+                        isChangeExpanded(`added-${selectedVersion.id}`)
+                          ? 'mdi-chevron-up'
+                          : 'mdi-chevron-down'
+                      }}
+                    </v-icon>
+                  </div>
+                  <div v-show="isChangeExpanded(`added-${selectedVersion.id}`)">
+                    <div
+                      v-for="change in getVersionChanges(selectedVersion).added"
+                      :key="change.field"
+                      class="change-item added-item"
+                    >
+                      <div class="change-field">{{ formatFieldName(change.field) }}</div>
                       <div class="change-value new-value scrollable-content">
                         <v-icon size="small" class="mr-1">mdi-plus</v-icon>
-                        <span>{{ stripHtml(String(change.newValue)) }}</span>
+                        <span>{{ stripHtml(String(change.value)) }}</span>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <!-- Removed Fields -->
-              <div
-                v-if="getVersionChanges(selectedVersion).removed.length > 0"
-                class="change-group"
-              >
                 <div
-                  class="change-group-header removed clickable"
-                  @click="toggleChangeGroup(`removed-${selectedVersion.id}`)"
+                  v-if="getVersionChanges(selectedVersion).modified.length > 0"
+                  class="change-group"
                 >
-                  <v-icon size="small" class="mr-1">mdi-minus-circle</v-icon>
-                  Removed ({{ getVersionChanges(selectedVersion).removed.length }})
-                  <v-icon size="small" class="ml-auto">
-                    {{
-                      isChangeExpanded(`removed-${selectedVersion.id}`)
-                        ? 'mdi-chevron-up'
-                        : 'mdi-chevron-down'
-                    }}
-                  </v-icon>
-                </div>
-                <div v-show="isChangeExpanded(`removed-${selectedVersion.id}`)">
                   <div
-                    v-for="change in getVersionChanges(selectedVersion).removed"
-                    :key="change.field"
-                    class="change-item removed-item"
+                    class="change-group-header modified clickable"
+                    @click="toggleChangeGroup(`modified-${selectedVersion.id}`)"
                   >
-                    <div class="change-field">{{ formatFieldName(change.field) }}</div>
-                    <div class="change-value old-value scrollable-content">
-                      <v-icon size="small" class="mr-1">mdi-minus</v-icon>
-                      <span>{{ stripHtml(String(change.value)) }}</span>
+                    <v-icon size="small" class="mr-1">mdi-pencil-circle</v-icon>
+                    Modified ({{ getVersionChanges(selectedVersion).modified.length }})
+                    <v-icon size="small" class="ml-auto">
+                      {{
+                        isChangeExpanded(`modified-${selectedVersion.id}`)
+                          ? 'mdi-chevron-up'
+                          : 'mdi-chevron-down'
+                      }}
+                    </v-icon>
+                  </div>
+                  <div v-show="isChangeExpanded(`modified-${selectedVersion.id}`)">
+                    <div
+                      v-for="change in getVersionChanges(selectedVersion).modified"
+                      :key="change.field"
+                      class="change-item modified-item"
+                    >
+                      <div class="change-field">{{ formatFieldName(change.field) }}</div>
+                      <div class="change-comparison">
+                        <div class="change-value old-value scrollable-content">
+                          <v-icon size="small" class="mr-1">mdi-minus</v-icon>
+                          <span>
+                            <template
+                              v-for="(part, index) in change.diff.oldParts"
+                              :key="`old-${change.field}-${index}`"
+                            >
+                              <mark v-if="part.changed" class="diff-changed-old">{{
+                                part.text
+                              }}</mark>
+                              <span v-else>{{ part.text }}</span>
+                            </template>
+                          </span>
+                        </div>
+                        <div class="change-arrow">
+                          <v-icon size="small" color="grey">mdi-arrow-down</v-icon>
+                        </div>
+                        <div class="change-value new-value scrollable-content">
+                          <v-icon size="small" class="mr-1">mdi-plus</v-icon>
+                          <span>
+                            <template
+                              v-for="(part, index) in change.diff.newParts"
+                              :key="`new-${change.field}-${index}`"
+                            >
+                              <mark v-if="part.changed" class="diff-changed-new">{{
+                                part.text
+                              }}</mark>
+                              <span v-else>{{ part.text }}</span>
+                            </template>
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <!-- No Changes -->
-              <div
-                v-if="
-                  getVersionChanges(selectedVersion).added.length === 0 &&
-                  getVersionChanges(selectedVersion).modified.length === 0 &&
-                  getVersionChanges(selectedVersion).removed.length === 0
-                "
-                class="no-changes"
-              >
-                <v-icon size="large" color="grey-lighten-1">mdi-information-outline</v-icon>
-                <p>No detectable changes in this version</p>
-              </div>
-            </template>
+                <div
+                  v-if="getVersionChanges(selectedVersion).removed.length > 0"
+                  class="change-group"
+                >
+                  <div
+                    class="change-group-header removed clickable"
+                    @click="toggleChangeGroup(`removed-${selectedVersion.id}`)"
+                  >
+                    <v-icon size="small" class="mr-1">mdi-minus-circle</v-icon>
+                    Removed ({{ getVersionChanges(selectedVersion).removed.length }})
+                    <v-icon size="small" class="ml-auto">
+                      {{
+                        isChangeExpanded(`removed-${selectedVersion.id}`)
+                          ? 'mdi-chevron-up'
+                          : 'mdi-chevron-down'
+                      }}
+                    </v-icon>
+                  </div>
+                  <div v-show="isChangeExpanded(`removed-${selectedVersion.id}`)">
+                    <div
+                      v-for="change in getVersionChanges(selectedVersion).removed"
+                      :key="change.field"
+                      class="change-item removed-item"
+                    >
+                      <div class="change-field">{{ formatFieldName(change.field) }}</div>
+                      <div class="change-value old-value scrollable-content">
+                        <v-icon size="small" class="mr-1">mdi-minus</v-icon>
+                        <span>{{ stripHtml(String(change.value)) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-            <!-- First Version -->
-            <div v-else class="first-version-notice">
-              <v-icon size="large" color="primary">mdi-file-star</v-icon>
-              <p>This is the first version - initial creation</p>
-              <p class="text-caption">{{ selectedVersion.changeDescription }}</p>
+                <div
+                  v-if="
+                    getVersionChanges(selectedVersion).added.length === 0 &&
+                    getVersionChanges(selectedVersion).modified.length === 0 &&
+                    getVersionChanges(selectedVersion).removed.length === 0
+                  "
+                  class="no-changes"
+                >
+                  <v-icon size="large" color="grey-lighten-1">mdi-information-outline</v-icon>
+                  <p>No detectable changes in this version</p>
+                </div>
+              </template>
+
+              <div v-else class="first-version-notice">
+                <v-icon size="large" color="#f5c52b">mdi-file-star</v-icon>
+                <p>This is the first version - initial creation</p>
+                <p class="text-caption">{{ selectedVersion.changeDescription }}</p>
+              </div>
             </div>
-          </div>
 
-          <v-divider class="my-4"></v-divider>
-
-          <!-- Current Content Snapshot -->
-          <div class="content-snapshot">
-            <h4 class="section-title">
-              <v-icon size="small" class="mr-2">mdi-file-document</v-icon>
-              Content Snapshot
-            </h4>
-
-            <div class="snapshot-fields">
-              <!-- Title -->
-              <div v-if="selectedVersion.data.title" class="snapshot-field">
-                <label>Title</label>
-                <div class="snapshot-value">{{ selectedVersion.data.title }}</div>
+            <div class="preview-panel snapshot-panel">
+              <div class="panel-heading">
+                <v-icon size="small" class="mr-2">mdi-file-document</v-icon>
+                Content Snapshot
               </div>
 
-              <!-- Description -->
-              <div v-if="selectedVersion.data.description" class="snapshot-field">
-                <label>Description</label>
-                <div class="snapshot-value description-content">
-                  {{ stripHtml(selectedVersion.data.description) }}
+              <div class="snapshot-fields">
+                <div v-if="selectedVersion.data.title" class="snapshot-field">
+                  <label>Title</label>
+                  <div class="snapshot-value">{{ selectedVersion.data.title }}</div>
                 </div>
-              </div>
 
-              <!-- Status -->
-              <div v-if="selectedVersion.data.status" class="snapshot-field">
-                <label>Status</label>
-                <v-chip size="small" :color="getStatusColor(selectedVersion.data.status)">
-                  {{ selectedVersion.data.status }}
-                </v-chip>
-              </div>
-
-              <!-- Timeline -->
-              <div
-                v-if="selectedVersion.data.startDate || selectedVersion.data.endDate"
-                class="snapshot-field"
-              >
-                <label>Timeline</label>
-                <div class="snapshot-value">
-                  {{
-                    selectedVersion.data.startDate
-                      ? new Date(selectedVersion.data.startDate).toLocaleDateString()
-                      : 'Not set'
-                  }}
-                  →
-                  {{
-                    selectedVersion.data.endDate
-                      ? new Date(selectedVersion.data.endDate).toLocaleDateString()
-                      : 'Not set'
-                  }}
+                <div v-if="selectedVersion.data.description" class="snapshot-field">
+                  <label>Description</label>
+                  <div class="snapshot-value description-content">
+                    {{ stripHtml(selectedVersion.data.description) }}
+                  </div>
                 </div>
-              </div>
 
-              <!-- Priority -->
-              <div v-if="selectedVersion.data.priority" class="snapshot-field">
-                <label>Priority</label>
-                <v-chip size="small" :color="getPriorityColor(selectedVersion.data.priority)">
-                  {{ selectedVersion.data.priority }}
-                </v-chip>
+                <div v-if="selectedVersion.data.status" class="snapshot-field">
+                  <label>Status</label>
+                  <v-chip size="small" :color="getStatusColor(selectedVersion.data.status)">
+                    {{ selectedVersion.data.status }}
+                  </v-chip>
+                </div>
+
+                <div
+                  v-if="selectedVersion.data.startDate || selectedVersion.data.endDate"
+                  class="snapshot-field"
+                >
+                  <label>Timeline</label>
+                  <div class="snapshot-value">
+                    {{
+                      selectedVersion.data.startDate
+                        ? new Date(selectedVersion.data.startDate).toLocaleDateString()
+                        : 'Not set'
+                    }}
+                    →
+                    {{
+                      selectedVersion.data.endDate
+                        ? new Date(selectedVersion.data.endDate).toLocaleDateString()
+                        : 'Not set'
+                    }}
+                  </div>
+                </div>
+
+                <div v-if="selectedVersion.data.priority" class="snapshot-field">
+                  <label>Priority</label>
+                  <v-chip size="small" :color="getPriorityColor(selectedVersion.data.priority)">
+                    {{ selectedVersion.data.priority }}
+                  </v-chip>
+                </div>
               </div>
             </div>
           </div>
         </v-card-text>
 
-        <v-divider></v-divider>
+        <v-divider />
 
         <v-card-actions class="dialog-actions">
           <v-btn variant="text" @click="closeVersionDialog" color="grey-darken-1">Close</v-btn>
           <v-spacer />
-          <!-- Main restore button - restores to PREVIOUS version (red/old content) -->
           <v-btn
             v-if="
               !selectedVersion.isActive &&
@@ -671,7 +723,6 @@ watch([() => props.projectId, () => props.projectType], () => {
             <v-icon class="mr-1">mdi-restore</v-icon>
             Restore (Before These Changes)
           </v-btn>
-          <!-- Secondary button - restores to THIS version (green/new content) -->
           <v-btn
             v-if="!selectedVersion.isActive && !getVersionChanges(selectedVersion).isFirstVersion"
             color="grey-darken-1"
@@ -682,7 +733,6 @@ watch([() => props.projectId, () => props.projectType], () => {
             <v-icon class="mr-1">mdi-redo-variant</v-icon>
             Restore This Version
           </v-btn>
-          <!-- For first version, only show restore to this version -->
           <v-btn
             v-if="!selectedVersion.isActive && getVersionChanges(selectedVersion).isFirstVersion"
             color="grey-darken-2"
@@ -735,8 +785,6 @@ watch([() => props.projectId, () => props.projectType], () => {
           <span>Confirm Restore</span>
         </v-card-title>
 
-        <v-divider class="dialog-divider" />
-
         <v-card-text class="confirm-dialog-content">
           <p class="confirm-message">{{ confirmMessage }}</p>
         </v-card-text>
@@ -773,109 +821,139 @@ watch([() => props.projectId, () => props.projectType], () => {
 
 <style scoped>
 .project-history {
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  max-width: 430px;
+  background: #ffffff;
+  color: #353535;
 }
 
 .history-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 14px 16px;
-  border-bottom: 1px solid #e5e7eb;
-  background: white;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e5e5e5;
+  background: #ffffff;
 }
 
 .header-title {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: #353535;
 }
 
 .header-title h3 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .loading-state,
 .empty-state {
+  min-height: 220px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 20px;
-  color: #6b7280;
   gap: 12px;
+  color: #6b7280;
+  background: #ffffff;
 }
 
 .loading-state p,
-.empty-state p {
+.empty-state p,
+.no-changes p,
+.first-version-notice p {
   margin: 0;
   font-size: 13px;
 }
 
 .history-list {
-  max-height: 300px;
+  max-height: 430px;
   overflow-y: auto;
-  background: white;
+  background: #ffffff;
 }
 
-.history-list::-webkit-scrollbar {
+.history-list::-webkit-scrollbar,
+.dialog-content::-webkit-scrollbar,
+.scrollable-content::-webkit-scrollbar,
+.description-content::-webkit-scrollbar {
   width: 6px;
 }
 
-.history-list::-webkit-scrollbar-track {
-  background: #f9fafb;
+.history-list::-webkit-scrollbar-track,
+.dialog-content::-webkit-scrollbar-track,
+.scrollable-content::-webkit-scrollbar-track,
+.description-content::-webkit-scrollbar-track {
+  background: #f5f5f5;
 }
 
-.history-list::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
-}
-
-.history-list::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+.history-list::-webkit-scrollbar-thumb,
+.dialog-content::-webkit-scrollbar-thumb,
+.scrollable-content::-webkit-scrollbar-thumb,
+.description-content::-webkit-scrollbar-thumb {
+  background: #cfcfcf;
+  border-radius: 999px;
 }
 
 .version-item {
   display: flex;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f3f4f6;
-  transition: all 0.2s ease;
-  position: relative;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #eeeeee;
   cursor: pointer;
+  position: relative;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.version-item::before {
+  content: '';
+  position: absolute;
+  left: 35px;
+  top: 52px;
+  bottom: -8px;
+  width: 1px;
+  background: #e5e5e5;
+}
+
+.version-item:last-child::before {
+  display: none;
 }
 
 .version-item:hover {
-  background-color: #f8fafc;
+  background: #fafafa;
 }
 
 .version-item.current {
-  background-color: #f0fdf4;
+  background: #fff9df;
+  border-left: 4px solid #f5c52b;
 }
 
-.version-item:last-child {
-  border-bottom: none;
+.version-avatar,
+.dialog-avatar {
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #d8d8d8;
 }
 
 .version-avatar {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-weight: 600;
-  font-size: 13px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 1;
+}
+
+.version-avatar.gold,
+.dialog-avatar.gold {
+  color: #353535;
 }
 
 .version-content {
@@ -883,374 +961,390 @@ watch([() => props.projectId, () => props.projectType], () => {
   min-width: 0;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  gap: 16px;
 }
 
 .version-info {
-  flex: 1;
   min-width: 0;
 }
 
-.version-author {
-  font-weight: 600;
-  color: #1f2937;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
+.version-author,
+.dialog-author {
+  font-weight: 700;
+  color: #353535;
+  letter-spacing: 0;
 }
 
-.version-time {
-  color: #6b7280;
-  font-size: 11px;
-  display: block;
+.version-author {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.version-time,
+.dialog-time {
+  color: #777777;
+  font-size: 12px;
+}
+
+.version-summary-text,
+.dialog-summary {
+  color: #555555;
+  line-height: 1.45;
 }
 
 .version-summary-text {
-  color: #6b7280;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
   margin-top: 4px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.current-chip,
+.past-chip {
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+.current-chip {
+  background: #f5c52b !important;
+  color: #353535 !important;
+}
+
+.past-chip {
+  background: #eeeeee !important;
+  color: #353535 !important;
 }
 
 .restore-btn {
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  flex-shrink: 0;
+  color: #353535 !important;
+  border: 1px solid #d8d8d8 !important;
+  background: #ffffff !important;
+  text-transform: none !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  align-self: center;
 }
 
-.version-item:hover .restore-btn {
-  opacity: 1;
+.version-item:hover .restore-btn,
+.restore-btn:hover {
+  border-color: #f5c52b !important;
+  background: #fff9df !important;
 }
 
-/* Version Details Dialog */
-.version-details-dialog {
-  border-radius: 12px;
+.version-details-dialog,
+.confirm-dialog-card {
+  border: 2px solid #353535 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18) !important;
+}
+
+.dialog-header,
+.confirm-dialog-header {
+  display: flex;
+  align-items: center;
+  background: #353535 !important;
+  color: #ffffff !important;
 }
 
 .dialog-header {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  background: #fafafa;
+  gap: 16px;
+  padding: 18px 22px !important;
 }
 
 .dialog-title-content {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .dialog-avatar {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-weight: 600;
-  font-size: 18px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffffff;
+  flex-shrink: 0;
 }
 
 .dialog-info {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
-.dialog-author {
-  font-weight: 600;
-  font-size: 16px;
-  color: #1f2937;
+.dialog-author-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.dialog-time {
+.dialog-author,
+.dialog-time,
+.dialog-summary {
+  color: inherit;
+}
+
+.dialog-time,
+.dialog-summary {
+  opacity: 0.82;
+}
+
+.dialog-summary {
   font-size: 13px;
-  color: #6b7280;
 }
 
 .dialog-content {
-  padding: 24px;
-  max-height: 500px;
+  padding: 20px !important;
+  max-height: 64vh;
+  overflow-y: auto;
+  background: #ffffff;
 }
 
-/* Editor Information */
-.editor-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #f8fafc;
+.preview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 16px;
+}
+
+.preview-panel {
+  border: 1px solid #dedede;
   border-radius: 8px;
-  font-size: 13px;
-  color: #6b7280;
+  background: #ffffff;
+  overflow: hidden;
 }
 
-.editor-label {
-  font-weight: 500;
-}
-
-.editor-name {
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.editor-time {
-  color: #9ca3af;
-}
-
-/* Section Titles */
-.section-title {
-  margin: 0 0 16px 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1f2937;
+.panel-heading {
   display: flex;
   align-items: center;
-}
-
-/* Changes Section */
-.changes-section {
-  margin-bottom: 24px;
+  padding: 12px 14px;
+  color: #353535;
+  background: #f7f7f7;
+  border-bottom: 1px solid #dedede;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .change-group {
-  margin-bottom: 20px;
+  padding: 14px;
+  border-bottom: 1px solid #eeeeee;
 }
 
 .change-group:last-child {
-  margin-bottom: 0;
+  border-bottom: none;
 }
 
 .change-group-header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 9px 10px;
   border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #d8d8d8;
+  color: #353535;
   font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 12px;
+  font-weight: 800;
   user-select: none;
 }
 
 .change-group-header.clickable {
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
 .change-group-header.clickable:hover {
-  opacity: 0.8;
-  transform: translateY(-1px);
+  border-color: #f5c52b;
+  background: #fff9df;
 }
 
 .change-group-header .ml-auto {
   margin-left: auto;
 }
 
-.change-group-header.added {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.change-group-header.modified {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
+.change-group-header.added,
+.change-group-header.modified,
 .change-group-header.removed {
-  background: #fee2e2;
-  color: #991b1b;
+  border-left: 4px solid #f5c52b;
 }
 
 .change-item {
-  padding: 12px;
-  margin-bottom: 8px;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-}
-
-.change-item:last-child {
-  margin-bottom: 0;
-}
-
-.added-item {
-  background: #f0fdf4;
-  border-color: #86efac;
-}
-
-.modified-item {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-}
-
-.removed-item {
-  background: #fef2f2;
-  border-color: #fecaca;
+  padding: 12px 0 0;
 }
 
 .change-field {
+  margin: 0 0 8px;
+  color: #353535;
   font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
+  letter-spacing: 0;
 }
 
 .change-value {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #dedede;
+  background: #fafafa;
+  color: #353535;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
   white-space: pre-wrap;
-  word-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .change-value.scrollable-content {
-  max-height: 300px;
+  max-height: 280px;
   overflow-y: auto;
 }
 
-.change-value::-webkit-scrollbar {
-  width: 4px;
-}
-
-.change-value::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.change-value::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 2px;
-}
-
 .old-value {
-  background: #fef2f2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
+  background: #f7f7f7;
 }
 
 .new-value {
-  background: #f0fdf4;
-  color: #065f46;
-  border: 1px solid #86efac;
+  background: #fffdf2;
+  border-color: #ead98a;
 }
 
 .change-comparison {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  gap: 8px;
 }
 
 .change-arrow {
   display: flex;
   justify-content: center;
-  padding: 4px 0;
+  color: #777777;
+}
+
+.diff-changed-old,
+.diff-changed-new {
+  padding: 0 3px;
+  border-radius: 3px;
+  color: #353535;
+}
+
+.diff-changed-old {
+  background: #e8e8e8;
+}
+
+.diff-changed-new {
+  background: #f5e7a1;
 }
 
 .no-changes,
 .first-version-notice {
+  min-height: 220px;
+  padding: 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px;
-  color: #6b7280;
-  text-align: center;
   gap: 8px;
+  color: #666666;
+  text-align: center;
 }
 
 .first-version-notice {
-  color: #3b82f6;
-}
-
-.first-version-notice p {
-  margin: 0;
-  font-size: 14px;
+  color: #353535;
 }
 
 .first-version-notice .text-caption {
+  color: #777777;
   font-size: 12px;
-  color: #6b7280;
-  margin-top: 4px;
-}
-
-/* Content Snapshot */
-.content-snapshot {
-  margin-top: 24px;
 }
 
 .snapshot-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
 }
 
 .snapshot-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  gap: 7px;
 }
 
 .snapshot-field label {
+  color: #666666;
   font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .snapshot-value {
-  font-size: 14px;
-  color: #1f2937;
-  line-height: 1.6;
-  padding: 12px;
-  background: #f9fafb;
+  padding: 11px 12px;
+  border: 1px solid #dedede;
   border-radius: 6px;
-  border: 1px solid #e5e7eb;
+  background: #fafafa;
+  color: #353535;
+  font-size: 13px;
+  line-height: 1.55;
   white-space: pre-wrap;
-  word-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .description-content {
-  max-height: 200px;
+  max-height: 220px;
   overflow-y: auto;
 }
 
-.description-content::-webkit-scrollbar {
-  width: 6px;
+.dialog-actions,
+.confirm-dialog-actions {
+  padding: 14px 20px !important;
+  background: #fafafa !important;
+  border-top: 1px solid #dedede !important;
 }
 
-.description-content::-webkit-scrollbar-track {
-  background: #e5e7eb;
-  border-radius: 3px;
+.restore-primary-btn,
+.confirm-dialog-actions .restore-btn {
+  background: #353535 !important;
+  color: #ffffff !important;
+  border-radius: 6px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
 }
 
-.description-content::-webkit-scrollbar-thumb {
-  background: #9ca3af;
-  border-radius: 3px;
+.restore-primary-btn:hover,
+.confirm-dialog-actions .restore-btn:hover {
+  background: #1f1f1f !important;
 }
 
-.dialog-actions {
-  padding: 16px 24px;
-  background: #fafafa;
+.restore-secondary-btn,
+.confirm-dialog-actions .cancel-btn {
+  color: #353535 !important;
+  border: 1px solid #777777 !important;
+  border-radius: 6px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
 }
 
-/* Notification Card Styles */
+.restore-secondary-btn:hover,
+.confirm-dialog-actions .cancel-btn:hover {
+  background: #fff9df !important;
+  border-color: #f5c52b !important;
+}
+
 .notification-card {
   position: fixed;
   top: 16px;
@@ -1258,19 +1352,18 @@ watch([() => props.projectId, () => props.projectType], () => {
   transform: translateX(-50%);
   z-index: 10000;
   min-width: 300px;
-  max-width: 400px;
+  max-width: 420px;
+  border: 2px solid #353535;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  background: #ffffff !important;
 }
 
 .notification-success {
-  background: #f0fdf4 !important;
-  border-left: 4px solid #10b981 !important;
+  border-left: 6px solid #f5c52b !important;
 }
 
 .notification-error {
-  background: #fef2f2 !important;
-  border-left: 4px solid #ef4444 !important;
+  border-left: 6px solid #777777 !important;
 }
 
 .notification-content {
@@ -1280,256 +1373,95 @@ watch([() => props.projectId, () => props.projectType], () => {
   padding: 14px 16px;
 }
 
-.notification-icon {
-  flex-shrink: 0;
-}
-
 .notification-message {
   flex: 1;
+  color: #353535;
   font-size: 14px;
-  font-weight: 500;
-  color: #1f2937;
+  font-weight: 700;
   line-height: 1.4;
 }
 
 .notification-close {
-  flex-shrink: 0;
-  color: #6b7280 !important;
+  color: #555555 !important;
 }
 
-.notification-close:hover {
-  color: #374151 !important;
-  background: rgba(0, 0, 0, 0.05) !important;
-}
-
-/* Slide down animation */
-.slide-down-enter-active {
-  transition: all 0.3s ease-out;
-}
-
+.slide-down-enter-active,
 .slide-down-leave-active {
-  transition: all 0.3s ease-in;
+  transition: all 0.24s ease;
 }
 
-.slide-down-enter-from {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-20px);
-}
-
+.slide-down-enter-from,
 .slide-down-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(-20px);
-}
-
-/* ========================================
-   Confirmation Dialog Styles
-   ======================================== */
-.confirm-dialog-card {
-  border: 2px solid #616161 !important;
-  border-radius: 8px !important;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  transform: translateX(-50%) translateY(-16px);
 }
 
 .confirm-dialog-header {
-  display: flex;
-  align-items: center;
-  padding: 20px 24px !important;
-  background: #424242 !important;
-  color: white !important;
-  font-size: 18px !important;
-  font-weight: 600 !important;
-}
-
-.dialog-divider {
-  border-color: #e0e0e0 !important;
-  opacity: 1 !important;
+  padding: 18px 22px !important;
+  font-size: 17px !important;
+  font-weight: 800 !important;
 }
 
 .confirm-dialog-content {
-  padding: 24px !important;
-  background: white !important;
+  padding: 22px !important;
+  background: #ffffff !important;
 }
 
 .confirm-message {
+  margin: 0;
+  color: #353535;
   font-size: 14px;
   line-height: 1.6;
-  color: #555;
-  margin: 0;
 }
 
-.confirm-dialog-actions {
-  padding: 16px 24px !important;
-  background: #fafafa !important;
-  border-top: 1px solid #e0e0e0 !important;
-}
-
-.confirm-dialog-actions .cancel-btn {
-  border: 2px solid #616161 !important;
-  color: #424242 !important;
-  font-weight: 600 !important;
-  text-transform: none !important;
-  letter-spacing: 0 !important;
-  border-radius: 6px !important;
-  padding: 0 24px !important;
-}
-
-.confirm-dialog-actions .cancel-btn:hover {
-  background: #f5f5f5 !important;
-  border-color: #424242 !important;
-}
-
-.confirm-dialog-actions .restore-btn {
-  background: #424242 !important;
-  background-color: #424242 !important;
-  color: white !important;
-  font-weight: 600 !important;
-  text-transform: none !important;
-  letter-spacing: 0 !important;
-  border-radius: 6px !important;
-  padding: 0 28px !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+.dialog-divider {
+  border-color: #dedede !important;
   opacity: 1 !important;
-  visibility: visible !important;
 }
 
-.confirm-dialog-actions .restore-btn:hover {
-  background: #303030 !important;
-  background-color: #303030 !important;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
-}
-
-/* Main Dialog Action Buttons */
-.dialog-actions {
-  padding: 16px 24px !important;
-  background: #fafafa !important;
-  border-top: 1px solid #e5e7eb !important;
-}
-
-.restore-primary-btn {
-  background: #424242 !important;
-  background-color: #424242 !important;
-  color: white !important;
-  font-weight: 600 !important;
-  text-transform: none !important;
+:deep(.v-btn) {
   letter-spacing: 0 !important;
-  border-radius: 6px !important;
-  padding: 0 24px !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
 }
 
-.restore-primary-btn:hover {
-  background: #303030 !important;
-  background-color: #303030 !important;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
-}
-
-.restore-secondary-btn {
-  border: 2px solid #616161 !important;
-  color: #424242 !important;
-  font-weight: 600 !important;
-  text-transform: none !important;
-  letter-spacing: 0 !important;
-  border-radius: 6px !important;
-  padding: 0 24px !important;
-}
-
-.restore-secondary-btn:hover {
-  background: #f5f5f5 !important;
-  border-color: #424242 !important;
-}
-
-.restore-btn {
-  background: #424242 !important;
-  background-color: #424242 !important;
-  color: white !important;
-}
-
-:deep(.restore-btn) {
-  background: #353535 !important;
-  background-color: #353535 !important;
-  color: white !important;
-}
-
-:deep(.restore-btn .v-btn__content) {
-  color: white !important;
-}
-
-:deep(.restore-btn .v-icon) {
-  color: white !important;
-}
-
-:deep(.restore-btn .v-btn__overlay) {
-  display: none !important;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .project-history {
-    max-width: 100%;
+@media (max-width: 860px) {
+  .preview-grid {
+    grid-template-columns: 1fr;
   }
 
-  .version-item {
-    padding: 12px 16px;
-    gap: 10px;
+  .dialog-header {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .history-header,
+  .version-item,
+  .dialog-header,
+  .dialog-content,
+  .dialog-actions,
+  .confirm-dialog-actions {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
   }
 
   .version-content {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    gap: 10px;
   }
 
   .restore-btn {
-    opacity: 1;
     align-self: flex-start;
   }
 
-  .dialog-content {
-    padding: 16px;
+  .dialog-title-content {
+    align-items: flex-start;
   }
 
-  .change-comparison {
-    gap: 4px;
-  }
-
-  .change-value {
-    font-size: 12px;
-    padding: 6px 10px;
-  }
-
-  .snapshot-value {
-    padding: 10px;
-    font-size: 13px;
-  }
-
-  /* Confirmation dialog responsive */
-  .confirm-dialog-header {
-    padding: 16px 20px !important;
-    font-size: 16px !important;
-  }
-
-  .confirm-dialog-content {
-    padding: 20px !important;
-  }
-
-  .confirm-message {
-    font-size: 13px;
-  }
-
+  .dialog-actions,
   .confirm-dialog-actions {
-    padding: 12px 20px !important;
     flex-direction: column-reverse;
+    align-items: stretch;
     gap: 8px;
-  }
-
-  .confirm-dialog-actions .cancel-btn,
-  .confirm-dialog-actions .restore-btn {
-    width: 100%;
-  }
-
-  .confirm-dialog-actions .v-spacer {
-    display: none;
   }
 }
 </style>

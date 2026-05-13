@@ -9,6 +9,7 @@ import HighlightComments from '@/components/HighlightComments.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
 import { projectsService, profilesService } from '@/services/supabaseService'
 import { supabase } from '@/utils/supabase'
+import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import {
   getProjectComments,
   addProjectComment,
@@ -138,6 +139,31 @@ const updateLastSaveTime = () => {
   project.value.lastModified = lastSaveTime.value
 }
 
+const getEditorDisplayName = (userEmail) => {
+  const profile = currentUserProfile.value
+    ? {
+        ...currentUserProfile.value,
+        full_name:
+          `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim(),
+      }
+    : { full_name: '' }
+
+  return getDisplayName(userEmail || 'Unknown User', profile, true)
+}
+
+const buildHistoryProjectData = () => ({
+  title: project.value.title || '',
+  description: project.value.description || '',
+  content: editorContent.value || project.value.content || '',
+  status: project.value.status || 'draft',
+  sectionHead: project.value.sectionHead || '',
+  writers: project.value.writers || '',
+  artists: project.value.artists || '',
+  dueDate: project.value.dueDate || '',
+  dueDateISO: project.value.dueDate || '',
+  mediaUploaded: project.value.mediaUploaded || '',
+})
+
 const handleContentChange = () => {
   if (isEditorEditable.value) {
     hasUnsavedChanges.value = true
@@ -236,6 +262,17 @@ const getBackButtonText = computed(() => {
 
 const saveContentChanges = async () => {
   try {
+    const previousSnapshot = {
+      title: project.value.title,
+      description: project.value.description,
+      content: project.value.content,
+      status: project.value.status,
+      sectionHead: project.value.sectionHead,
+      writers: project.value.writers,
+      artists: project.value.artists,
+      dueDate: project.value.dueDate,
+    }
+
     // Save to Supabase
     await projectsService.update(projectId, {
       content: editorContent.value,
@@ -248,6 +285,27 @@ const saveContentChanges = async () => {
     project.value.lastModified = new Date().toLocaleString()
     updateLastSaveTime()
     hasUnsavedChanges.value = false
+
+    try {
+      const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+      const changeSummary =
+        previousSnapshot.content !== editorContent.value
+          ? 'Content updated'
+          : 'Project content saved'
+
+      await createProjectVersionSupabase(
+        projectType.value,
+        projectId,
+        buildHistoryProjectData(),
+        changeSummary,
+        getEditorDisplayName(userEmail),
+        'draft',
+      )
+      console.log('✅ Version history created for section head content save')
+    } catch (versionError) {
+      console.error('Error creating section head history version:', versionError)
+      // Don't fail the content save if history creation fails
+    }
 
     // Schedule notification after 10 seconds of no further edits
     if (notificationTimeout.value) {

@@ -221,6 +221,31 @@ const getBackButtonText = computed(() => {
   return `Back to ${typeNames[projectType.value] || 'Projects'}`
 })
 
+const getHistoryDisplayName = () => {
+  const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+  const fullName = currentUserProfile.value
+    ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+    : ''
+  const profile = currentUserProfile.value
+    ? { ...currentUserProfile.value, full_name: fullName }
+    : { full_name: fullName }
+
+  return getDisplayName(userEmail, profile, true)
+}
+
+const buildHistoryProjectData = () => ({
+  title: project.value.title || '',
+  description: project.value.description || '',
+  content: project.value.content || '',
+  status: project.value.status || '',
+  sectionHead: project.value.sectionHead || '',
+  writers: project.value.writers || '',
+  artists: project.value.artists || '',
+  dueDate: project.value.dueDate || '',
+  dueDateISO: project.value.dueDate || '',
+  mediaUploaded: project.value.mediaUploaded || '',
+})
+
 const saveContentChanges = async () => {
   try {
     // Save to Supabase
@@ -235,6 +260,20 @@ const saveContentChanges = async () => {
     project.value.lastModified = new Date().toLocaleString()
     updateLastSaveTime()
     hasUnsavedChanges.value = false
+
+    try {
+      await createProjectVersionSupabase(
+        projectType.value,
+        projectId,
+        buildHistoryProjectData(),
+        'Content updated',
+        getHistoryDisplayName(),
+        'draft',
+      )
+      console.log('✅ Version history created for chief adviser content save')
+    } catch (versionError) {
+      console.error('Error creating chief adviser history version:', versionError)
+    }
 
     // Schedule notification after 10 seconds of no further edits
     if (notificationTimeout.value) {
@@ -269,6 +308,20 @@ const saveContentChanges = async () => {
   } catch (error) {
     console.error('Error saving content:', error)
     showNotification('Error saving content', 'error')
+  }
+}
+
+const handleVersionRestored = async () => {
+  try {
+    await loadProjectData()
+    await nextTick()
+    if (quillEditorRef.value && editorContent.value) {
+      quillEditorRef.value.setContent(editorContent.value)
+    }
+    showNotification('Project restored from version')
+  } catch (error) {
+    console.error('Error reloading chief adviser after restore:', error)
+    showNotification('Project restored, but the page needs a refresh', 'warning')
   }
 }
 
@@ -335,6 +388,27 @@ const submitApproval = async () => {
     const updatedProject = await projectsService.getById(projectId)
     project.value.status = updatedProject.status
 
+    try {
+      const changeDescription =
+        action === 'approve'
+          ? 'Approved by Chief Adviser'
+          : action === 'return'
+            ? 'Returned by Chief Adviser'
+            : 'Rejected by Chief Adviser'
+
+      await createProjectVersionSupabase(
+        projectType.value,
+        projectId,
+        buildHistoryProjectData(),
+        changeDescription,
+        getHistoryDisplayName(),
+        newStatus,
+      )
+      console.log('✅ Version history created for chief adviser approval update')
+    } catch (versionError) {
+      console.error('Error creating chief adviser approval history version:', versionError)
+    }
+
     // Create notification based on action with workflow labels
     try {
       const userEmail = localStorage.getItem('userEmail') || ''
@@ -357,37 +431,6 @@ const submitApproval = async () => {
     } catch (notifError) {
       console.warn('⚠️ Notification creation failed (non-critical):', notifError)
       // Continue execution even if notification fails
-    }
-
-    // Try to save to Supabase (non-blocking)
-    try {
-      // Only call Supabase if project has a valid id
-      if (projectId) {
-        const userEmail = localStorage.getItem('userEmail') || ''
-        const fullName = currentUserProfile.value
-          ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
-          : ''
-        const author = fullName || userEmail || 'Unknown User'
-
-        await createProjectVersionSupabase(
-          projectType.value,
-          projectId,
-          project.value,
-          action === 'approve'
-            ? 'Approved by Chief Adviser - Ready for Publishing'
-            : action === 'return'
-              ? 'Returned by Chief Adviser for reconsideration'
-              : 'Rejected by Chief Adviser - Returned to Artist and Writer',
-          author,
-          'approval',
-        )
-        console.log('Project version saved to Supabase successfully')
-      } else {
-        console.log('Project does not have valid ID, skipping sync')
-      }
-    } catch (err) {
-      console.warn('Failed to save project version to Supabase (non-critical):', err)
-      // Don't block the workflow if Supabase fails
     }
 
     showApprovalDialog.value = false
@@ -881,7 +924,11 @@ onMounted(async () => {
 
           <v-col cols="12" lg="4" class="right-panel">
             <div class="history-section mb-4">
-              <ProjectHistory :project-id="projectId" :project-type="projectType" />
+              <ProjectHistory
+                :project-id="projectId"
+                :project-type="projectType"
+                @version-restored="handleVersionRestored"
+              />
             </div>
 
             <HighlightComments

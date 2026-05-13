@@ -7,7 +7,7 @@ import { supabase } from '@/utils/supabase.js'
 
 // Store last version creation time per project to prevent too frequent versions
 const lastVersionTime = new Map()
-const VERSION_DEBOUNCE_MS = 30000 // 30 seconds - reduced for more frequent history updates
+const VERSION_DEBOUNCE_MS = 30000 // 30 seconds window; latest edit updates recent version instead of being dropped
 
 /**
  * Get current user UUID from Supabase auth session
@@ -120,24 +120,35 @@ export const createProjectVersion = async (
 
   try {
     let actualProjectId = projectId
+    let updateExistingVersionId = null
+    let updateExistingVersionNumber = null
 
-    // Google Docs-style debouncing: Only create version if enough time has passed
-    // Skip debouncing for new projects (projectId is null)
+    // Debounce window behavior: keep the latest edit by updating most recent version.
+    // This avoids losing recent edits while preventing rapid version spam.
     if (actualProjectId) {
       const projectKey = `${projectType}-${actualProjectId}`
       const now = Date.now()
       const lastTime = lastVersionTime.get(projectKey)
 
       if (lastTime && now - lastTime < VERSION_DEBOUNCE_MS) {
-        console.log('⏱️  Skipping version creation - too soon since last version')
-        console.log(`   Time since last version: ${Math.floor((now - lastTime) / 1000)}s`)
-        console.log(`   Minimum interval: ${Math.floor(VERSION_DEBOUNCE_MS / 1000)}s`)
-        return null // Don't create version yet
-      }
+        const { data: latestVersion, error: latestVersionError } = await supabase
+          .from('project_history')
+          .select('id, version_number')
+          .eq('project_id', actualProjectId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
 
-      // Update last version time
-      lastVersionTime.set(projectKey, now)
-      console.log('✅ Creating version - sufficient time has passed')
+        if (latestVersionError) {
+          throw latestVersionError
+        }
+
+        if (latestVersion?.id) {
+          updateExistingVersionId = latestVersion.id
+          updateExistingVersionNumber = latestVersion.version_number
+          console.log('⏱️  Updating latest version inside debounce window')
+        }
+      }
     }
 
     // For new projects (projectId is null), we'll create the project first and get the auto-generated UUID
@@ -228,15 +239,18 @@ export const createProjectVersion = async (
       console.log('Project already exists:', project.id)
     }
 
-    // Get next version number
-    const { data: versions } = await supabase
-      .from('project_history')
-      .select('version_number')
-      .eq('project_id', actualProjectId)
-      .order('version_number', { ascending: false })
-      .limit(1)
+    // Get next version number, unless we're updating an existing recent version
+    let nextVersionNumber = updateExistingVersionNumber
+    if (!nextVersionNumber) {
+      const { data: versions } = await supabase
+        .from('project_history')
+        .select('version_number')
+        .eq('project_id', actualProjectId)
+        .order('version_number', { ascending: false })
+        .limit(1)
 
-    const nextVersionNumber = versions?.length > 0 ? versions[0].version_number + 1 : 1
+      nextVersionNumber = versions?.length > 0 ? versions[0].version_number + 1 : 1
+    }
 
     // Get current user email
     const currentUserId = await getCurrentUserId()
@@ -303,11 +317,27 @@ export const createProjectVersion = async (
       created_at: new Date().toISOString(),
     }
 
-    const { data: version, error } = await supabase
-      .from('project_history')
-      .insert(versionData)
-      .select('*')
-      .maybeSingle()
+    let version = null
+    let error = null
+
+    if (updateExistingVersionId) {
+      const { data, error: updateError } = await supabase
+        .from('project_history')
+        .update(versionData)
+        .eq('id', updateExistingVersionId)
+        .select('*')
+        .maybeSingle()
+      version = data
+      error = updateError
+    } else {
+      const { data, error: insertError } = await supabase
+        .from('project_history')
+        .insert(versionData)
+        .select('*')
+        .maybeSingle()
+      version = data
+      error = insertError
+    }
 
     // Attach empty comments array since it's a new version
     if (version) {
@@ -317,6 +347,12 @@ export const createProjectVersion = async (
     if (error) {
       console.error('Error creating version in Supabase:', error)
       throw error
+    }
+
+    // Update debounce timer only after successful write.
+    if (actualProjectId) {
+      const projectKey = `${projectType}-${actualProjectId}`
+      lastVersionTime.set(projectKey, Date.now())
     }
 
     console.log('Version created successfully in Supabase for project:', actualProjectId)

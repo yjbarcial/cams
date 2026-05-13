@@ -34,7 +34,12 @@ const emit = defineEmits(['version-restored', 'version-deleted'])
 const showHistory = ref(false)
 
 const toggleHistory = () => {
-  showHistory.value = !showHistory.value
+  if (!showHistory.value) {
+    showHistory.value = true
+    return
+  }
+
+  showHistory.value = false
 }
 
 const handleVersionRestored = (restoredProject) => {
@@ -56,13 +61,15 @@ const handleVersionDeleted = (versionId) => {
     </v-btn>
 
     <!-- History Panel -->
-    <v-dialog v-model="showHistory" max-width="1000px" scrollable>
+    <v-dialog v-model="showHistory" max-width="1040px" scrollable>
       <v-card class="history-dialog">
         <v-card-title class="dialog-header">
-          <v-icon class="mr-2">mdi-history</v-icon>
-          Project History
+          <div class="dialog-title">
+            <v-icon>mdi-history</v-icon>
+            <span>Project History</span>
+          </div>
           <v-spacer />
-          <v-btn icon @click="showHistory = false" size="small">
+          <v-btn icon variant="text" @click="showHistory = false" size="small" class="close-btn">
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </v-card-title>
@@ -87,17 +94,37 @@ const handleVersionDeleted = (versionId) => {
 
 .history-toggle-btn {
   text-transform: none;
-  font-weight: 500;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .history-dialog {
   max-height: 90vh;
+  border: 2px solid #353535;
+  border-radius: 8px !important;
+  overflow: hidden;
 }
 
 .dialog-header {
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 16px 24px;
+  background: #353535;
+  color: #ffffff;
+  border-bottom: 3px solid #f5c52b;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+}
+
+.dialog-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.close-btn {
+  color: #ffffff !important;
 }
 
 :deep(.v-card-text) {

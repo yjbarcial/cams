@@ -230,6 +230,31 @@ const getBackButtonText = computed(() => {
   return `Back to ${typeNames[projectType.value] || 'Projects'}`
 })
 
+const getHistoryDisplayName = () => {
+  const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+  const fullName = currentUserProfile.value
+    ? `${currentUserProfile.value.first_name || ''} ${currentUserProfile.value.last_name || ''}`.trim()
+    : ''
+  const profile = currentUserProfile.value
+    ? { ...currentUserProfile.value, full_name: fullName }
+    : { full_name: fullName }
+
+  return getDisplayName(userEmail, profile, true)
+}
+
+const buildHistoryProjectData = () => ({
+  title: project.value.title || '',
+  description: project.value.description || '',
+  content: project.value.content || '',
+  status: project.value.status || '',
+  sectionHead: project.value.sectionHead || '',
+  writers: project.value.writers || '',
+  artists: project.value.artists || '',
+  dueDate: project.value.dueDate || '',
+  dueDateISO: project.value.dueDate || '',
+  mediaUploaded: project.value.mediaUploaded || '',
+})
+
 const startApproval = (action) => {
   // Validation for different actions
   if (action === 'approve' && normalizedProjectStatus.value !== 'to_online_accounts_manager') {
@@ -244,6 +269,20 @@ const startApproval = (action) => {
   approvalAction.value = action
   approvalComments.value = ''
   showApprovalDialog.value = true
+}
+
+const handleVersionRestored = async () => {
+  try {
+    await loadProjectData()
+    await nextTick()
+    if (quillEditorRef.value && editorContent.value) {
+      quillEditorRef.value.setContent(editorContent.value)
+    }
+    showNotification('Project restored from version')
+  } catch (error) {
+    console.error('Error reloading archival manager after restore:', error)
+    showNotification('Project restored, but the page needs a refresh', 'warning')
+  }
 }
 
 const submitApproval = async () => {
@@ -285,6 +324,25 @@ const submitApproval = async () => {
 
     console.log(`✅ Project ${action}ed via Supabase`)
 
+    try {
+      const changeDescription =
+        action === 'approve'
+          ? 'Approved by Online Accounts Manager'
+          : 'Published by Archival Manager'
+
+      await createProjectVersionSupabase(
+        projectType.value,
+        projectId,
+        buildHistoryProjectData(),
+        changeDescription,
+        getHistoryDisplayName(),
+        newStatus,
+      )
+      console.log('✅ Version history created for archival workflow update')
+    } catch (versionError) {
+      console.error('Error creating archival history version:', versionError)
+    }
+
     // Reload project with all relationships for notification
     const updatedProject = await projectsService.getById(projectId)
     project.value.status = updatedProject.status
@@ -314,24 +372,6 @@ const submitApproval = async () => {
     }
 
     // Try to save to Supabase project history
-    try {
-      if (project.value.supabaseId) {
-        await createProjectVersionSupabase(
-          projectType.value,
-          projectId,
-          project.value,
-          action === 'approve'
-            ? `Approved by Online Accounts Manager`
-            : `Published by ${currentUserRole.value}`,
-          user.id,
-          newStatus,
-        )
-        console.log('Project version saved to Supabase successfully')
-      }
-    } catch (err) {
-      console.warn('Failed to save project version to Supabase (non-critical):', err)
-    }
-
     showApprovalDialog.value = false
     approvalAction.value = ''
     approvalComments.value = ''
@@ -810,7 +850,11 @@ onMounted(async () => {
 
           <v-col cols="12" lg="4" class="right-panel">
             <div class="history-section mb-4">
-              <ProjectHistory :project-id="projectId" :project-type="projectType" />
+              <ProjectHistory
+                :project-id="projectId"
+                :project-type="projectType"
+                @version-restored="handleVersionRestored"
+              />
             </div>
 
             <HighlightComments
