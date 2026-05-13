@@ -27,6 +27,7 @@ const publications = ref([])
 const loading = ref(true)
 const refreshing = ref(false)
 const error = ref(null)
+const initialLoadStatus = ref('')
 let projectsSubscription = null
 let profilesSubscription = null
 const search = ref('')
@@ -56,6 +57,49 @@ const editFormData = ref({
   positions_label: '',
 })
 const editLoading = ref(false)
+
+const INITIAL_LOAD_TIMEOUT_MS = 12000
+const usersCacheKey = 'admin_users_cache'
+const projectsCacheKey = 'admin_projects_cache'
+const publicationsCacheKey = 'admin_publications_cache'
+
+const safeParseCache = (key) => {
+  try {
+    const cached = localStorage.getItem(key)
+    if (!cached) return []
+    const parsed = JSON.parse(cached)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+const saveCache = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Ignore cache write errors.
+  }
+}
+
+const withTimeout = async (promise, timeoutMs, fallbackValue, label) => {
+  let timeoutId
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => {
+      console.warn(`⏱️ ${label} timed out after ${timeoutMs}ms; using fallback data`)
+      resolve({ timedOut: true, result: fallbackValue })
+    }, timeoutMs)
+  })
+
+  try {
+    return await Promise.race([
+      promise.then((result) => ({ timedOut: false, result })),
+      timeoutPromise,
+    ])
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
 
 const roleOptions = [
   { title: 'Admin', value: 'admin' },
@@ -117,7 +161,9 @@ const handleUploadError = (message) => {
   displayNotification(message || 'Upload failed', 'error')
 }
 
-const effectiveUserRole = ref(localStorage.getItem('debugRole') || localStorage.getItem('userRole') || '')
+const effectiveUserRole = ref(
+  localStorage.getItem('debugRole') || localStorage.getItem('userRole') || '',
+)
 const effectiveAccessRole = ref(localStorage.getItem('accessRole') || '')
 const canManageUsers = computed(() => effectiveUserRole.value === 'admin')
 const canDeleteRecords = computed(() => effectiveUserRole.value === 'admin')
@@ -250,7 +296,18 @@ const loadAllProjects = async () => {
 
     query = query.order('created_at', { ascending: false })
 
-    const { data: apiProjects, error } = await query
+    const { result, timedOut } = await withTimeout(
+      query,
+      INITIAL_LOAD_TIMEOUT_MS,
+      { data: safeParseCache(projectsCacheKey), error: null },
+      'Fetching projects',
+    )
+
+    const { data: apiProjects, error } = result || {}
+
+    if (timedOut) {
+      initialLoadStatus.value = 'Using cached projects while Supabase is slow.'
+    }
 
     if (error) {
       console.error('❌ Supabase error:', error)
@@ -286,10 +343,11 @@ const loadAllProjects = async () => {
     })
 
     console.log('✅ Projects loaded from Supabase:', mappedProjects.length)
+    saveCache(projectsCacheKey, mappedProjects)
     return mappedProjects
   } catch (error) {
     console.error('❌ Error loading projects from Supabase:', error)
-    return []
+    return safeParseCache(projectsCacheKey)
   }
 }
 
@@ -336,12 +394,24 @@ const refreshData = async () => {
 // Load publications/archives from Supabase
 const loadPublications = async () => {
   try {
-    const data = await archivesService.getAll()
+    const { result: data, timedOut } = await withTimeout(
+      archivesService.getAll(),
+      INITIAL_LOAD_TIMEOUT_MS,
+      safeParseCache(publicationsCacheKey),
+      'Fetching publications',
+    )
+
+    if (timedOut) {
+      initialLoadStatus.value = 'Using cached publications while Supabase is slow.'
+    }
+
     console.log('✅ Publications loaded:', data.length)
-    return data || []
+    const mappedPublications = data || []
+    saveCache(publicationsCacheKey, mappedPublications)
+    return mappedPublications
   } catch (error) {
     console.error('❌ Error loading publications:', error)
-    return []
+    return safeParseCache(publicationsCacheKey)
   }
 }
 
@@ -418,7 +488,16 @@ const fetchRealUsers = async () => {
   try {
     console.log('🔍 Fetching users from Supabase...')
 
-    const data = await profilesService.getAll()
+    const { result: data, timedOut } = await withTimeout(
+      profilesService.getAll(),
+      INITIAL_LOAD_TIMEOUT_MS,
+      safeParseCache(usersCacheKey),
+      'Fetching users',
+    )
+
+    if (timedOut) {
+      initialLoadStatus.value = 'Using cached users while Supabase is slow.'
+    }
 
     console.log('📊 Users Supabase result:', data)
 
@@ -432,7 +511,7 @@ const fetchRealUsers = async () => {
 
     console.log('✅ Found users:', regularUsers.length, '(excluding admins)')
 
-    return regularUsers.map((user) => {
+    const mappedUsers = regularUsers.map((user) => {
       const derivedName =
         user.full_name ||
         [user.first_name, user.last_name].filter(Boolean).join(' ').trim() ||
@@ -453,9 +532,12 @@ const fetchRealUsers = async () => {
         last_active: user.last_active,
       }
     })
+
+    saveCache(usersCacheKey, mappedUsers)
+    return mappedUsers
   } catch (err) {
     console.error('❌ Error fetching real users:', err)
-    return []
+    return safeParseCache(usersCacheKey)
   }
 }
 
@@ -465,40 +547,36 @@ onMounted(async () => {
     console.log('Starting to fetch system admin data from Supabase...')
     loading.value = true
 
-    // Fetch REAL users from Supabase
-    if (canManageUsers.value) {
-      const realUsers = await fetchRealUsers()
-      users.value = realUsers
-    } else {
-      users.value = []
-    }
+    const [usersResult, projectsResult, publicationsResult] = await Promise.all([
+      canManageUsers.value ? fetchRealUsers() : Promise.resolve([]),
+      loadAllProjects(),
+      loadPublications(),
+    ])
 
-    // Load projects from Supabase (with localStorage fallback)
-    const allProjects = await loadAllProjects()
-    projects.value = allProjects
-
-    // Load publications from Supabase
-    const allPublications = await loadPublications()
-    publications.value = allPublications
+    users.value = usersResult
+    projects.value = projectsResult
+    publications.value = publicationsResult
 
     // Update statistics - show ALL items in scrollable tables
     statistics.value = {
-      totalUsers: canManageUsers.value ? users.value.length : 0,
-      activeUsers: canManageUsers.value ? users.value.filter((u) => u.status === 'active').length : 0,
-      totalProjects: allProjects.length,
-      activeProjects: allProjects.filter(
+      totalUsers: canManageUsers.value ? usersResult.length : 0,
+      activeUsers: canManageUsers.value
+        ? usersResult.filter((u) => u.status === 'active').length
+        : 0,
+      totalProjects: projectsResult.length,
+      activeProjects: projectsResult.filter(
         (p) => p.status === 'in_progress' || p.status === 'under_review',
       ).length,
-      publishedWorks: allProjects.filter((p) => p.status === 'published').length,
-      totalPublications: allPublications.length,
-      recentProjects: allProjects,
-      recentPublications: allPublications,
+      publishedWorks: projectsResult.filter((p) => p.status === 'published').length,
+      totalPublications: publicationsResult.length,
+      recentProjects: projectsResult,
+      recentPublications: publicationsResult,
     }
 
     console.log('✅ All data loaded successfully from Supabase:', {
-      users: users.value.length,
-      projects: allProjects.length,
-      publications: allPublications.length,
+      users: usersResult.length,
+      projects: projectsResult.length,
+      publications: publicationsResult.length,
     })
 
     // Set up real-time subscription for projects (optional - will fail silently if connection issues)
@@ -696,18 +774,21 @@ const sortItems = (items, key, order, getValue) => {
     if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * factor
 
     return (
-      String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' }) * factor
+      String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' }) *
+      factor
     )
   })
 }
 
 const getProjectSortValue = (project, key) => {
   if (!project) return null
-  if (key === 'created_at') return project.created_at ? new Date(project.created_at).getTime() : null
+  if (key === 'created_at')
+    return project.created_at ? new Date(project.created_at).getTime() : null
   if (key === 'title') return project.title || ''
   if (key === 'type') return project.type || ''
   if (key === 'status') return formatStatus(project.status || '')
-  if (key === 'created_by') return project.user?.full_name || project.user?.email || project.sectionHead || ''
+  if (key === 'created_by')
+    return project.user?.full_name || project.user?.email || project.sectionHead || ''
   return project[key] ?? ''
 }
 
@@ -759,7 +840,12 @@ const visiblePublications = computed(() => {
     })
   }
 
-  return sortItems(items, publicationSortBy.value, publicationSortOrder.value, getPublicationSortValue)
+  return sortItems(
+    items,
+    publicationSortBy.value,
+    publicationSortOrder.value,
+    getPublicationSortValue,
+  )
 })
 
 const publicationTableColspan = computed(() => (canDeleteRecords.value ? 5 : 4))
@@ -1158,7 +1244,12 @@ const performClearClientData = async () => {
                 </v-dialog>
 
                 <!-- Delete Publication Confirmation Dialog -->
-                <v-dialog v-if="canDeleteRecords" v-model="showDeleteDialog" max-width="560px" persistent>
+                <v-dialog
+                  v-if="canDeleteRecords"
+                  v-model="showDeleteDialog"
+                  max-width="560px"
+                  persistent
+                >
                   <v-card class="edit-user-card delete-dialog-card">
                     <v-card-title class="edit-user-header delete-dialog-header">
                       <div class="header-content">
@@ -1299,7 +1390,6 @@ const performClearClientData = async () => {
                     </v-card-actions>
                   </v-card>
                 </v-dialog>
-
               </v-card-text>
             </v-card>
           </v-col>
@@ -1741,7 +1831,10 @@ const performClearClientData = async () => {
                             </td>
                           </tr>
                           <tr v-if="visiblePublications.length === 0">
-                            <td :colspan="publicationTableColspan" class="text-center text-grey py-6">
+                            <td
+                              :colspan="publicationTableColspan"
+                              class="text-center text-grey py-6"
+                            >
                               No publications found. Upload content to get started.
                             </td>
                           </tr>

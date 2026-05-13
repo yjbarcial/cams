@@ -1,5 +1,7 @@
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue'
+import Quill from 'quill'
+import 'quill/dist/quill.snow.css'
 import { getDisplayName } from '@/utils/userDisplay.js'
 import { supabase } from '@/utils/supabase.js'
 
@@ -118,44 +120,12 @@ const quillOptions = {
   },
 }
 
-// Load Quill from CDN
-const loadQuill = () => {
-  return new Promise((resolve, reject) => {
-    // Check if Quill is already loaded
-    if (window.Quill) {
-      resolve(window.Quill)
-      return
-    }
-
-    // Load Quill CSS
-    const cssLink = document.createElement('link')
-    cssLink.rel = 'stylesheet'
-    cssLink.href = 'https://cdn.quilljs.com/1.3.6/quill.snow.css'
-    document.head.appendChild(cssLink)
-
-    // Load Quill JS
-    const script = document.createElement('script')
-    script.src = 'https://cdn.quilljs.com/1.3.6/quill.min.js'
-    script.onload = () => {
-      if (window.Quill) {
-        resolve(window.Quill)
-      } else {
-        reject(new Error('Quill failed to load'))
-      }
-    }
-    script.onerror = () => reject(new Error('Failed to load Quill script'))
-    document.head.appendChild(script)
-  })
-}
-
 // Initialize Quill editor
 onMounted(async () => {
   // Load current user profile first
   await loadCurrentUserProfile()
 
   try {
-    const Quill = await loadQuill()
-
     await nextTick()
 
     if (editorRef.value) {
@@ -181,7 +151,13 @@ onMounted(async () => {
           if (delta && delta.ops) {
             // Process after Quill has updated
             setTimeout(() => {
-              const selection = quill.value.getSelection(true)
+              let selection = null
+              try {
+                selection = quill.value?.getSelection ? quill.value.getSelection() : null
+              } catch (selectionError) {
+                selection = null
+              }
+
               if (selection && selection.length === 0) {
                 // User is typing (cursor position, not selection)
                 const cursorIndex = selection.index
@@ -266,7 +242,13 @@ onMounted(async () => {
       quill.value.root.addEventListener('keydown', (e) => {
         // Only handle regular typing keys (not special keys like Enter, Backspace, etc.)
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          const selection = quill.value.getSelection(true)
+          let selection = null
+          try {
+            selection = quill.value?.getSelection ? quill.value.getSelection() : null
+          } catch (selectionError) {
+            selection = null
+          }
+
           if (selection && selection.length === 0) {
             const format = quill.value.getFormat(selection.index, 1)
             if (format && format.background) {
@@ -331,7 +313,7 @@ onMounted(async () => {
     if (editorRef.value) {
       editorRef.value.innerHTML = `
         <div style="padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;">
-          <p style="color: #ef4444; margin: 0;">Quill editor failed to load. Please check your internet connection.</p>
+          <p style="color: #ef4444; margin: 0;">Quill editor failed to load.</p>
           <textarea 
             style="width: 100%; min-height: 300px; margin-top: 10px; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px;"
             placeholder="Fallback text editor - ${props.placeholder}"

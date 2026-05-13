@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { requiredValidator, emailValidator } from '@/utils/validators'
 import { supabase } from '@/utils/supabase'
@@ -49,24 +49,6 @@ function togglePassword() {
   showPassword.value = !showPassword.value
 }
 
-// Handle back button navigation prevention
-const handlePopState = () => {
-  const isLoggedIn = localStorage.getItem('isLoggedIn')
-  if (!isLoggedIn || isLoggedIn === 'false') {
-    // Preserve history state when manipulating
-    window.history.pushState(history.state, '', window.location.href)
-  }
-}
-
-// Prevent navigation to dashboard when not logged in
-const preventUnauthorizedNavigation = () => {
-  const isLoggedIn = localStorage.getItem('isLoggedIn')
-  if (!isLoggedIn || isLoggedIn === 'false') {
-    // Preserve history state when manipulating
-    window.history.replaceState(history.state, '', window.location.href)
-  }
-}
-
 onMounted(async () => {
   const urlParams = new URLSearchParams(window.location.search)
 
@@ -107,13 +89,6 @@ onMounted(async () => {
 
   // No session - enable the form
   loading.value = false
-
-  preventUnauthorizedNavigation()
-  window.addEventListener('popstate', handlePopState)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('popstate', handlePopState)
 })
 
 // Sign in with password

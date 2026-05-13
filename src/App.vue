@@ -4,19 +4,59 @@ import { supabase } from '@/utils/supabase'
 import { onMounted, onUnmounted } from 'vue'
 import { accessDeniedState, hideAccessDenied } from '@/stores/accessDenied'
 import { startPresenceTracking } from '@/utils/presence'
+import { addUserToProfiles } from '@/utils/autoAddUser'
 
 const router = useRouter()
 let stopPresenceTracking = null
+let authSubscription = null
+
+const syncAuthContext = async (user) => {
+  if (!user) return
+
+  if (user.email) {
+    localStorage.setItem('userEmail', user.email)
+  }
+
+  const hasProfileContext =
+    !!localStorage.getItem('userRole') &&
+    !!localStorage.getItem('accessRole') &&
+    !!localStorage.getItem('userId')
+
+  if (!hasProfileContext) {
+    await addUserToProfiles(user)
+  }
+}
 
 const dismissAccessDenied = () => {
   hideAccessDenied()
 }
 
+const followAccessDeniedAction = () => {
+  const target = accessDeniedState.actionTo
+  hideAccessDenied()
+
+  if (target) {
+    router.push(target)
+  }
+}
+
 onMounted(async () => {
   stopPresenceTracking = await startPresenceTracking()
 
+  // Bootstrap local auth/profile context after page refresh.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (session?.user) {
+    await syncAuthContext(session.user)
+  }
+
   // Listen for auth state changes - Supabase will automatically process hash params
-  supabase.auth.onAuthStateChange(async (event) => {
+  const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (session?.user) {
+      await syncAuthContext(session.user)
+    }
+
     // If user clicked password recovery link, redirect to reset password page
     if (event === 'PASSWORD_RECOVERY') {
       // Small delay to ensure session is fully established
@@ -24,11 +64,17 @@ onMounted(async () => {
       router.push('/auth/reset-password')
     }
   })
+  authSubscription = data?.subscription || null
 })
 
 onUnmounted(() => {
   if (stopPresenceTracking) {
     stopPresenceTracking()
+  }
+
+  if (authSubscription) {
+    authSubscription.unsubscribe()
+    authSubscription = null
   }
 })
 </script>
@@ -51,8 +97,10 @@ onUnmounted(() => {
         </div>
 
         <p class="access-denied-message">
-          You don't have permission to access this section. It is reserved for authorized personnel
-          only.
+          {{
+            accessDeniedState.message ||
+            "You don't have permission to access this section. It is reserved for authorized personnel only."
+          }}
         </p>
 
         <div class="access-denied-details">
@@ -68,11 +116,22 @@ onUnmounted(() => {
         </div>
 
         <p class="access-denied-hint">
-          Contact the system administrator if you believe this is an error.
+          {{
+            accessDeniedState.hint ||
+            'Contact the system administrator if you believe this is an error.'
+          }}
         </p>
       </div>
 
       <div class="access-denied-footer">
+        <v-btn
+          v-if="accessDeniedState.actionLabel && accessDeniedState.actionTo"
+          variant="flat"
+          class="access-denied-action-btn"
+          @click="followAccessDeniedAction"
+        >
+          {{ accessDeniedState.actionLabel }}
+        </v-btn>
         <v-btn variant="flat" class="access-denied-ok-btn" @click="dismissAccessDenied">
           Understood
         </v-btn>
@@ -215,9 +274,11 @@ body {
   padding: 14px 24px;
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
 }
 
-.access-denied-ok-btn {
+.access-denied-ok-btn,
+.access-denied-action-btn {
   background: #353535 !important;
   color: #ffffff !important;
   font-weight: 600 !important;
@@ -233,5 +294,14 @@ body {
 .access-denied-ok-btn:hover {
   background: #1f1f1f !important;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.access-denied-action-btn {
+  background: #f5c52b !important;
+  color: #353535 !important;
+}
+
+.access-denied-action-btn:hover {
+  background: #eab308 !important;
 }
 </style>

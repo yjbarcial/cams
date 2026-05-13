@@ -1,35 +1,6 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
-
-// Prevent back navigation to login page
-const preventBackToLogin = () => {
-  // Add a new history entry to prevent going back
-  window.history.pushState(history.state, '', window.location.href)
-}
-
-// Handle browser back button
-const handlePopState = () => {
-  // Push the current state again to prevent going back
-  window.history.pushState(history.state, '', window.location.href)
-}
-
-onMounted(() => {
-  // Prevent back navigation when component mounts
-  preventBackToLogin()
-
-  // Listen for back button attempts
-  window.addEventListener('popstate', handlePopState)
-
-  // Replace the current history entry to remove login page from history
-  window.history.replaceState(history.state, '', window.location.href)
-})
-
-onUnmounted(() => {
-  // Clean up event listener
-  window.removeEventListener('popstate', handlePopState)
-})
 </script>
 
 <template>
