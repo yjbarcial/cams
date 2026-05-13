@@ -394,6 +394,29 @@ const loadProjectData = async () => {
 
     console.log('✅ Project loaded from Supabase:', foundProject)
 
+    const normalizedStatus = String(foundProject.status || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+    const normalizedType = String(foundProject.project_type || route.query.type || '')
+      .trim()
+      .toLowerCase()
+    const isOtherLikeType = normalizedType === 'other' || normalizedType === 'social-media'
+
+    const isAllowed = isOnlineAccountsManager
+      ? normalizedStatus === 'to_online_accounts_manager' ||
+        (normalizedStatus === 'for_publish' && isOtherLikeType)
+      : normalizedStatus === 'for_publish' && !isOtherLikeType
+
+    if (!isAllowed) {
+      showNotification('This project is not yet in your workflow stage', 'warning')
+      const routePath = isOtherLikeType ? '/other' : `/${normalizedType || 'magazine'}`
+      setTimeout(() => {
+        router.push(routePath)
+      }, 400)
+      return
+    }
+
     // Load project members with their profile info
     const members = await projectsService.getMembers(projectId)
     console.log('✅ Project members loaded:', members)

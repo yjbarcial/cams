@@ -574,6 +574,13 @@ const canViewProject = computed(() => {
   const userId = localStorage.getItem('userId')
   const effectiveUserId = userId || currentUserProfile.value?.id
 
+  if (
+    userRole !== 'admin' &&
+    (accessRole === 'archival_manager' || accessRole === 'online_accounts_manager')
+  ) {
+    return false
+  }
+
   // All higher ranks can VIEW projects (but not necessarily EDIT)
   if (
     userRole === 'admin' ||

@@ -15,6 +15,7 @@ const roleDisplayMap = {
   editor_in_chief: 'Editor-in-Chief',
   chief_adviser: 'Chief Adviser',
   archival_manager: 'Archival Manager',
+  assigned_member: 'Assigned Project Member',
   technical_editor: 'Technical Editor',
   creative_director: 'Creative Director',
   section_head: 'Section Head',

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { projectsService, profilesService, archivesService } from '@/services/supabaseService'
 import { deleteProjectNotifications } from '@/services/notificationsService'
 import { supabase } from '@/utils/supabase'
@@ -7,6 +8,8 @@ import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import UploadView from '@/views/system/UploadView.vue'
 import clearClientData from '@/utils/clearClientData'
+
+const router = useRouter()
 
 // State for statistics and content
 const statistics = ref({
@@ -114,7 +117,26 @@ const handleUploadError = (message) => {
   displayNotification(message || 'Upload failed', 'error')
 }
 
-const activeTab = ref('users')
+const effectiveUserRole = ref(localStorage.getItem('debugRole') || localStorage.getItem('userRole') || '')
+const effectiveAccessRole = ref(localStorage.getItem('accessRole') || '')
+const canManageUsers = computed(() => effectiveUserRole.value === 'admin')
+const canDeleteRecords = computed(() => effectiveUserRole.value === 'admin')
+const canClearLocalData = computed(() => effectiveUserRole.value === 'admin')
+const canReviewForPublishProjects = computed(
+  () => effectiveUserRole.value !== 'admin' && effectiveAccessRole.value === 'archival_manager',
+)
+const canShowProjectActionCol = computed(
+  () => canDeleteRecords.value || canReviewForPublishProjects.value,
+)
+const dashboardTitle = computed(() =>
+  canManageUsers.value ? 'System Admin Dashboard' : 'Archival Manager Dashboard',
+)
+const dashboardSubtitle = computed(() =>
+  canManageUsers.value ? 'Content & Archival Management System' : 'Review & Publication Queue',
+)
+const statsColMd = computed(() => (canManageUsers.value ? 3 : 6))
+
+const activeTab = ref(canManageUsers.value ? 'users' : 'projects')
 const projectSearch = ref('')
 const projectTypeFilter = ref(null)
 const projectStatusFilter = ref(null)
@@ -203,32 +225,26 @@ const loadAllProjects = async () => {
       `,
     )
 
-    // Filter projects based on user role
+    // Filter projects based on role/accessRole
     if (userRole === 'admin') {
-      // System admins see only published projects
       query = query.eq('status', 'Published')
+    } else if (accessRole === 'online_accounts_manager') {
+      query = query.or(
+        'status.eq.to_online_accounts_manager,and(status.eq.For Publish,project_type.eq.other)',
+      )
+    } else if (accessRole === 'archival_manager') {
+      query = query.eq('status', 'For Publish').neq('project_type', 'other')
     } else if (userRole === 'editor') {
-      // Content administrators see projects at their workflow stage
-      if (accessRole === 'online_accounts_manager') {
-        // Online Accounts Manager sees: to_online_accounts_manager and for_publish for 'other' projects
-        query = query.or(
-          'status.eq.to_online_accounts_manager,and(status.eq.For Publish,project_type.eq.other)',
-        )
-      } else if (accessRole === 'archival_manager') {
-        // Archival Managers see: for_publish for non-'other' projects
-        query = query.and('status.eq.For Publish').neq('project_type', 'other')
-      } else if (accessRole === 'editor_in_chief') {
+      if (accessRole === 'editor_in_chief') {
         query = query.eq('status', 'to_editor_in_chief')
       } else if (accessRole === 'technical_editor' || accessRole === 'creative_director') {
         query = query.or('status.eq.to_technical_editor,status.eq.to_creative_director')
       } else if (accessRole === 'chief_adviser') {
         query = query.eq('status', 'to_chief_adviser')
       } else {
-        // Default for other editors: show published
         query = query.eq('status', 'Published')
       }
     } else {
-      // Other roles (section_head, member) see only published projects
       query = query.eq('status', 'Published')
     }
 
@@ -281,8 +297,12 @@ const loadAllProjects = async () => {
 const refreshData = async () => {
   try {
     refreshing.value = true
-    const realUsers = await fetchRealUsers()
-    users.value = realUsers
+    if (canManageUsers.value) {
+      const realUsers = await fetchRealUsers()
+      users.value = realUsers
+    } else {
+      users.value = []
+    }
 
     const allProjects = await loadAllProjects()
     projects.value = allProjects
@@ -292,8 +312,10 @@ const refreshData = async () => {
     publications.value = allPublications
 
     // Update statistics - show ALL items
-    statistics.value.totalUsers = users.value.length
-    statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
+    statistics.value.totalUsers = canManageUsers.value ? users.value.length : 0
+    statistics.value.activeUsers = canManageUsers.value
+      ? users.value.filter((u) => u.status === 'active').length
+      : 0
     statistics.value.totalProjects = allProjects.length
     statistics.value.activeProjects = allProjects.filter(
       (p) => p.status === 'in_progress' || p.status === 'under_review',
@@ -429,7 +451,6 @@ const fetchRealUsers = async () => {
         updated_at: user.updated_at,
         last_sign_in: user.last_login,
         last_active: user.last_active,
-        updated_at: user.updated_at,
       }
     })
   } catch (err) {
@@ -445,8 +466,12 @@ onMounted(async () => {
     loading.value = true
 
     // Fetch REAL users from Supabase
-    const realUsers = await fetchRealUsers()
-    users.value = realUsers
+    if (canManageUsers.value) {
+      const realUsers = await fetchRealUsers()
+      users.value = realUsers
+    } else {
+      users.value = []
+    }
 
     // Load projects from Supabase (with localStorage fallback)
     const allProjects = await loadAllProjects()
@@ -458,8 +483,8 @@ onMounted(async () => {
 
     // Update statistics - show ALL items in scrollable tables
     statistics.value = {
-      totalUsers: users.value.length,
-      activeUsers: users.value.filter((u) => u.status === 'active').length,
+      totalUsers: canManageUsers.value ? users.value.length : 0,
+      activeUsers: canManageUsers.value ? users.value.filter((u) => u.status === 'active').length : 0,
       totalProjects: allProjects.length,
       activeProjects: allProjects.filter(
         (p) => p.status === 'in_progress' || p.status === 'under_review',
@@ -505,34 +530,36 @@ onMounted(async () => {
       )
     }
 
-    try {
-      profilesSubscription = supabase
-        .channel('profiles-presence-changes')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'profiles' },
-          async (payload) => {
-            console.log('📡 Profile status update received:', payload)
-            const realUsers = await fetchRealUsers()
-            users.value = realUsers
-            statistics.value.totalUsers = users.value.length
-            statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
-          },
+    if (canManageUsers.value) {
+      try {
+        profilesSubscription = supabase
+          .channel('profiles-presence-changes')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'profiles' },
+            async (payload) => {
+              console.log('📡 Profile status update received:', payload)
+              const realUsers = await fetchRealUsers()
+              users.value = realUsers
+              statistics.value.totalUsers = users.value.length
+              statistics.value.activeUsers = users.value.filter((u) => u.status === 'active').length
+            },
+          )
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Real-time subscription active for profiles')
+            } else if (status === 'CHANNEL_ERROR') {
+              console.warn('⚠️ Profile real-time subscription error (non-critical)')
+            } else if (status === 'TIMED_OUT') {
+              console.warn('⚠️ Profile real-time subscription timed out (non-critical)')
+            }
+          })
+      } catch (subscriptionError) {
+        console.warn(
+          '⚠️ Could not establish profile real-time subscription (non-critical):',
+          subscriptionError,
         )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Real-time subscription active for profiles')
-          } else if (status === 'CHANNEL_ERROR') {
-            console.warn('⚠️ Profile real-time subscription error (non-critical)')
-          } else if (status === 'TIMED_OUT') {
-            console.warn('⚠️ Profile real-time subscription timed out (non-critical)')
-          }
-        })
-    } catch (subscriptionError) {
-      console.warn(
-        '⚠️ Could not establish profile real-time subscription (non-critical):',
-        subscriptionError,
-      )
+      }
     }
   } catch (err) {
     console.error('❌ Error in onMounted:', err)
@@ -585,6 +612,8 @@ const getUserStatusClass = (status) => {
 
 const getUserStatusText = (status) => {
   if (status === 'pending') return 'Pending Approval'
+  if (status === 'active') return 'Online'
+  if (status === 'inactive') return 'Offline'
   return formatText(status)
 }
 
@@ -713,6 +742,8 @@ const visibleProjects = computed(() => {
   return sortItems(items, projectSortBy.value, projectSortOrder.value, getProjectSortValue)
 })
 
+const projectTableColspan = computed(() => (canShowProjectActionCol.value ? 7 : 6))
+
 const visiblePublications = computed(() => {
   const key = (publicationSearch.value || '').toLowerCase().trim()
 
@@ -730,6 +761,21 @@ const visiblePublications = computed(() => {
 
   return sortItems(items, publicationSortBy.value, publicationSortOrder.value, getPublicationSortValue)
 })
+
+const publicationTableColspan = computed(() => (canDeleteRecords.value ? 5 : 4))
+
+const normalizeStatus = (status) => {
+  return String(status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+}
+
+const openForPublishProject = (project) => {
+  if (!project?.id) return
+  if (normalizeStatus(project.status) !== 'for_publish') return
+  router.push({ name: 'archival-manager', params: { id: project.id } })
+}
 
 // Format date helper
 const formatDate = (date) => {
@@ -962,8 +1008,8 @@ const performClearClientData = async () => {
                       <v-icon size="28" color="white">mdi-view-dashboard</v-icon>
                     </div>
                     <div class="ml-3">
-                      <div class="text-h5 font-weight-bold">System Admin Dashboard</div>
-                      <div class="text-caption text-grey">Content & Archival Management System</div>
+                      <div class="text-h5 font-weight-bold">{{ dashboardTitle }}</div>
+                      <div class="text-caption text-grey">{{ dashboardSubtitle }}</div>
                     </div>
                   </div>
                   <div class="d-flex gap-2">
@@ -978,6 +1024,7 @@ const performClearClientData = async () => {
                       Refresh
                     </v-btn>
                     <v-btn
+                      v-if="canClearLocalData"
                       color="error"
                       variant="outlined"
                       @click="showClearDialog = true"
@@ -992,7 +1039,7 @@ const performClearClientData = async () => {
               <v-card-text class="px-6 pb-6">
                 <v-row class="stats-cards">
                   <!-- Stats Cards -->
-                  <v-col cols="12" sm="6" md="3">
+                  <v-col v-if="canManageUsers" cols="12" sm="6" md="3">
                     <v-card class="stat-card stat-card-primary" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -1006,7 +1053,7 @@ const performClearClientData = async () => {
                     </v-card>
                   </v-col>
 
-                  <v-col cols="12" sm="6" md="3">
+                  <v-col v-if="canManageUsers" cols="12" sm="6" md="3">
                     <v-card class="stat-card stat-card-success" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -1020,7 +1067,7 @@ const performClearClientData = async () => {
                     </v-card>
                   </v-col>
 
-                  <v-col cols="12" sm="6" md="3">
+                  <v-col cols="12" sm="6" :md="statsColMd">
                     <v-card class="stat-card stat-card-info" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -1028,13 +1075,15 @@ const performClearClientData = async () => {
                         </div>
                         <div class="stat-info">
                           <div class="stat-value">{{ statistics.totalProjects }}</div>
-                          <div class="stat-label">Total Projects</div>
+                          <div class="stat-label">
+                            {{ canManageUsers ? 'Total Projects' : 'For Publish Queue' }}
+                          </div>
                         </div>
                       </div>
                     </v-card>
                   </v-col>
 
-                  <v-col cols="12" sm="6" md="3">
+                  <v-col cols="12" sm="6" :md="statsColMd">
                     <v-card class="stat-card stat-card-light" elevation="0">
                       <div class="stat-card-content">
                         <div class="stat-icon-wrapper">
@@ -1050,7 +1099,7 @@ const performClearClientData = async () => {
                 </v-row>
 
                 <!-- Clear Local Data Confirmation Dialog -->
-                <v-dialog v-model="showClearDialog" max-width="600">
+                <v-dialog v-if="canClearLocalData" v-model="showClearDialog" max-width="600">
                   <v-card>
                     <v-card-title class="text-h6 d-flex justify-space-between align-center">
                       <div>
@@ -1109,7 +1158,7 @@ const performClearClientData = async () => {
                 </v-dialog>
 
                 <!-- Delete Publication Confirmation Dialog -->
-                <v-dialog v-model="showDeleteDialog" max-width="560px" persistent>
+                <v-dialog v-if="canDeleteRecords" v-model="showDeleteDialog" max-width="560px" persistent>
                   <v-card class="edit-user-card delete-dialog-card">
                     <v-card-title class="edit-user-header delete-dialog-header">
                       <div class="header-content">
@@ -1178,7 +1227,12 @@ const performClearClientData = async () => {
                 </v-dialog>
 
                 <!-- Delete Project Confirmation Dialog -->
-                <v-dialog v-model="showDeleteProjectDialog" max-width="560px" persistent>
+                <v-dialog
+                  v-if="canDeleteRecords"
+                  v-model="showDeleteProjectDialog"
+                  max-width="560px"
+                  persistent
+                >
                   <v-card class="edit-user-card delete-dialog-card">
                     <v-card-title class="edit-user-header delete-dialog-header">
                       <div class="header-content">
@@ -1260,6 +1314,7 @@ const performClearClientData = async () => {
               <v-divider />
               <v-list nav density="comfortable" class="admin-sidebar-list">
                 <v-list-item
+                  v-if="canManageUsers"
                   :active="activeTab === 'users'"
                   @click="activeTab = 'users'"
                   rounded="lg"
@@ -1307,7 +1362,7 @@ const performClearClientData = async () => {
             <v-card elevation="2" class="admin-section-card">
               <div class="d-flex d-md-none">
                 <v-tabs v-model="activeTab" bg-color="#fafafa" color="#f5c52b" class="w-100">
-                  <v-tab value="users">
+                  <v-tab v-if="canManageUsers" value="users">
                     <v-icon start size="20" color="#424242">mdi-account-group</v-icon>
                     Users
                   </v-tab>
@@ -1329,7 +1384,7 @@ const performClearClientData = async () => {
 
               <v-window v-model="activeTab" class="admin-section-window">
                 <!-- User Management Tab -->
-                <v-window-item value="users">
+                <v-window-item v-if="canManageUsers" value="users">
                   <v-card-text>
                     <div class="user-management-panel">
                       <div class="user-management-header">
@@ -1527,7 +1582,13 @@ const performClearClientData = async () => {
                             <th>Status</th>
                             <th>Created By</th>
                             <th>Date</th>
-                            <th class="text-center" style="width: 120px">Actions</th>
+                            <th
+                              v-if="canShowProjectActionCol"
+                              class="text-center"
+                              style="width: 120px"
+                            >
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1542,8 +1603,9 @@ const performClearClientData = async () => {
                             </td>
                             <td>{{ project.user?.full_name || project.sectionHead }}</td>
                             <td>{{ formatDate(project.created_at) }}</td>
-                            <td class="text-center">
+                            <td v-if="canShowProjectActionCol" class="text-center">
                               <v-btn
+                                v-if="canDeleteRecords"
                                 icon
                                 size="small"
                                 color="error"
@@ -1553,10 +1615,23 @@ const performClearClientData = async () => {
                               >
                                 <v-icon>mdi-delete</v-icon>
                               </v-btn>
+                              <v-btn
+                                v-else
+                                icon
+                                size="small"
+                                color="primary"
+                                variant="text"
+                                @click="openForPublishProject(project)"
+                                title="Open For Publish"
+                              >
+                                <v-icon>mdi-publish</v-icon>
+                              </v-btn>
                             </td>
                           </tr>
                           <tr v-if="visibleProjects.length === 0">
-                            <td colspan="7" class="text-center text-grey py-6">No projects found.</td>
+                            <td :colspan="projectTableColspan" class="text-center text-grey py-6">
+                              No projects found.
+                            </td>
                           </tr>
                         </tbody>
                       </v-table>
@@ -1634,7 +1709,9 @@ const performClearClientData = async () => {
                             <th>Title</th>
                             <th>Category</th>
                             <th>Date Published</th>
-                            <th class="text-center" style="width: 120px">Actions</th>
+                            <th v-if="canDeleteRecords" class="text-center" style="width: 120px">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1650,7 +1727,7 @@ const performClearClientData = async () => {
                               </v-chip>
                             </td>
                             <td>{{ formatDate(publication.created_at) }}</td>
-                            <td class="text-center">
+                            <td v-if="canDeleteRecords" class="text-center">
                               <v-btn
                                 icon
                                 size="small"
@@ -1664,7 +1741,7 @@ const performClearClientData = async () => {
                             </td>
                           </tr>
                           <tr v-if="visiblePublications.length === 0">
-                            <td colspan="5" class="text-center text-grey py-6">
+                            <td :colspan="publicationTableColspan" class="text-center text-grey py-6">
                               No publications found. Upload content to get started.
                             </td>
                           </tr>
@@ -1766,7 +1843,7 @@ const performClearClientData = async () => {
     </Teleport>
 
     <!-- Delete User Dialog -->
-    <v-dialog v-model="showDeleteUserDialog" max-width="560px" persistent>
+    <v-dialog v-if="canManageUsers" v-model="showDeleteUserDialog" max-width="560px" persistent>
       <v-card class="edit-user-card delete-dialog-card">
         <v-card-title class="edit-user-header delete-dialog-header">
           <div class="header-content">
@@ -1836,7 +1913,7 @@ const performClearClientData = async () => {
     </v-dialog>
 
     <!-- Edit User Dialog -->
-    <v-dialog v-model="showEditUserDialog" max-width="560px">
+    <v-dialog v-if="canManageUsers" v-model="showEditUserDialog" max-width="560px">
       <v-card class="edit-user-card">
         <!-- Header -->
         <v-card-title class="edit-user-header">
@@ -1876,7 +1953,6 @@ const performClearClientData = async () => {
                   v-for="action in approvalStatusActions"
                   :key="action.value"
                   class="approval-action-btn"
-                  :class="{ 'approval-action-active': editFormData.status === action.value }"
                   variant="outlined"
                   size="large"
                   :disabled="editLoading"
@@ -1956,7 +2032,7 @@ const performClearClientData = async () => {
           >
             Cancel
           </v-btn>
-          <v-btn color="white" class="save-btn" @click="saveUserChanges" :loading="editLoading">
+          <v-btn class="save-btn" @click="saveUserChanges" :loading="editLoading">
             Save Changes
           </v-btn>
         </v-card-actions>
@@ -1966,6 +2042,17 @@ const performClearClientData = async () => {
 </template>
 
 <style scoped>
+:global(:root) {
+  --admin-primary: #374151;
+  --admin-accent: #f5c52b;
+  --admin-bg: #f7f7f8;
+  --admin-surface: #ffffff;
+  --admin-border: #e5e7eb;
+  --admin-border-soft: #eef0f4;
+  --admin-text: #111827;
+  --admin-muted: #6b7280;
+}
+
 .admin-page {
   --admin-primary: #374151;
   --admin-accent: #f5c52b;
@@ -2184,12 +2271,6 @@ const performClearClientData = async () => {
   font-weight: 700;
   border-radius: 8px !important;
   background: #fff !important;
-}
-
-.approval-action-active {
-  background: var(--admin-primary) !important;
-  border-color: var(--admin-primary) !important;
-  color: #fff !important;
 }
 
 .status-helper {

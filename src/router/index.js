@@ -45,7 +45,8 @@ const requireAdmin = (to, from, next) => {
   }
 
   const userRole = getEffectiveUserRole()
-  if (userRole !== 'admin') {
+  const accessRole = localStorage.getItem('accessRole')
+  if (userRole !== 'admin' && accessRole !== 'archival_manager') {
     // Not a System Admin - redirect to dashboard
     next({ name: 'dashboard' })
   } else {
@@ -144,6 +145,27 @@ const checkAuth = (to, from, next) => {
     return false
   }
   return true
+}
+
+const requireProjectPageAccess = (to, from, next) => {
+  if (!checkAuth(to, from, next)) return
+  const accessRole = localStorage.getItem('accessRole')
+  const userRole = getEffectiveUserRole()
+
+  if (
+    userRole !== 'admin' &&
+    (accessRole === 'archival_manager' || accessRole === 'online_accounts_manager')
+  ) {
+    showAccessDenied('assigned_member')
+    if (from?.name) {
+      next(false)
+    } else {
+      next({ name: 'dashboard' })
+    }
+    return
+  }
+
+  next()
 }
 
 const router = createRouter({
@@ -284,7 +306,7 @@ const router = createRouter({
       name: 'project',
       component: ProjectView,
       props: true,
-      beforeEnter: requireAuth,
+      beforeEnter: requireProjectPageAccess,
     },
 
     // Approval Routes - Updated Flow: Section Head → Technical Editor → EIC → Chief Adviser → Archival Manager

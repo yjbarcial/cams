@@ -51,6 +51,9 @@ const loadProjects = async () => {
     const userRole = localStorage.getItem('userRole')
     const accessRole = localStorage.getItem('accessRole')
     const userId = localStorage.getItem('userId')
+    const userEmail = localStorage.getItem('userEmail')
+    const isAdminUser =
+      userRole === 'admin' || ADMIN_EMAILS.some((email) => email.toLowerCase() === userEmail?.toLowerCase())
 
     // Build base query
     let query = supabase
@@ -65,8 +68,16 @@ const loadProjects = async () => {
       .eq('project_type', 'folio')
       .order('created_at', { ascending: false })
 
-    // If user is a member (writer/artist), only show their projects
-    if (userRole === 'member' && accessRole !== 'section_head' && userId) {
+    if (!isAdminUser && accessRole === 'online_accounts_manager') {
+      projects.value = []
+      return
+    } else if (
+      userRole === 'member' &&
+      accessRole !== 'section_head' &&
+      accessRole !== 'archival_manager' &&
+      accessRole !== 'online_accounts_manager' &&
+      userId
+    ) {
       query = query.filter('project_members.user_id', 'eq', userId)
     }
     // section_head, editor, and admin see all projects
@@ -277,6 +288,12 @@ const filteredProjects = computed(() => {
 
   // Filter out published projects (they're in Archive now)
   filtered = filtered.filter((project) => project.status !== 'Published')
+
+  const accessRole = localStorage.getItem('accessRole')
+  const userRole = localStorage.getItem('userRole')
+  if (accessRole === 'archival_manager' && userRole !== 'admin') {
+    filtered = filtered.filter((project) => project.status !== 'For Publish' && project.status !== 'for_publish')
+  }
 
   if (searchQuery.value) {
     filtered = filtered.filter(

@@ -53,10 +53,10 @@ const handleStorageChange = (e) => {
   }
 }
 
-// Check if current user is a System Admin (database-driven)
-const isAdmin = computed(() => {
-  const userRole = localStorage.getItem('userRole')
-  return userRole === 'admin'
+const canOpenAdminPanel = computed(() => {
+  const userRole = localStorage.getItem('debugRole') || localStorage.getItem('userRole')
+  const accessRole = localStorage.getItem('accessRole')
+  return userRole === 'admin' || accessRole === 'archival_manager'
 })
 
 const handleProfile = () => {
@@ -131,7 +131,7 @@ const goToDashboard = () => {
 
       <!-- System Admin icon - only visible for system admins -->
       <RouterLink
-        v-if="isAdmin"
+        v-if="canOpenAdminPanel"
         to="/admin"
         class="icon-button"
         aria-label="System Admin Panel"
