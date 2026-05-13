@@ -275,6 +275,8 @@ const assignProject = async () => {
     return
   }
 
+  let createdProjectId = null
+
   try {
     // Get current user info first
     const {
@@ -296,6 +298,7 @@ const assignProject = async () => {
     }
 
     const newProject = await projectsService.create(projectData)
+    createdProjectId = newProject.id
     const creatorName = currentUserProfile
       ? `${currentUserProfile.first_name} ${currentUserProfile.last_name}`.trim()
       : currentUserEmail
@@ -394,7 +397,26 @@ const assignProject = async () => {
     await router.push(cancelPath.value)
   } catch (error) {
     console.error('Error creating project:', error)
-    showNotification(error.error?.message || 'Failed to create project', 'error')
+
+    if (createdProjectId) {
+      try {
+        await projectsService.delete(createdProjectId)
+      } catch (cleanupError) {
+        console.error('Error cleaning up incomplete project:', cleanupError)
+      }
+    }
+
+    const isProjectMembersPolicyError =
+      error?.code === '42501' ||
+      error?.message?.includes('project_members') ||
+      error?.message?.includes('row-level security')
+
+    showNotification(
+      isProjectMembersPolicyError
+        ? 'Project member assignment is blocked by database permissions. Please ask an admin to run the project members RLS policy fix.'
+        : error.error?.message || 'Failed to create project',
+      'error',
+    )
   }
 }
 

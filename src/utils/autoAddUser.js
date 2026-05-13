@@ -45,13 +45,14 @@ export async function getUserProfileByEmail(email) {
 }
 
 function getAccessRole(userRole, designationLabel) {
+  const role = normalizeText(userRole)
   const label = String(designationLabel || '').toLowerCase()
 
-  if (userRole === 'admin') {
+  if (role === 'admin') {
     return 'admin'
   }
 
-  if (userRole === 'section_head' || label.includes('section head')) {
+  if (role === 'section_head' || label.includes('section head')) {
     return 'section_head'
   }
 
@@ -74,10 +75,10 @@ function getAccessRole(userRole, designationLabel) {
     return 'online_accounts_manager'
   }
 
-  if (userRole === 'editor') {
+  if (role === 'editor') {
     return 'editor'
   }
-  if (userRole === 'member') {
+  if (role === 'member') {
     return 'member'
   }
 
@@ -240,7 +241,7 @@ export async function addUserToProfiles(user, profileData = {}) {
         console.error('Error updating:', updateError)
         return false
       } else {
-        const resolvedRole = existingUser.role
+        const resolvedRole = normalizeText(existingUser.role)
         localStorage.setItem('userRole', resolvedRole)
         localStorage.setItem('userId', existingUser.id)
 

@@ -22,8 +22,14 @@ import ChiefAdviserView from '@/views/system/ChiefAdviserView.vue'
 import ArchivalManagerView from '@/views/system/ArchivalManagerView.vue'
 import { showAccessDenied } from '@/stores/accessDenied'
 
+const normalizeRole = (role) =>
+  String(role || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+
 const getEffectiveUserRole = () => {
-  return localStorage.getItem('debugRole') || localStorage.getItem('userRole')
+  return normalizeRole(localStorage.getItem('debugRole') || localStorage.getItem('userRole'))
 }
 
 // Authentication guard
@@ -45,7 +51,7 @@ const requireAdmin = (to, from, next) => {
   }
 
   const userRole = getEffectiveUserRole()
-  const accessRole = localStorage.getItem('accessRole')
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
   if (
     userRole !== 'admin' &&
     accessRole !== 'archival_manager' &&
@@ -60,7 +66,7 @@ const requireAdmin = (to, from, next) => {
 
 const isPublicationManager = () => {
   const userRole = getEffectiveUserRole()
-  const accessRole = localStorage.getItem('accessRole')
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
 
   return (
     userRole !== 'admin' &&
@@ -100,7 +106,7 @@ const requireSectionHead = (to, from, next) => {
   }
 
   const userRole = getEffectiveUserRole()
-  const accessRole = localStorage.getItem('accessRole')
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
 
   // Allow if admin or section head
   if (accessRole === 'section_head' || userRole === 'section_head' || userRole === 'admin') {
@@ -114,7 +120,7 @@ const requireSectionHead = (to, from, next) => {
 // Specific editor role guards
 const requireEditorInChief = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
-  const accessRole = localStorage.getItem('accessRole')
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
   const userRole = getEffectiveUserRole()
 
   if (accessRole === 'editor_in_chief' || userRole === 'admin') {
@@ -127,7 +133,7 @@ const requireEditorInChief = (to, from, next) => {
 
 const requireChiefAdviser = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
-  const accessRole = localStorage.getItem('accessRole')
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
   const userRole = getEffectiveUserRole()
 
   if (accessRole === 'chief_adviser' || userRole === 'admin') {
@@ -140,7 +146,7 @@ const requireChiefAdviser = (to, from, next) => {
 
 const requireArchivalManager = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
-  const accessRole = localStorage.getItem('accessRole')
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
   const userRole = getEffectiveUserRole()
 
   if (
@@ -158,7 +164,7 @@ const requireArchivalManager = (to, from, next) => {
 // Combined guard for unified Editor Review (both Technical Editor and Creative Director)
 const requireEditorReview = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
-  const accessRole = localStorage.getItem('accessRole')
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
   const userRole = getEffectiveUserRole()
 
   if (
@@ -185,7 +191,7 @@ const checkAuth = (to, from, next) => {
 
 const requireProjectPageAccess = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
-  const accessRole = localStorage.getItem('accessRole')
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
   const userRole = getEffectiveUserRole()
 
   if (

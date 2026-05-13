@@ -53,9 +53,15 @@ const handleStorageChange = (e) => {
   }
 }
 
+const normalizeRole = (role) =>
+  String(role || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+
 const canOpenAdminPanel = computed(() => {
-  const userRole = localStorage.getItem('debugRole') || localStorage.getItem('userRole')
-  const accessRole = localStorage.getItem('accessRole')
+  const userRole = normalizeRole(localStorage.getItem('debugRole') || localStorage.getItem('userRole'))
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
   return (
     userRole === 'admin' ||
     accessRole === 'archival_manager' ||

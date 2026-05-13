@@ -22,6 +22,12 @@ const normalizeEmail = (email) =>
     .trim()
     .toLowerCase()
 
+const normalizeRole = (role) =>
+  String(role || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+
 const STATUS_QUERY_VALUES = {
   for_publish: ['For Publish'],
 }
@@ -43,8 +49,8 @@ const isAdminEmail = (email, adminEmails) => {
 }
 
 export const getProjectListUserContext = (adminEmails = []) => {
-  const userRole = localStorage.getItem('userRole') || ''
-  const accessRole = localStorage.getItem('accessRole') || ''
+  const userRole = normalizeRole(localStorage.getItem('userRole'))
+  const accessRole = normalizeRole(localStorage.getItem('accessRole'))
   const userId = localStorage.getItem('userId') || ''
   const userEmail = localStorage.getItem('userEmail') || ''
 
@@ -64,7 +70,7 @@ export const getProjectMembersSelect = (context, projectType) => {
     : 'project_members(user_id, role)'
 }
 
-export const getVisibilityRule = (context, projectType) => {
+export const getVisibilityRule = (context) => {
   if (!context) return { type: NO_PROJECTS }
   if (context.isAdmin) return { type: ADMIN_ONLY }
 

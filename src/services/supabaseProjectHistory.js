@@ -61,6 +61,8 @@ const getCurrentUserId = async () => {
  * @returns {Object} Version in local format
  */
 const transformVersionFromDB = (dbVersion) => {
+  if (!dbVersion) return null
+
   return {
     id: dbVersion.id,
     projectId: dbVersion.project_id,
@@ -95,6 +97,29 @@ const transformVersionFromDB = (dbVersion) => {
     isDeleted: dbVersion.is_deleted || false,
   }
 }
+
+const buildVersionFallback = ({
+  id,
+  projectId,
+  projectType,
+  versionNumber,
+  versionData,
+  comments = [],
+}) => ({
+  id: id || `local-${projectId}-${versionNumber}-${Date.now()}`,
+  project_id: projectId,
+  project_type: projectType || 'magazine',
+  version_number: versionNumber,
+  created_at: versionData.created_at,
+  author: versionData.metadata?.author || 'Unknown',
+  change_description: versionData.change_description,
+  version_type: versionData.metadata?.versionType || 'draft',
+  project_data: versionData.project_data,
+  metadata: versionData.metadata || {},
+  version_comments: comments,
+  is_active: false,
+  is_deleted: false,
+})
 
 /**
  * Create a new project version snapshot
@@ -347,6 +372,19 @@ export const createProjectVersion = async (
     if (error) {
       console.error('Error creating version in Supabase:', error)
       throw error
+    }
+
+    if (!version) {
+      console.warn(
+        'Project history write succeeded but returned no row. Using local fallback; check project_history SELECT RLS policy if history list is empty.',
+      )
+      version = buildVersionFallback({
+        id: updateExistingVersionId,
+        projectId: actualProjectId,
+        projectType,
+        versionNumber: nextVersionNumber,
+        versionData,
+      })
     }
 
     // Update debounce timer only after successful write.

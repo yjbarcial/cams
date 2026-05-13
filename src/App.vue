@@ -48,21 +48,22 @@ onMounted(async () => {
   const {
     data: { session },
   } = await supabase.auth.getSession()
-  if (session?.user) {
+  if (session?.user && router.currentRoute.value.name !== 'reset-password') {
     await syncAuthContext(session.user)
   }
 
   // Listen for auth state changes - Supabase will automatically process hash params
   const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-    if (session?.user) {
-      await syncAuthContext(session.user)
-    }
-
     // If user clicked password recovery link, redirect to reset password page
     if (event === 'PASSWORD_RECOVERY') {
       // Small delay to ensure session is fully established
       await new Promise((resolve) => setTimeout(resolve, 100))
       router.push('/auth/reset-password')
+      return
+    }
+
+    if (session?.user) {
+      await syncAuthContext(session.user)
     }
   })
   authSubscription = data?.subscription || null

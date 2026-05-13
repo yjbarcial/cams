@@ -161,6 +161,13 @@ const handleUploadError = (message) => {
   displayNotification(message || 'Upload failed', 'error')
 }
 
+const normalizeRole = (role) => {
+  return String(role || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+}
+
 const effectiveUserRole = ref(
   localStorage.getItem('debugRole') || localStorage.getItem('userRole') || '',
 )
@@ -249,8 +256,8 @@ const loadAllProjects = async () => {
     console.log('🔍 Fetching all projects from Supabase...')
 
     // Get user's access role to determine which projects to show
-    const accessRole = localStorage.getItem('accessRole')
-    const userRole = localStorage.getItem('userRole')
+    const accessRole = normalizeRole(localStorage.getItem('accessRole'))
+    const userRole = normalizeRole(localStorage.getItem('userRole'))
 
     // Build query based on user role
     let query = supabase.from('projects').select(
@@ -273,7 +280,7 @@ const loadAllProjects = async () => {
 
     // Filter projects based on role/accessRole
     if (userRole === 'admin') {
-      query = query.eq('status', 'Published')
+      console.log('Admin access: showing all projects')
     } else if (accessRole === 'online_accounts_manager') {
       query = query.or(
         'status.eq.to_online_accounts_manager,and(status.eq.For Publish,project_type.eq.other)',

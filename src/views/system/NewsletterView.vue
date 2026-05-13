@@ -167,6 +167,10 @@ const loadProjects = async () => {
 
         const userContext = getProjectListUserContext(ADMIN_EMAILS)
         const projectMembersSelect = getProjectMembersSelect(userContext, 'newsletter')
+        const relationSelect = userContext.isAdmin
+          ? 'section_head_profile:profiles!section_head_id(id, first_name, last_name, email)'
+          : `section_head_profile:profiles!section_head_id(id, first_name, last_name, email),
+            ${projectMembersSelect}`
 
         // Build base query
         let query = supabase
@@ -174,8 +178,7 @@ const loadProjects = async () => {
           .select(
             `
             *,
-            section_head_profile:profiles!section_head_id(id, first_name, last_name, email),
-            ${projectMembersSelect}
+            ${relationSelect}
           `,
           )
           .eq('project_type', 'newsletter')

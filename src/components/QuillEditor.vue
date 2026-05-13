@@ -154,7 +154,7 @@ onMounted(async () => {
               let selection = null
               try {
                 selection = quill.value?.getSelection ? quill.value.getSelection() : null
-              } catch (selectionError) {
+              } catch {
                 selection = null
               }
 
@@ -245,7 +245,7 @@ onMounted(async () => {
           let selection = null
           try {
             selection = quill.value?.getSelection ? quill.value.getSelection() : null
-          } catch (selectionError) {
+          } catch {
             selection = null
           }
 
