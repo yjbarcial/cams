@@ -1,13 +1,21 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import MainHeader from '@/components/layout/MainHeader.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ProjectHistoryButton from '@/components/ProjectHistoryButton.vue'
 import { supabase } from '@/utils/supabase'
 import { projectsService } from '@/services/supabaseService'
+import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import { deleteProjectNotifications } from '@/services/notificationsService'
 import { getDisplayName } from '@/utils/userDisplay'
+import { addUserToProfiles } from '@/utils/autoAddUser'
+import {
+  applyProjectListVisibility,
+  filterProjectsForCurrentUser,
+  getProjectListUserContext,
+  getProjectMembersSelect,
+} from '@/utils/projectListVisibility'
 
 const router = useRouter()
 const route = useRoute()
@@ -30,10 +38,88 @@ const canAddProject = computed(() => {
 
 // Initialize projects - NO DEFAULT PROJECTS
 const projects = ref([])
+const isLoadingProjects = ref(false)
+let authStateSubscription = null
+const projectCacheKey = 'newsletter_projects_cache'
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const ensureAuthAndProfileContext = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session?.user) {
+    return null
+  }
+
+  // Keep local context in sync so role-based filtering does not race on first load.
+  localStorage.setItem('userEmail', session.user.email || '')
+
+  const hasProfileContext =
+    !!localStorage.getItem('userRole') &&
+    !!localStorage.getItem('accessRole') &&
+    !!localStorage.getItem('userId')
+
+  if (!hasProfileContext) {
+    await addUserToProfiles(session.user)
+  }
+
+  return session.user
+}
+
+const loadCachedProjects = () => {
+  try {
+    const cached = localStorage.getItem(projectCacheKey)
+    if (!cached) return []
+    const parsed = JSON.parse(cached)
+    if (!Array.isArray(parsed)) return []
+    return filterProjectsForCurrentUser(
+      parsed,
+      getProjectListUserContext(ADMIN_EMAILS),
+      'newsletter',
+    )
+  } catch {
+    return []
+  }
+}
+
+const saveCachedProjects = (items) => {
+  try {
+    localStorage.setItem(projectCacheKey, JSON.stringify(items))
+  } catch {
+    // Ignore cache write failures.
+  }
+}
 
 // Load projects from localStorage on component mount
 onMounted(() => {
+  projects.value = loadCachedProjects()
   loadProjects()
+
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    if (session?.user && route.path === '/newsletter') {
+      loadProjects()
+    }
+
+    if (event === 'SIGNED_OUT') {
+      projects.value = []
+    }
+  })
+  authStateSubscription = data?.subscription || null
+
+  window.addEventListener('focus', handleWindowFocus)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onUnmounted(() => {
+  if (authStateSubscription) {
+    authStateSubscription.unsubscribe()
+    authStateSubscription = null
+  }
+
+  window.removeEventListener('focus', handleWindowFocus)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 // Watch for route changes to reload projects
@@ -46,80 +132,120 @@ watch(
   },
 )
 
+const handleWindowFocus = () => {
+  if (route.path === '/newsletter') {
+    loadProjects()
+  }
+}
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible' && route.path === '/newsletter') {
+    loadProjects()
+  }
+}
+
 const loadProjects = async () => {
+  if (isLoadingProjects.value) return
+
+  isLoadingProjects.value = true
+
   try {
-    const userRole = localStorage.getItem('userRole')
-    const accessRole = localStorage.getItem('accessRole')
-    const userId = localStorage.getItem('userId')
-    const userEmail = localStorage.getItem('userEmail')
-    const isAdminUser =
-      userRole === 'admin' || ADMIN_EMAILS.some((email) => email.toLowerCase() === userEmail?.toLowerCase())
+    const maxAttempts = 3
+    let lastError = null
 
-    // Build base query
-    let query = supabase
-      .from('projects')
-      .select(
-        `
-        *,
-        section_head_profile:profiles!section_head_id(id, first_name, last_name, email),
-        project_members(user_id)
-      `,
-      )
-      .eq('project_type', 'newsletter')
-      .order('created_at', { ascending: false })
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const user = await ensureAuthAndProfileContext()
+        if (!user) {
+          if (attempt < maxAttempts) {
+            await delay(300 * attempt)
+            continue
+          }
+          projects.value = []
+          return
+        }
 
-    if (!isAdminUser && accessRole === 'online_accounts_manager') {
-      projects.value = []
-      return
-    } else if (
-      userRole === 'member' &&
-      accessRole !== 'section_head' &&
-      accessRole !== 'archival_manager' &&
-      accessRole !== 'online_accounts_manager' &&
-      userId
-    ) {
-      query = query.filter('project_members.user_id', 'eq', userId)
-    }
-    // section_head, editor, and admin see all projects
+        const userContext = getProjectListUserContext(ADMIN_EMAILS)
+        const projectMembersSelect = getProjectMembersSelect(userContext, 'newsletter')
 
-    const { data, error } = await query
+        // Build base query
+        let query = supabase
+          .from('projects')
+          .select(
+            `
+            *,
+            section_head_profile:profiles!section_head_id(id, first_name, last_name, email),
+            ${projectMembersSelect}
+          `,
+          )
+          .eq('project_type', 'newsletter')
+          .order('created_at', { ascending: false })
 
-    if (error) throw error
+        query = applyProjectListVisibility(query, userContext, 'newsletter')
 
-    projects.value = (data || []).map((project) => {
-      // Build section head name from profile data
-      let sectionHeadName = ''
-      if (project.section_head_profile) {
-        const profile = project.section_head_profile
-        const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
-        sectionHeadName = getDisplayName(profile.email || fullName, {
-          ...profile,
-          full_name: fullName,
+        const { data, error } = await query
+        if (error) throw error
+
+        const visibleProjects = filterProjectsForCurrentUser(data || [], userContext, 'newsletter')
+        const mappedProjects = visibleProjects.map((project) => {
+          let sectionHeadName = ''
+          if (project.section_head_profile) {
+            const profile = project.section_head_profile
+            const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+            sectionHeadName = getDisplayName(profile.email || fullName, {
+              ...profile,
+              full_name: fullName,
+            })
+          }
+
+          const memberIds = (project.project_members || []).map((m) => m.user_id)
+
+          return {
+            ...project,
+            id: project.id,
+            title: project.title,
+            status: project.status,
+            sectionHead: sectionHeadName,
+            sectionHeadId: project.section_head_id,
+            deadline: project.due_date,
+            dueDate: project.due_date,
+            createdAt: project.created_at,
+            updatedAt: project.updated_at,
+            starred: project.is_starred || false,
+            isStarred: project.is_starred || false,
+            memberIds: memberIds,
+          }
         })
-      }
 
-      // Extract member user IDs
-      const memberIds = (project.project_members || []).map((m) => m.user_id)
+        // Handle transient empty responses right after auth/session restore.
+        const shouldRetryEmptyResult =
+          mappedProjects.length === 0 && attempt < maxAttempts && route.path === '/newsletter'
 
-      return {
-        ...project,
-        id: project.id,
-        title: project.title,
-        status: project.status,
-        sectionHead: sectionHeadName,
-        sectionHeadId: project.section_head_id,
-        deadline: project.due_date,
-        dueDate: project.due_date,
-        createdAt: project.created_at,
-        updatedAt: project.updated_at,
-        starred: project.is_starred || false,
-        isStarred: project.is_starred || false,
-        memberIds: memberIds,
+        if (shouldRetryEmptyResult) {
+          await delay(300 * attempt)
+          continue
+        }
+
+        projects.value = mappedProjects
+        saveCachedProjects(mappedProjects)
+        return
+      } catch (attemptError) {
+        lastError = attemptError
+        if (attempt < maxAttempts) {
+          await delay(300 * attempt)
+          continue
+        }
       }
-    })
+    }
+
+    throw lastError || new Error('Unable to load projects')
   } catch (error) {
     console.error('Error loading projects from Supabase:', error)
-    projects.value = []
+    if (projects.value.length === 0) {
+      projects.value = loadCachedProjects()
+    }
+  } finally {
+    isLoadingProjects.value = false
   }
 }
 
@@ -289,12 +415,6 @@ const filteredProjects = computed(() => {
   // Filter out published projects (they're in Archive now)
   filtered = filtered.filter((project) => project.status !== 'Published')
 
-  const accessRole = localStorage.getItem('accessRole')
-  const userRole = localStorage.getItem('userRole')
-  if (accessRole === 'archival_manager' && userRole !== 'admin') {
-    filtered = filtered.filter((project) => project.status !== 'For Publish' && project.status !== 'for_publish')
-  }
-
   // Filter by search query
   if (searchQuery.value) {
     filtered = filtered.filter(
@@ -366,6 +486,42 @@ const startEdit = (project) => {
   showEditDialog.value = true
 }
 
+const getEditorDisplayName = () => {
+  const userEmail = localStorage.getItem('userEmail') || 'Unknown User'
+  return getDisplayName(userEmail)
+}
+
+const getEditChangeSummary = (previousProject, updatedProject) => {
+  const changedFields = []
+  if ((previousProject.title || '') !== (updatedProject.title || '')) changedFields.push('title')
+  if ((previousProject.description || '') !== (updatedProject.description || '')) {
+    changedFields.push('description')
+  }
+  if ((previousProject.status || '') !== (updatedProject.status || '')) changedFields.push('status')
+
+  const previousDueDate =
+    previousProject.deadline || previousProject.due_date || previousProject.dueDate || ''
+  const updatedDueDate =
+    updatedProject.deadline || updatedProject.due_date || updatedProject.dueDate || ''
+  if (previousDueDate !== updatedDueDate) changedFields.push('due date')
+
+  if (changedFields.length === 0) return 'Project details edited'
+  return `Updated ${changedFields.join(', ')}`
+}
+
+const buildHistoryProjectData = (project) => ({
+  title: project.title || '',
+  description: project.description || '',
+  content: project.content || '',
+  status: project.status || 'draft',
+  sectionHead: project.sectionHead || '',
+  writers: project.writers || '',
+  artists: project.artists || '',
+  dueDate: project.deadline || project.due_date || project.dueDate || '',
+  dueDateISO: project.deadline || project.due_date || project.dueDate || '',
+  mediaUploaded: project.mediaUploaded || '',
+})
+
 const saveEdit = async () => {
   if (!editingProject.value.title.trim()) {
     alert('Please enter a project title')
@@ -373,6 +529,8 @@ const saveEdit = async () => {
   }
 
   try {
+    const previousProject = projects.value.find((p) => p.id === editingProject.value.id)
+
     await projectsService.update(editingProject.value.id, {
       title: editingProject.value.title,
       description: editingProject.value.description,
@@ -383,6 +541,19 @@ const saveEdit = async () => {
     const projectIndex = projects.value.findIndex((p) => p.id === editingProject.value.id)
     if (projectIndex !== -1) {
       projects.value[projectIndex] = { ...editingProject.value }
+    }
+
+    try {
+      await createProjectVersionSupabase(
+        'newsletter',
+        editingProject.value.id,
+        buildHistoryProjectData(editingProject.value),
+        getEditChangeSummary(previousProject || {}, editingProject.value),
+        getEditorDisplayName(),
+        'draft',
+      )
+    } catch (historyError) {
+      console.error('Error creating project history snapshot:', historyError)
     }
 
     editingProject.value = null

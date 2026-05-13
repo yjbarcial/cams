@@ -7,6 +7,10 @@ export const accessDeniedState = reactive({
   show: false,
   requiredRole: '',
   userRole: '',
+  message: '',
+  hint: '',
+  actionLabel: '',
+  actionTo: '',
 })
 
 const roleDisplayMap = {
@@ -21,12 +25,17 @@ const roleDisplayMap = {
   section_head: 'Section Head',
   member: 'Contributor',
   guest: 'Guest',
+  admin_view: 'Admin View',
 }
 
-export function showAccessDenied(requiredRole) {
+export function showAccessDenied(requiredRole, options = {}) {
   const userRole = localStorage.getItem('userRole') || ''
   accessDeniedState.requiredRole = roleDisplayMap[requiredRole] || requiredRole
   accessDeniedState.userRole = roleDisplayMap[userRole] || userRole || 'User'
+  accessDeniedState.message = options.message || ''
+  accessDeniedState.hint = options.hint || ''
+  accessDeniedState.actionLabel = options.actionLabel || ''
+  accessDeniedState.actionTo = options.actionTo || ''
   accessDeniedState.show = true
 }
 
@@ -34,4 +43,8 @@ export function hideAccessDenied() {
   accessDeniedState.show = false
   accessDeniedState.requiredRole = ''
   accessDeniedState.userRole = ''
+  accessDeniedState.message = ''
+  accessDeniedState.hint = ''
+  accessDeniedState.actionLabel = ''
+  accessDeniedState.actionTo = ''
 }

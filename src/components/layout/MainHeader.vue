@@ -56,7 +56,11 @@ const handleStorageChange = (e) => {
 const canOpenAdminPanel = computed(() => {
   const userRole = localStorage.getItem('debugRole') || localStorage.getItem('userRole')
   const accessRole = localStorage.getItem('accessRole')
-  return userRole === 'admin' || accessRole === 'archival_manager'
+  return (
+    userRole === 'admin' ||
+    accessRole === 'archival_manager' ||
+    accessRole === 'online_accounts_manager'
+  )
 })
 
 const handleProfile = () => {

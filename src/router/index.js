@@ -46,12 +46,48 @@ const requireAdmin = (to, from, next) => {
 
   const userRole = getEffectiveUserRole()
   const accessRole = localStorage.getItem('accessRole')
-  if (userRole !== 'admin' && accessRole !== 'archival_manager') {
+  if (
+    userRole !== 'admin' &&
+    accessRole !== 'archival_manager' &&
+    accessRole !== 'online_accounts_manager'
+  ) {
     // Not a System Admin - redirect to dashboard
     next({ name: 'dashboard' })
   } else {
     next()
   }
+}
+
+const isPublicationManager = () => {
+  const userRole = getEffectiveUserRole()
+  const accessRole = localStorage.getItem('accessRole')
+
+  return (
+    userRole !== 'admin' &&
+    (accessRole === 'archival_manager' || accessRole === 'online_accounts_manager')
+  )
+}
+
+const showManagerProjectListDenied = () => {
+  showAccessDenied('admin_view', {
+    message:
+      'Project lists are for contributors, section heads, and approval roles. Publication managers review their assigned publishing queue in Admin View.',
+    hint: 'Open Admin View to see the projects ready for archival or online accounts processing.',
+    actionLabel: 'Go to Admin View',
+    actionTo: '/admin',
+  })
+}
+
+const requireProjectListAccess = (to, from, next) => {
+  if (!checkAuth(to, from, next)) return
+
+  if (isPublicationManager()) {
+    showManagerProjectListDenied()
+    next(false)
+    return
+  }
+
+  next()
 }
 
 // Role-based guards for approval workflows
@@ -156,7 +192,7 @@ const requireProjectPageAccess = (to, from, next) => {
     userRole !== 'admin' &&
     (accessRole === 'archival_manager' || accessRole === 'online_accounts_manager')
   ) {
-    showAccessDenied('assigned_member')
+    showManagerProjectListDenied()
     if (from?.name) {
       next(false)
     } else {
@@ -248,7 +284,7 @@ const router = createRouter({
       path: '/magazine',
       name: 'magazine',
       component: MagazineView,
-      beforeEnter: requireAuth,
+      beforeEnter: requireProjectListAccess,
     },
     {
       path: '/magazine/new',
@@ -260,7 +296,7 @@ const router = createRouter({
       path: '/newsletter',
       name: 'newsletter',
       component: NewsletterView,
-      beforeEnter: requireAuth,
+      beforeEnter: requireProjectListAccess,
     },
     {
       path: '/newsletter/new',
@@ -272,7 +308,7 @@ const router = createRouter({
       path: '/folio',
       name: 'folio',
       component: FolioView,
-      beforeEnter: requireAuth,
+      beforeEnter: requireProjectListAccess,
     },
     {
       path: '/folio/new',
@@ -284,7 +320,7 @@ const router = createRouter({
       path: '/other',
       name: 'other',
       component: OtherView,
-      beforeEnter: requireAuth,
+      beforeEnter: requireProjectListAccess,
     },
     {
       path: '/other/new',
