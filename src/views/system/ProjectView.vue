@@ -85,6 +85,10 @@ const tempTitle = ref(project.value.title)
 const editorContent = ref('')
 const isEditing = ref(true) // Always true now - auto-edit mode
 const quillEditorRef = ref(null)
+const isReadOnlyMode = computed(() => {
+  const readonly = route.query.readonly
+  return readonly === '1' || readonly === 'true' || readonly === true
+})
 
 // Project members for permission checking
 const projectMemberIds = ref([])
@@ -614,6 +618,10 @@ const canViewProject = computed(() => {
 
 // Permission checking - determine if current user can edit this project
 const canEditProject = computed(() => {
+  if (isReadOnlyMode.value) {
+    return false
+  }
+
   const userId = localStorage.getItem('userId')
   const userEmail = localStorage.getItem('userEmail')
   const effectiveUserId = userId || currentUserProfile.value?.id

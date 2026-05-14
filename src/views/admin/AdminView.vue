@@ -42,6 +42,9 @@ const publicationDeleteLoading = ref(false)
 const showDeleteProjectDialog = ref(false)
 const projectToDelete = ref(null)
 const projectDeleteLoading = ref(false)
+const showRecordActionsDialog = ref(false)
+const selectedRecordKind = ref('project')
+const selectedRecord = ref(null)
 
 // User edit dialog state
 const showEditUserDialog = ref(false)
@@ -177,9 +180,6 @@ const canDeleteRecords = computed(() => effectiveUserRole.value === 'admin')
 const canClearLocalData = computed(() => effectiveUserRole.value === 'admin')
 const canReviewForPublishProjects = computed(
   () => effectiveUserRole.value !== 'admin' && effectiveAccessRole.value === 'archival_manager',
-)
-const canShowProjectActionCol = computed(
-  () => canDeleteRecords.value || canReviewForPublishProjects.value,
 )
 const dashboardTitle = computed(() =>
   canManageUsers.value ? 'System Admin Dashboard' : 'Archival Manager Dashboard',
@@ -830,7 +830,7 @@ const visibleProjects = computed(() => {
   return sortItems(items, projectSortBy.value, projectSortOrder.value, getProjectSortValue)
 })
 
-const projectTableColspan = computed(() => (canShowProjectActionCol.value ? 7 : 6))
+const projectTableColspan = computed(() => 6)
 
 const visiblePublications = computed(() => {
   const key = (publicationSearch.value || '').toLowerCase().trim()
@@ -855,7 +855,7 @@ const visiblePublications = computed(() => {
   )
 })
 
-const publicationTableColspan = computed(() => (canDeleteRecords.value ? 5 : 4))
+const publicationTableColspan = computed(() => 4)
 
 const normalizeStatus = (status) => {
   return String(status || '')
@@ -868,6 +868,58 @@ const openForPublishProject = (project) => {
   if (!project?.id) return
   if (normalizeStatus(project.status) !== 'for_publish') return
   router.push({ name: 'archival-manager', params: { id: project.id } })
+}
+
+const openRecordActions = (kind, record) => {
+  if (!record?.id) return
+
+  selectedRecordKind.value = kind
+  selectedRecord.value = record
+  showRecordActionsDialog.value = true
+}
+
+const closeRecordActionsDialog = () => {
+  showRecordActionsDialog.value = false
+  selectedRecord.value = null
+}
+
+const viewSelectedRecord = () => {
+  if (!selectedRecord.value?.id) return
+
+  const kind = selectedRecordKind.value
+  const record = selectedRecord.value
+
+  closeRecordActionsDialog()
+
+  if (kind === 'project') {
+    router.push({
+      name: 'project',
+      params: { id: record.id },
+      query: {
+        type: (record.project_type || record.type || 'magazine').toString().toLowerCase(),
+        readonly: '1',
+      },
+    })
+    return
+  }
+
+  router.push({ name: 'publication', params: { id: record.id } })
+}
+
+const deleteSelectedRecord = () => {
+  if (!selectedRecord.value?.id) return
+
+  const kind = selectedRecordKind.value
+  const record = selectedRecord.value
+
+  closeRecordActionsDialog()
+
+  if (kind === 'project') {
+    confirmDeleteProject(record)
+    return
+  }
+
+  confirmDeletePublication(record)
 }
 
 // Format date helper
@@ -1257,15 +1309,21 @@ const performClearClientData = async () => {
                   max-width="560px"
                   persistent
                 >
-                  <v-card class="edit-user-card delete-dialog-card">
-                    <v-card-title class="edit-user-header delete-dialog-header">
+                  <v-card class="edit-user-card delete-dialog-card clean-actions-card">
+                    <v-card-title
+                      class="edit-user-header delete-dialog-header clean-actions-header"
+                    >
                       <div class="header-content">
-                        <v-avatar size="44" color="#6b7280" class="edit-user-avatar">
+                        <v-avatar
+                          size="40"
+                          color="#ef4444"
+                          class="edit-user-avatar row-actions-avatar"
+                        >
                           <v-icon color="white">mdi-delete-alert</v-icon>
                         </v-avatar>
                         <div class="edit-user-identity">
-                          <div class="edit-user-title">Delete Publication</div>
-                          <div class="edit-user-email">
+                          <div class="edit-user-title clean-actions-title">Delete Publication</div>
+                          <div class="edit-user-email clean-actions-subtitle">
                             {{ publicationToDelete?.title || 'Untitled' }}
                           </div>
                         </div>
@@ -1273,19 +1331,21 @@ const performClearClientData = async () => {
                         <v-btn
                           icon
                           variant="text"
-                          color="white"
+                          class="row-actions-close"
                           :disabled="publicationDeleteLoading"
                           @click="showDeleteDialog = false"
                         >
-                          <v-icon>mdi-close</v-icon>
+                          <v-icon color="#f5c52b">mdi-close</v-icon>
                         </v-btn>
                       </div>
                     </v-card-title>
-                    <v-card-text class="edit-user-body">
-                      <div class="dialog-section">
-                        <div class="section-heading">
-                          <v-icon size="18">mdi-archive-remove-outline</v-icon>
-                          <span>System Admin Dashboard</span>
+                    <v-card-text class="edit-user-body clean-actions-body">
+                      <div class="dialog-section clean-actions-section">
+                        <div class="section-heading clean-actions-heading">
+                          <v-icon size="18" class="clean-heading-icon"
+                            >mdi-archive-remove-outline</v-icon
+                          >
+                          <span>Confirm deletion</span>
                         </div>
                         <p class="delete-dialog-copy">
                           Are you sure you want to delete this publication?
@@ -1313,7 +1373,7 @@ const performClearClientData = async () => {
                         Cancel
                       </v-btn>
                       <v-btn
-                        class="delete-confirm-btn"
+                        class="clean-btn clean-btn-danger"
                         :loading="publicationDeleteLoading"
                         @click="deletePublication"
                       >
@@ -1331,15 +1391,21 @@ const performClearClientData = async () => {
                   max-width="560px"
                   persistent
                 >
-                  <v-card class="edit-user-card delete-dialog-card">
-                    <v-card-title class="edit-user-header delete-dialog-header">
+                  <v-card class="edit-user-card delete-dialog-card clean-actions-card">
+                    <v-card-title
+                      class="edit-user-header delete-dialog-header clean-actions-header"
+                    >
                       <div class="header-content">
-                        <v-avatar size="44" color="#6b7280" class="edit-user-avatar">
+                        <v-avatar
+                          size="40"
+                          color="#ef4444"
+                          class="edit-user-avatar row-actions-avatar"
+                        >
                           <v-icon color="white">mdi-delete-alert</v-icon>
                         </v-avatar>
                         <div class="edit-user-identity">
-                          <div class="edit-user-title">Delete Project</div>
-                          <div class="edit-user-email">
+                          <div class="edit-user-title clean-actions-title">Delete Project</div>
+                          <div class="edit-user-email clean-actions-subtitle">
                             {{ projectToDelete?.title || 'Untitled' }}
                           </div>
                         </div>
@@ -1347,19 +1413,21 @@ const performClearClientData = async () => {
                         <v-btn
                           icon
                           variant="text"
-                          color="white"
+                          class="row-actions-close"
                           :disabled="projectDeleteLoading"
                           @click="showDeleteProjectDialog = false"
                         >
-                          <v-icon>mdi-close</v-icon>
+                          <v-icon color="#f5c52b">mdi-close</v-icon>
                         </v-btn>
                       </div>
                     </v-card-title>
-                    <v-card-text class="edit-user-body">
-                      <div class="dialog-section">
-                        <div class="section-heading">
-                          <v-icon size="18">mdi-folder-remove-outline</v-icon>
-                          <span>System Admin Dashboard</span>
+                    <v-card-text class="edit-user-body clean-actions-body">
+                      <div class="dialog-section clean-actions-section">
+                        <div class="section-heading clean-actions-heading">
+                          <v-icon size="18" class="clean-heading-icon"
+                            >mdi-folder-remove-outline</v-icon
+                          >
+                          <span>Confirm deletion</span>
                         </div>
                         <p class="delete-dialog-copy">
                           Are you sure you want to delete this project?
@@ -1387,7 +1455,7 @@ const performClearClientData = async () => {
                         Cancel
                       </v-btn>
                       <v-btn
-                        class="delete-confirm-btn"
+                        class="clean-btn clean-btn-danger"
                         :loading="projectDeleteLoading"
                         @click="deleteProject"
                       >
@@ -1395,6 +1463,82 @@ const performClearClientData = async () => {
                         Delete Project
                       </v-btn>
                     </v-card-actions>
+                  </v-card>
+                </v-dialog>
+
+                <!-- Row Actions Dialog -->
+                <v-dialog v-model="showRecordActionsDialog" max-width="420px" persistent>
+                  <v-card class="edit-user-card row-actions-card clean-actions-card">
+                    <v-card-title class="edit-user-header row-actions-header clean-actions-header">
+                      <div class="header-content">
+                        <v-avatar
+                          size="40"
+                          color="#f5c52b"
+                          class="edit-user-avatar row-actions-avatar"
+                        >
+                          <v-icon color="white" size="20">
+                            {{
+                              selectedRecordKind === 'project'
+                                ? 'mdi-folder-outline'
+                                : 'mdi-book-open-page-variant-outline'
+                            }}
+                          </v-icon>
+                        </v-avatar>
+                        <div class="edit-user-identity">
+                          <div class="edit-user-title clean-actions-title">
+                            {{
+                              selectedRecordKind === 'project'
+                                ? 'Project Options'
+                                : 'Publication Options'
+                            }}
+                          </div>
+                          <div class="edit-user-email clean-actions-subtitle">
+                            {{ selectedRecord?.title || 'Selected item' }}
+                          </div>
+                        </div>
+                        <v-spacer />
+                        <v-btn
+                          icon
+                          variant="text"
+                          class="row-actions-close"
+                          @click="closeRecordActionsDialog"
+                        >
+                          <v-icon color="#f5c52b">mdi-close</v-icon>
+                        </v-btn>
+                      </div>
+                    </v-card-title>
+
+                    <v-card-text class="edit-user-body clean-actions-body">
+                      <div class="dialog-section clean-actions-section">
+                        <div class="section-heading clean-actions-heading">
+                          <v-icon size="18" class="clean-heading-icon"
+                            >mdi-cursor-default-click</v-icon
+                          >
+                          <span>Choose an action</span>
+                        </div>
+
+                        <div class="action-buttons-stack mt-4">
+                          <v-btn
+                            block
+                            class="clean-btn clean-btn-primary mb-3"
+                            @click="viewSelectedRecord"
+                          >
+                            <v-icon start>mdi-eye-outline</v-icon>
+                            View
+                          </v-btn>
+
+                          <v-btn
+                            v-if="canDeleteRecords"
+                            block
+                            class="clean-btn clean-btn-danger"
+                            @click="deleteSelectedRecord"
+                          >
+                            <v-icon start>mdi-delete</v-icon>
+                            Delete
+                          </v-btn>
+                        </div>
+                      </div>
+                    </v-card-text>
                   </v-card>
                 </v-dialog>
               </v-card-text>
@@ -1679,17 +1823,18 @@ const performClearClientData = async () => {
                             <th>Status</th>
                             <th>Created By</th>
                             <th>Date</th>
-                            <th
-                              v-if="canShowProjectActionCol"
-                              class="text-center"
-                              style="width: 120px"
-                            >
-                              Actions
-                            </th>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="(project, index) in visibleProjects" :key="project.id">
+                          <tr
+                            v-for="(project, index) in visibleProjects"
+                            :key="project.id"
+                            class="clickable-table-row"
+                            role="button"
+                            tabindex="0"
+                            @click="openRecordActions('project', project)"
+                            @keydown.enter.prevent="openRecordActions('project', project)"
+                          >
                             <td class="text-center">{{ index + 1 }}</td>
                             <td>{{ project.title }}</td>
                             <td>{{ project.type }}</td>
@@ -1700,30 +1845,6 @@ const performClearClientData = async () => {
                             </td>
                             <td>{{ project.user?.full_name || project.sectionHead }}</td>
                             <td>{{ formatDate(project.created_at) }}</td>
-                            <td v-if="canShowProjectActionCol" class="text-center">
-                              <v-btn
-                                v-if="canDeleteRecords"
-                                icon
-                                size="small"
-                                color="error"
-                                variant="text"
-                                @click="confirmDeleteProject(project)"
-                                title="Delete Project"
-                              >
-                                <v-icon>mdi-delete</v-icon>
-                              </v-btn>
-                              <v-btn
-                                v-else
-                                icon
-                                size="small"
-                                color="primary"
-                                variant="text"
-                                @click="openForPublishProject(project)"
-                                title="Open For Publish"
-                              >
-                                <v-icon>mdi-publish</v-icon>
-                              </v-btn>
-                            </td>
                           </tr>
                           <tr v-if="visibleProjects.length === 0">
                             <td :colspan="projectTableColspan" class="text-center text-grey py-6">
@@ -1806,15 +1927,17 @@ const performClearClientData = async () => {
                             <th>Title</th>
                             <th>Category</th>
                             <th>Date Published</th>
-                            <th v-if="canDeleteRecords" class="text-center" style="width: 120px">
-                              Actions
-                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr
                             v-for="(publication, index) in visiblePublications"
                             :key="publication.id"
+                            class="clickable-table-row"
+                            role="button"
+                            tabindex="0"
+                            @click="openRecordActions('publication', publication)"
+                            @keydown.enter.prevent="openRecordActions('publication', publication)"
                           >
                             <td class="text-center">{{ index + 1 }}</td>
                             <td>{{ publication.title || 'Untitled' }}</td>
@@ -1824,18 +1947,6 @@ const performClearClientData = async () => {
                               </v-chip>
                             </td>
                             <td>{{ formatDate(publication.created_at) }}</td>
-                            <td v-if="canDeleteRecords" class="text-center">
-                              <v-btn
-                                icon
-                                size="small"
-                                color="error"
-                                variant="text"
-                                @click="confirmDeletePublication(publication)"
-                                title="Delete Publication"
-                              >
-                                <v-icon>mdi-delete</v-icon>
-                              </v-btn>
-                            </td>
                           </tr>
                           <tr v-if="visiblePublications.length === 0">
                             <td
@@ -2246,6 +2357,87 @@ const performClearClientData = async () => {
   border: none !important;
 }
 
+.clean-actions-card {
+  border-radius: 12px !important;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  background: #ffffff !important;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08) !important;
+}
+
+.clean-actions-header {
+  background: #191c22 !important; /* darker navy for high contrast */
+  padding: 14px 18px !important;
+  border-bottom: 1px solid rgba(245, 197, 43, 0.06);
+}
+
+.row-actions-avatar {
+  box-shadow: none;
+  border-radius: 10px;
+}
+
+.clean-actions-title {
+  color: #ffffff !important; /* white for max contrast */
+  font-size: 17px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.2px;
+}
+
+.clean-actions-subtitle {
+  color: rgba(255, 255, 255, 0.82) !important;
+  font-size: 12px !important;
+  margin-top: 4px !important;
+}
+
+.row-actions-close {
+  background: transparent !important;
+  min-width: 36px !important;
+}
+
+.clean-actions-body {
+  background: #ffffff !important;
+  color: #191c22;
+  padding: 18px !important;
+}
+
+.clean-actions-section {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.clean-actions-heading {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.clean-heading-icon {
+  color: #f5c52b;
+}
+
+.clean-btn {
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  padding: 10px 18px !important;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+}
+
+.clean-btn-primary {
+  background: #f5c52b !important; /* gold */
+  color: #0b1220 !important; /* dark text */
+}
+
+.clean-btn-danger {
+  background: transparent !important;
+  border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  color: #ef4444 !important; /* red */
+}
+
+.clean-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.06) !important;
+}
+
 .delete-dialog-header {
   background: #4b5563 !important;
 }
@@ -2654,6 +2846,15 @@ const performClearClientData = async () => {
   transform: translateY(-4px);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15) !important;
   border-color: #bdbdbd !important;
+}
+
+.clickable-table-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.clickable-table-row:hover {
+  background-color: rgba(245, 197, 43, 0.08);
 }
 
 .stat-card-primary {

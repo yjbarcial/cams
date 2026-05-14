@@ -74,6 +74,15 @@ const isPublicationManager = () => {
   )
 }
 
+const showAdminProjectListDenied = () => {
+  showAccessDenied('admin_view', {
+    message: 'System administrators review projects and publications from Admin View only.',
+    hint: 'Use Admin View to inspect projects and publications without entering the workflow pages.',
+    actionLabel: 'Go to Admin View',
+    actionTo: '/admin',
+  })
+}
+
 const showManagerProjectListDenied = () => {
   showAccessDenied('admin_view', {
     message:
@@ -86,6 +95,12 @@ const showManagerProjectListDenied = () => {
 
 const requireProjectListAccess = (to, from, next) => {
   if (!checkAuth(to, from, next)) return
+
+  if (getEffectiveUserRole() === 'admin') {
+    showAdminProjectListDenied()
+    next(false)
+    return
+  }
 
   if (isPublicationManager()) {
     showManagerProjectListDenied()
