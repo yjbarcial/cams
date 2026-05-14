@@ -48,10 +48,6 @@ function getAccessRole(userRole, designationLabel) {
   const role = normalizeText(userRole)
   const label = String(designationLabel || '').toLowerCase()
 
-  if (role === 'admin') {
-    return 'admin'
-  }
-
   if (role === 'section_head' || label.includes('section head')) {
     return 'section_head'
   }
@@ -73,6 +69,10 @@ function getAccessRole(userRole, designationLabel) {
   }
   if (label.includes('online accounts manager')) {
     return 'online_accounts_manager'
+  }
+
+  if (role === 'admin') {
+    return 'admin'
   }
 
   if (role === 'editor') {
@@ -171,7 +171,9 @@ export async function setProfileStatusByEmail(email, status = 'inactive') {
 
     const allowedStatuses = ['active', 'inactive', 'pending', 'suspended']
     const requestedStatus = String(status || '').toLowerCase()
-    const normalizedStatus = allowedStatuses.includes(requestedStatus) ? requestedStatus : 'inactive'
+    const normalizedStatus = allowedStatuses.includes(requestedStatus)
+      ? requestedStatus
+      : 'inactive'
 
     const updateData = {
       status: normalizedStatus,

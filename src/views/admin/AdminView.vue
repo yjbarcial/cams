@@ -178,9 +178,14 @@ const effectiveAccessRole = ref(localStorage.getItem('accessRole') || '')
 const canManageUsers = computed(() => effectiveUserRole.value === 'admin')
 const canDeleteRecords = computed(() => effectiveUserRole.value === 'admin')
 const canClearLocalData = computed(() => effectiveUserRole.value === 'admin')
-const canReviewForPublishProjects = computed(
-  () => effectiveUserRole.value !== 'admin' && effectiveAccessRole.value === 'archival_manager',
-)
+const canReviewForPublishProjects = computed(() => {
+  const role = normalizeRole(effectiveAccessRole.value)
+  return role === 'archival_manager' || role === 'online_accounts_manager'
+})
+const prioritizeForPublishProjects = computed(() => {
+  const role = normalizeRole(effectiveAccessRole.value)
+  return role === 'archival_manager' || role === 'online_accounts_manager'
+})
 const dashboardTitle = computed(() =>
   canManageUsers.value ? 'System Admin Dashboard' : 'Archival Manager Dashboard',
 )
@@ -827,7 +832,32 @@ const visibleProjects = computed(() => {
     })
   }
 
-  return sortItems(items, projectSortBy.value, projectSortOrder.value, getProjectSortValue)
+  const sortedItems = sortItems(
+    items,
+    projectSortBy.value,
+    projectSortOrder.value,
+    getProjectSortValue,
+  )
+
+  if (!prioritizeForPublishProjects.value) {
+    return sortedItems
+  }
+
+  const prioritizedItems = sortedItems.map((item, index) => ({
+    item,
+    index,
+    isForPublish: normalizeStatus(item?.status) === 'for_publish',
+  }))
+
+  prioritizedItems.sort((a, b) => {
+    if (a.isForPublish !== b.isForPublish) {
+      return a.isForPublish ? -1 : 1
+    }
+
+    return a.index - b.index
+  })
+
+  return prioritizedItems.map(({ item }) => item)
 })
 
 const projectTableColspan = computed(() => 6)
@@ -892,6 +922,13 @@ const viewSelectedRecord = () => {
   closeRecordActionsDialog()
 
   if (kind === 'project') {
+    const projectStatus = normalizeStatus(record.status)
+
+    if (projectStatus === 'for_publish' && canReviewForPublishProjects.value) {
+      router.push({ name: 'archival-manager', params: { id: record.id } })
+      return
+    }
+
     router.push({
       name: 'project',
       params: { id: record.id },
