@@ -55,6 +55,41 @@ export const formatStatus = (status) => {
     .join(' ')
 }
 
+export const formatProjectStatus = (projectOrStatus) => {
+  const project =
+    projectOrStatus && typeof projectOrStatus === 'object'
+      ? projectOrStatus
+      : { status: projectOrStatus }
+  const status = project.status
+
+  if (
+    project.forwarded_to_adviser_by &&
+    !project.adviser_approved_by &&
+    !project.adviser_returned_by &&
+    !project.adviser_rejected_by &&
+    status !== 'to_chief_adviser'
+  ) {
+    return 'To Chief Adviser'
+  }
+
+  if (status === 'to_technical_editor' || status === 'to_creative_director') {
+    const technicalEditorApproved = !!project.technical_editor_approved_by
+    const creativeDirectorApproved = !!project.creative_director_approved_by
+
+    if (technicalEditorApproved && !creativeDirectorApproved) {
+      return 'Waiting for Creative Director'
+    }
+
+    if (creativeDirectorApproved && !technicalEditorApproved) {
+      return 'Waiting for Technical Editor'
+    }
+
+    return 'Editor Review'
+  }
+
+  return formatStatus(status)
+}
+
 /**
  * Format designation labels (roles) to proper format
  * @param {string} designation - Designation label (e.g., 'section_head')

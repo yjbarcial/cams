@@ -136,7 +136,7 @@ const requireChiefAdviser = (to, from, next) => {
   const accessRole = normalizeRole(localStorage.getItem('accessRole'))
   const userRole = getEffectiveUserRole()
 
-  if (accessRole === 'chief_adviser' || userRole === 'admin') {
+  if (accessRole === 'chief_adviser' || userRole === 'chief_adviser' || userRole === 'admin') {
     next()
   } else {
     showAccessDenied('chief_adviser')

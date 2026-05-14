@@ -5,8 +5,8 @@ const ASSIGNED_SECTION_HEAD = 'assigned_section_head'
 const WORKFLOW_STATUS = 'workflow_status'
 
 const STATUS_BY_WORKFLOW_ROLE = {
-  technical_editor: ['to_technical_editor'],
-  creative_director: ['to_creative_director'],
+  technical_editor: ['to_technical_editor', 'to_creative_director'],
+  creative_director: ['to_technical_editor', 'to_creative_director'],
   editor_in_chief: ['to_editor_in_chief'],
   chief_adviser: ['to_chief_adviser'],
 }
@@ -29,7 +29,18 @@ const normalizeRole = (role) =>
     .replace(/[\s-]+/g, '_')
 
 const STATUS_QUERY_VALUES = {
+  draft: ['draft'],
+  to_section_head: ['to_section_head'],
+  to_technical_editor: ['to_technical_editor'],
+  to_creative_director: ['to_creative_director'],
+  to_editor_in_chief: ['to_editor_in_chief'],
+  to_chief_adviser: ['to_chief_adviser'],
   for_publish: ['For Publish'],
+  published: ['published'],
+  returned_by_section_head: ['returned_by_section_head'],
+  returned_by_technical_editor: ['returned_by_technical_editor'],
+  returned_by_creative_director: ['returned_by_creative_director'],
+  returned_by_chief_adviser: ['returned_by_chief_adviser'],
 }
 
 const getStatusQueryValues = (statuses) => {
@@ -46,6 +57,22 @@ const getStatusQueryValues = (statuses) => {
 const isAdminEmail = (email, adminEmails) => {
   const normalizedEmail = normalizeEmail(email)
   return adminEmails.some((adminEmail) => normalizeEmail(adminEmail) === normalizedEmail)
+}
+
+const isPendingChiefAdviserProject = (project) => {
+  if (!project) return false
+
+  if (normalizeStatus(project.status) === 'to_chief_adviser') return true
+  if (!project.forwarded_to_adviser_by) return false
+
+  return !(
+    project.adviser_approved_by ||
+    project.adviser_returned_by ||
+    project.adviser_rejected_by ||
+    normalizeStatus(project.status) === 'for_publish' ||
+    normalizeStatus(project.status) === 'published' ||
+    normalizeStatus(project.status) === 'returned_by_chief_adviser'
+  )
 }
 
 export const getProjectListUserContext = (adminEmails = []) => {
@@ -70,6 +97,11 @@ export const getProjectMembersSelect = (context, projectType) => {
     : 'project_members(user_id, role)'
 }
 
+export const shouldScopeProjectsByType = (context, projectType) => {
+  const rule = getVisibilityRule(context, projectType)
+  return rule.type !== WORKFLOW_STATUS
+}
+
 export const getVisibilityRule = (context) => {
   if (!context) return { type: NO_PROJECTS }
   if (context.isAdmin) return { type: ADMIN_ONLY }
@@ -92,7 +124,7 @@ export const getVisibilityRule = (context) => {
     return { type: NO_PROJECTS }
   }
 
-  const workflowStatuses = STATUS_BY_WORKFLOW_ROLE[accessRole]
+  const workflowStatuses = STATUS_BY_WORKFLOW_ROLE[accessRole] || STATUS_BY_WORKFLOW_ROLE[userRole]
   if (workflowStatuses) {
     return { type: WORKFLOW_STATUS, statuses: workflowStatuses }
   }
@@ -122,6 +154,10 @@ export const applyProjectListVisibility = (query, context, projectType) => {
   }
 
   if (rule.type === WORKFLOW_STATUS) {
+    if (context.accessRole === 'chief_adviser' || context.userRole === 'chief_adviser') {
+      return query.or('status.eq.to_chief_adviser,forwarded_to_adviser_by.not.is.null')
+    }
+
     return query.in('status', getStatusQueryValues(rule.statuses))
   }
 
@@ -149,6 +185,10 @@ export const isProjectVisibleToCurrentUser = (project, context, projectType) => 
   }
 
   if (rule.type === WORKFLOW_STATUS) {
+    if (context.accessRole === 'chief_adviser' || context.userRole === 'chief_adviser') {
+      return isPendingChiefAdviserProject(project)
+    }
+
     return rule.statuses.includes(normalizeStatus(project.status))
   }
 

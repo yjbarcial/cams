@@ -22,7 +22,7 @@ import {
   notifyProjectUpdate,
 } from '@/services/notificationsService.js'
 import { getDisplayName } from '@/utils/userDisplay.js'
-import { formatStatus } from '@/utils/statusFormatter.js'
+import { formatProjectStatus } from '@/utils/statusFormatter.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -980,6 +980,7 @@ const formatCommentTime = (timestamp) => {
 const getStatusColor = (status) => {
   const statusColors = {
     to_technical_editor: 'info',
+    to_creative_director: 'info',
     returned_by_technical_editor: 'warning',
     to_editor_in_chief: 'primary',
   }
@@ -1140,7 +1141,7 @@ onMounted(async () => {
                 <div class="metadata-item">
                   <span class="label">Submission Status:</span>
                   <v-chip :color="getStatusColor(project.status)" size="small">
-                    {{ formatStatus(project.status) }}
+                    {{ formatProjectStatus(project) }}
                   </v-chip>
                 </div>
                 <div class="metadata-item">

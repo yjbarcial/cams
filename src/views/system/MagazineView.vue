@@ -9,12 +9,14 @@ import { projectsService } from '@/services/supabaseService'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import { deleteProjectNotifications } from '@/services/notificationsService'
 import { getDisplayName } from '@/utils/userDisplay'
+import { formatProjectStatus } from '@/utils/statusFormatter'
 import { addUserToProfiles } from '@/utils/autoAddUser'
 import {
   applyProjectListVisibility,
   filterProjectsForCurrentUser,
   getProjectListUserContext,
   getProjectMembersSelect,
+  shouldScopeProjectsByType,
 } from '@/utils/projectListVisibility'
 
 const router = useRouter()
@@ -175,8 +177,11 @@ const loadProjects = async () => {
             ${relationSelect}
           `,
           )
-          .eq('project_type', 'magazine')
           .order('created_at', { ascending: false })
+
+        if (shouldScopeProjectsByType(userContext, 'magazine')) {
+          query = query.eq('project_type', 'magazine')
+        }
 
         query = applyProjectListVisibility(query, userContext, 'magazine')
 
@@ -344,32 +349,34 @@ const handleView = (projectId) => {
   }
 
   // Route based on project status with type query parameter
+  const actualType = project.project_type || 'magazine'
+
   if (project.status === 'draft' || project.status === 'returned_by_section_head') {
-    router.push(`/project/${projectId}?type=magazine`)
+    router.push(`/project/${projectId}?type=${actualType}`)
   } else if (
     project.status === 'to_section_head' ||
     project.status === 'returned_by_technical_editor' ||
     project.status === 'returned_by_creative_director'
   ) {
-    router.push(`/section-head/${projectId}?type=magazine`)
+    router.push(`/section-head/${projectId}?type=${actualType}`)
   } else if (
     project.status === 'to_technical_editor' ||
     project.status === 'to_creative_director'
   ) {
-    router.push(`/technical-editor/${projectId}?type=magazine`)
+    router.push(`/technical-editor/${projectId}?type=${actualType}`)
+  } else if (project.status === 'to_chief_adviser' || project.forwarded_to_adviser_by) {
+    router.push(`/chief-adviser/${projectId}?type=${actualType}`)
   } else if (
     project.status === 'to_editor_in_chief' ||
     project.status === 'returned_by_chief_adviser'
   ) {
-    router.push(`/editor-in-chief/${projectId}?type=magazine`)
+    router.push(`/editor-in-chief/${projectId}?type=${actualType}`)
   } else if (project.status === 'for_publish' || project.status === 'For Publish') {
-    router.push(`/archival-manager/${projectId}?type=magazine`)
-  } else if (project.status === 'to_chief_adviser') {
-    router.push(`/chief-adviser/${projectId}?type=magazine`)
+    router.push(`/archival-manager/${projectId}?type=${actualType}`)
   } else if (project.status === 'published') {
-    router.push(`/project/${projectId}?type=magazine`)
+    router.push(`/project/${projectId}?type=${actualType}`)
   } else {
-    router.push(`/project/${projectId}?type=magazine`)
+    router.push(`/project/${projectId}?type=${actualType}`)
   }
 }
 // ...existing code...
@@ -799,7 +806,7 @@ const cancelBulkDelete = () => {
               </v-col>
               <v-col class="table-cell">{{ project.sectionHead }}</v-col>
               <v-col class="table-cell">{{ formatDate(project.dueDate) }}</v-col>
-              <v-col class="table-cell">{{ formatStatus(project.status) }}</v-col>
+              <v-col class="table-cell">{{ formatProjectStatus(project) }}</v-col>
               <v-col class="table-cell actions-cell">
                 <v-btn
                   class="action-btn view-btn"

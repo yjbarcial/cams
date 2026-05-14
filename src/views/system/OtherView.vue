@@ -9,12 +9,14 @@ import { projectsService } from '@/services/supabaseService'
 import { createProjectVersion as createProjectVersionSupabase } from '@/services/supabaseProjectHistory.js'
 import { deleteProjectNotifications } from '@/services/notificationsService'
 import { getDisplayName } from '@/utils/userDisplay'
+import { formatProjectStatus } from '@/utils/statusFormatter'
 import { addUserToProfiles } from '@/utils/autoAddUser'
 import {
   applyProjectListVisibility,
   filterProjectsForCurrentUser,
   getProjectListUserContext,
   getProjectMembersSelect,
+  shouldScopeProjectsByType,
 } from '@/utils/projectListVisibility'
 
 const router = useRouter()
@@ -175,8 +177,11 @@ const loadProjects = async () => {
             ${relationSelect}
           `,
           )
-          .eq('project_type', 'other')
           .order('created_at', { ascending: false })
+
+        if (shouldScopeProjectsByType(userContext, 'other')) {
+          query = query.eq('project_type', 'other')
+        }
 
         query = applyProjectListVisibility(query, userContext, 'other')
 
@@ -362,6 +367,13 @@ const handleView = (projectId) => {
   } else if (project.status === 'to_online_accounts_manager') {
     router.push(`/archival-manager/${projectId}?type=${actualType}`)
   } else if (
+    project.status === 'to_chief_adviser' ||
+    project.status === 'To Chief Adviser' ||
+    project.status === 'Adviser Review' ||
+    project.forwarded_to_adviser_by
+  ) {
+    router.push(`/chief-adviser/${projectId}?type=${actualType}`)
+  } else if (
     project.status === 'to_editor_in_chief' ||
     project.status === 'EIC Review' ||
     project.status === 'Returned by EIC' ||
@@ -370,8 +382,6 @@ const handleView = (projectId) => {
     router.push(`/editor-in-chief/${projectId}?type=${actualType}`)
   } else if (project.status === 'For Publish' || project.status === 'for_publish') {
     router.push(`/archival-manager/${projectId}?type=${actualType}`)
-  } else if (project.status === 'To Chief Adviser' || project.status === 'Adviser Review') {
-    router.push(`/chief-adviser/${projectId}?type=${actualType}`)
   } else if (project.status === 'Published' || project.status === 'EIC Approved') {
     router.push(`/project/${projectId}?type=${actualType}`)
   } else {
@@ -792,7 +802,7 @@ const cancelBulkDelete = () => {
               </v-col>
               <v-col class="table-cell">{{ project.sectionHead }}</v-col>
               <v-col class="table-cell">{{ formatDate(project.dueDate) }}</v-col>
-              <v-col class="table-cell">{{ formatStatus(project.status) }}</v-col>
+              <v-col class="table-cell">{{ formatProjectStatus(project) }}</v-col>
               <v-col class="table-cell actions-cell">
                 <v-btn
                   class="action-btn view-btn"
