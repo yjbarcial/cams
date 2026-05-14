@@ -1509,34 +1509,25 @@ const performClearClientData = async () => {
                     </v-card-title>
 
                     <v-card-text class="edit-user-body clean-actions-body">
-                      <div class="dialog-section clean-actions-section">
-                        <div class="section-heading clean-actions-heading">
-                          <v-icon size="18" class="clean-heading-icon"
-                            >mdi-cursor-default-click</v-icon
-                          >
-                          <span>Choose an action</span>
-                        </div>
+                      <div class="action-buttons-stack clean-actions-stack">
+                        <v-btn
+                          block
+                          class="clean-btn clean-btn-primary mb-3"
+                          @click="viewSelectedRecord"
+                        >
+                          <v-icon start>mdi-eye-outline</v-icon>
+                          View
+                        </v-btn>
 
-                        <div class="action-buttons-stack mt-4">
-                          <v-btn
-                            block
-                            class="clean-btn clean-btn-primary mb-3"
-                            @click="viewSelectedRecord"
-                          >
-                            <v-icon start>mdi-eye-outline</v-icon>
-                            View
-                          </v-btn>
-
-                          <v-btn
-                            v-if="canDeleteRecords"
-                            block
-                            class="clean-btn clean-btn-danger"
-                            @click="deleteSelectedRecord"
-                          >
-                            <v-icon start>mdi-delete</v-icon>
-                            Delete
-                          </v-btn>
-                        </div>
+                        <v-btn
+                          v-if="canDeleteRecords"
+                          block
+                          class="clean-btn clean-btn-danger"
+                          @click="deleteSelectedRecord"
+                        >
+                          <v-icon start>mdi-delete</v-icon>
+                          Delete
+                        </v-btn>
                       </div>
                     </v-card-text>
                   </v-card>
@@ -2397,22 +2388,11 @@ const performClearClientData = async () => {
 .clean-actions-body {
   background: #ffffff !important;
   color: #191c22;
-  padding: 18px !important;
+  padding: 18px 18px 20px !important;
 }
 
-.clean-actions-section {
-  background: transparent;
-  border: none;
-  padding: 0;
-}
-
-.clean-actions-heading {
-  color: #0f172a;
-  font-weight: 800;
-}
-
-.clean-heading-icon {
-  color: #f5c52b;
+.clean-actions-stack {
+  padding-top: 2px;
 }
 
 .clean-btn {
