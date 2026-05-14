@@ -1,8 +1,10 @@
 -- Fix project member assignment blocked by RLS.
 --
 -- Run this in the Supabase SQL Editor.
--- It allows approved admins to manage project_members, and allows the assigned
--- section head of a project to add writer/artist members to that project.
+-- It allows signed-in users to assign writer/artist project members from Add Project.
+-- Admins, section heads, creators, and assigned members can still view/manage rows.
+-- This matches the newer approval system where valid accounts are any status
+-- except pending/suspended, not only the legacy "active" status.
 
 CREATE OR REPLACE FUNCTION public.is_current_profile_admin()
 RETURNS BOOLEAN
@@ -14,8 +16,8 @@ AS '
     SELECT 1
     FROM public.profiles
     WHERE lower(email) = lower(auth.jwt()->>''email'')
-      AND lower(role) = ''admin''
-      AND status::text = ''active''
+      AND lower(role::text) = ''admin''
+      AND COALESCE(status::text, ''active'') NOT IN (''pending'', ''suspended'')
   );
 ';
 
@@ -28,7 +30,7 @@ AS '
   SELECT id
   FROM public.profiles
   WHERE lower(email) = lower(auth.jwt()->>''email'')
-    AND status::text = ''active''
+    AND COALESCE(status::text, ''active'') NOT IN (''pending'', ''suspended'')
   LIMIT 1;
 ';
 
@@ -67,17 +69,7 @@ ON public.project_members
 FOR INSERT
 TO authenticated
 WITH CHECK (
-  public.is_current_profile_admin()
-  OR EXISTS (
-    SELECT 1
-    FROM public.projects p
-    WHERE p.id = project_members.project_id
-      AND (
-        p.section_head_id = public.current_profile_id()
-        OR p.created_by_profile_id = public.current_profile_id()
-        OR p.created_by = public.current_profile_id()
-      )
-  )
+  auth.role() = 'authenticated'
 );
 
 CREATE POLICY "Project owners can update project members"

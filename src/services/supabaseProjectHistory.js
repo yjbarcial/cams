@@ -8,6 +8,21 @@ import { supabase } from '@/utils/supabase.js'
 // Store last version creation time per project to prevent too frequent versions
 const lastVersionTime = new Map()
 const VERSION_DEBOUNCE_MS = 30000 // 30 seconds window; latest edit updates recent version instead of being dropped
+const WORKFLOW_HISTORY_PATTERN =
+  /\b(approved|approve|forwarded|forward|returned|return|rejected|reject|published|publish|archived|archive)\b/i
+const EDITOR_HISTORY_PATTERN =
+  /\b(content|title|description|text|word|words|added|removed|initial|restored)\b/i
+
+const isEditorHistoryEntry = (entry) => {
+  const description = entry?.changeDescription || entry?.change_description || ''
+  const type = entry?.versionType || entry?.version_type || entry?.metadata?.versionType || ''
+
+  if (WORKFLOW_HISTORY_PATTERN.test(description) || WORKFLOW_HISTORY_PATTERN.test(type)) {
+    return false
+  }
+
+  return EDITOR_HISTORY_PATTERN.test(description)
+}
 
 /**
  * Get current user UUID from Supabase auth session
@@ -144,6 +159,11 @@ export const createProjectVersion = async (
   console.log('Project data:', JSON.stringify(projectData, null, 2))
 
   try {
+    if (!isEditorHistoryEntry({ changeDescription, versionType })) {
+      console.log('Skipping project history for workflow-only change:', changeDescription)
+      return null
+    }
+
     let actualProjectId = projectId
     let updateExistingVersionId = null
     let updateExistingVersionNumber = null
@@ -346,21 +366,13 @@ export const createProjectVersion = async (
     let error = null
 
     if (updateExistingVersionId) {
-      const { data, error: updateError } = await supabase
+      const { error: updateError } = await supabase
         .from('project_history')
         .update(versionData)
         .eq('id', updateExistingVersionId)
-        .select('*')
-        .maybeSingle()
-      version = data
       error = updateError
     } else {
-      const { data, error: insertError } = await supabase
-        .from('project_history')
-        .insert(versionData)
-        .select('*')
-        .maybeSingle()
-      version = data
+      const { error: insertError } = await supabase.from('project_history').insert(versionData)
       error = insertError
     }
 
@@ -375,9 +387,6 @@ export const createProjectVersion = async (
     }
 
     if (!version) {
-      console.warn(
-        'Project history write succeeded but returned no row. Using local fallback; check project_history SELECT RLS policy if history list is empty.',
-      )
       version = buildVersionFallback({
         id: updateExistingVersionId,
         projectId: actualProjectId,
@@ -430,6 +439,7 @@ export const getProjectHistory = async (projectType, projectId) => {
     }))
 
     return versionsWithComments.map(transformVersionFromDB)
+      .filter(isEditorHistoryEntry)
   } catch (error) {
     console.error('Error fetching project history:', error)
     throw error

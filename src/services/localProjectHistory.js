@@ -7,6 +7,21 @@ import { createProjectVersion as createProjectVersionRemote } from '@/services/s
 
 // History storage key pattern: {projectType}_project_history_{projectId}
 const getHistoryKey = (projectType, projectId) => `${projectType}_project_history_${projectId}`
+const WORKFLOW_HISTORY_PATTERN =
+  /\b(approved|approve|forwarded|forward|returned|return|rejected|reject|published|publish|archived|archive)\b/i
+const EDITOR_HISTORY_PATTERN =
+  /\b(content|title|description|text|word|words|added|removed|initial|restored)\b/i
+
+const isEditorHistoryEntry = (entry) => {
+  const description = entry?.changeDescription || entry?.change_description || ''
+  const type = entry?.versionType || entry?.version_type || entry?.metadata?.versionType || ''
+
+  if (WORKFLOW_HISTORY_PATTERN.test(description) || WORKFLOW_HISTORY_PATTERN.test(type)) {
+    return false
+  }
+
+  return EDITOR_HISTORY_PATTERN.test(description)
+}
 
 /**
  * Create a new project version snapshot
@@ -27,6 +42,11 @@ export const createProjectVersion = (
   versionType = 'draft',
 ) => {
   try {
+    if (!isEditorHistoryEntry({ changeDescription, versionType })) {
+      console.log('Skipping project history for workflow-only change:', changeDescription)
+      return null
+    }
+
     const version = {
       id: `v${Date.now()}`,
       projectId,
@@ -119,7 +139,7 @@ export const getProjectHistory = (projectType, projectId) => {
   try {
     const historyKey = getHistoryKey(projectType, projectId)
     const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
-    return history
+    return history.filter(isEditorHistoryEntry)
   } catch (error) {
     console.error('Error fetching project history:', error)
     return []

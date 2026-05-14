@@ -34,10 +34,35 @@ const notificationType = ref('success')
 const showConfirmDialog = ref(false)
 const confirmMessage = ref('')
 const confirmAction = ref(null)
+const DOCUMENT_EDIT_FIELDS = new Set(['title', 'description', 'content'])
 
-const activeHistory = computed(() =>
-  history.value.filter((v) => !v.isDeleted && v.author !== 'Current User'),
-)
+const getDocumentSnapshot = (version) => {
+  const data = version?.data || {}
+  return JSON.stringify({
+    title: data.title || '',
+    description: stripHtml(data.description || ''),
+    content: stripHtml(data.content || ''),
+  })
+}
+
+const hasDocumentSnapshot = (version) => {
+  const data = version?.data || {}
+  return ['title', 'description', 'content'].some((field) => {
+    const value = stripHtml(data[field] || '')
+    return String(value).trim().length > 0
+  })
+}
+
+const activeHistory = computed(() => {
+  const versions = history.value.filter((v) => !v.isDeleted)
+
+  return versions.filter((version, index) => {
+    if (!hasDocumentSnapshot(version)) return false
+    const previousVersion = versions[index + 1]
+    if (!previousVersion) return true
+    return getDocumentSnapshot(version) !== getDocumentSnapshot(previousVersion)
+  })
+})
 const currentVersion = computed(() => activeHistory.value.find((v) => v.isActive))
 
 const loadHistory = async () => {
@@ -186,7 +211,7 @@ const getVersionChanges = (version) => {
   }
 
   Object.keys(currentData).forEach((key) => {
-    if (key === 'metadata') return
+    if (!DOCUMENT_EDIT_FIELDS.has(key)) return
 
     if (!(key in previousData) || previousData[key] === null || previousData[key] === undefined) {
       changes.added.push({ field: key, value: stripHtml(currentData[key]) })
@@ -203,7 +228,7 @@ const getVersionChanges = (version) => {
   })
 
   Object.keys(previousData).forEach((key) => {
-    if (key === 'metadata') return
+    if (!DOCUMENT_EDIT_FIELDS.has(key)) return
     if (!(key in currentData) || currentData[key] === null || currentData[key] === undefined) {
       changes.removed.push({ field: key, value: stripHtml(previousData[key]) })
     }
@@ -341,26 +366,6 @@ const getAvatarColor = (name) => {
   return name.length % 2 === 0 ? '#353535' : '#f5c52b'
 }
 
-const getStatusColor = (status) => {
-  const colors = {
-    'in-progress': 'grey-darken-2',
-    planning: 'grey',
-    completed: 'grey-darken-3',
-    'on-hold': 'warning',
-    draft: 'grey',
-  }
-  return colors[status?.toLowerCase()] || 'grey'
-}
-
-const getPriorityColor = (priority) => {
-  const colors = {
-    high: 'grey-darken-3',
-    medium: 'warning',
-    low: 'grey',
-  }
-  return colors[priority?.toLowerCase()] || 'grey'
-}
-
 onMounted(() => {
   loadHistory()
 })
@@ -400,9 +405,9 @@ watch(
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="history.length === 0" class="empty-state">
+    <div v-else-if="activeHistory.length === 0" class="empty-state">
       <v-icon size="48" color="grey-lighten-1">mdi-history</v-icon>
-      <p>No project history available</p>
+      <p>No document edits yet</p>
     </div>
 
     <!-- History List - Google Docs Style -->
@@ -665,39 +670,6 @@ watch(
                   </div>
                 </div>
 
-                <div v-if="selectedVersion.data.status" class="snapshot-field">
-                  <label>Status</label>
-                  <v-chip size="small" :color="getStatusColor(selectedVersion.data.status)">
-                    {{ selectedVersion.data.status }}
-                  </v-chip>
-                </div>
-
-                <div
-                  v-if="selectedVersion.data.startDate || selectedVersion.data.endDate"
-                  class="snapshot-field"
-                >
-                  <label>Timeline</label>
-                  <div class="snapshot-value">
-                    {{
-                      selectedVersion.data.startDate
-                        ? new Date(selectedVersion.data.startDate).toLocaleDateString()
-                        : 'Not set'
-                    }}
-                    →
-                    {{
-                      selectedVersion.data.endDate
-                        ? new Date(selectedVersion.data.endDate).toLocaleDateString()
-                        : 'Not set'
-                    }}
-                  </div>
-                </div>
-
-                <div v-if="selectedVersion.data.priority" class="snapshot-field">
-                  <label>Priority</label>
-                  <v-chip size="small" :color="getPriorityColor(selectedVersion.data.priority)">
-                    {{ selectedVersion.data.priority }}
-                  </v-chip>
-                </div>
               </div>
             </div>
           </div>

@@ -221,6 +221,7 @@ onMounted(() => {
 const showNotificationCard = ref(false)
 const notificationMessage = ref('')
 const notificationType = ref('success')
+const isAssigningProject = ref(false)
 
 // Show notification card
 const showNotification = (message, type = 'success') => {
@@ -258,6 +259,8 @@ const cancelPath = computed(() => {
 })
 
 const assignProject = async () => {
+  if (isAssigningProject.value) return
+
   if (!title.value.trim()) {
     showNotification('Please enter a project title', 'warning')
     return
@@ -276,6 +279,7 @@ const assignProject = async () => {
   }
 
   let createdProjectId = null
+  isAssigningProject.value = true
 
   try {
     // Get current user info first
@@ -417,6 +421,8 @@ const assignProject = async () => {
         : error.error?.message || 'Failed to create project',
       'error',
     )
+  } finally {
+    isAssigningProject.value = false
   }
 }
 
@@ -796,7 +802,14 @@ const saveAsDraft = () => {
 
             <v-row class="actions mt-6 pt-2" style="border-top: 1px solid #e5e7eb">
               <v-col cols="auto">
-                <v-btn class="primary" @click="assignProject">Assign Project</v-btn>
+                <v-btn
+                  class="primary"
+                  :loading="isAssigningProject"
+                  :disabled="isAssigningProject"
+                  @click="assignProject"
+                >
+                  Assign Project
+                </v-btn>
               </v-col>
               <v-col cols="auto">
                 <v-btn class="draft" @click="saveAsDraft">Save as Draft</v-btn>

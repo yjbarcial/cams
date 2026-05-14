@@ -9,6 +9,25 @@ import { ADMIN_EMAILS } from '@/utils/userDisplay.js'
 
 let hasLoggedProfileFetchNetworkIssue = false
 let hasLoggedAdminNotificationTableIssue = false
+let profileFetchRetryAfter = 0
+
+const PROFILE_FETCH_RETRY_DELAY_MS = 60000
+
+const getCachedProfileId = (email) => {
+  const cachedEmail = localStorage.getItem('notificationProfileEmail')
+  if (cachedEmail && cachedEmail.toLowerCase() !== String(email || '').toLowerCase()) {
+    return null
+  }
+
+  return localStorage.getItem('userId') || localStorage.getItem('notificationProfileId') || null
+}
+
+const cacheProfileId = (email, profileId) => {
+  if (!profileId) return
+  localStorage.setItem('notificationProfileEmail', email)
+  localStorage.setItem('notificationProfileId', String(profileId))
+  localStorage.setItem('userId', String(profileId))
+}
 
 const isTransientNetworkFetchError = (error) => {
   const message = String(error?.message || '').toLowerCase()
@@ -159,29 +178,31 @@ export const getNotifications = async () => {
       isAdmin,
     })
 
-    // Get current user's ID from their profile
-    const { profilesService } = await import('./supabaseService.js')
-    let currentUserId = null
-    try {
-      const currentProfile = await profilesService.getByEmail(currentUserEmail)
-      currentUserId = currentProfile?.id
-      hasLoggedProfileFetchNetworkIssue = false
-      console.log('🔑 Current user details:', {
-        email: currentUserEmail,
-        userId: currentUserId,
-      })
-    } catch (error) {
-      if (isTransientNetworkFetchError(error)) {
-        if (!hasLoggedProfileFetchNetworkIssue) {
-          console.warn(
-            '⚠️ Temporary network issue while fetching user profile for notifications. Using email-based filtering fallback.',
-          )
+    let currentUserId = getCachedProfileId(currentUserEmail)
+
+    if (!currentUserId && Date.now() >= profileFetchRetryAfter) {
+      try {
+        const { profilesService } = await import('./supabaseService.js')
+        const currentProfile = await profilesService.getByEmail(currentUserEmail)
+        currentUserId = currentProfile?.id || null
+        cacheProfileId(currentUserEmail, currentUserId)
+        hasLoggedProfileFetchNetworkIssue = false
+        profileFetchRetryAfter = 0
+      } catch (error) {
+        if (isTransientNetworkFetchError(error)) {
+          profileFetchRetryAfter = Date.now() + PROFILE_FETCH_RETRY_DELAY_MS
           hasLoggedProfileFetchNetworkIssue = true
+        } else {
+          console.error('Error fetching current user profile:', error)
         }
-      } else {
-        console.error('Error fetching current user profile:', error)
       }
     }
+
+    console.log('Current user notification details:', {
+      email: currentUserEmail,
+      userId: currentUserId,
+      profileSource: currentUserId ? 'cached' : 'email-fallback',
+    })
 
     // Role mapping for notification recipients (maps designation label → userRole)
     const roleMapping = {
